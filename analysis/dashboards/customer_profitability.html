@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>ABOHASHEM | ربحية العملاء</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="brand">ABOHASHEM FOR MEAT — منصة الذكاء المالي<small>لوحة ربحية العملاء (إيرادية)</small></div>
+  <nav class="tabs">
+    <a href="index.html">التنفيذية</a>
+    <a href="customer_profitability.html" class="active">ربحية العملاء</a>
+    <a href="brand_performance.html">أداء البراندات</a>
+    <a href="product_performance.html">أداء الأصناف</a>
+    <a href="manufacturing_inventory.html">التصنيع والمخزون</a>
+    <a href="forecast_dashboard.html">التنبؤ</a>
+  </nav>
+</div>
+<main>
+  <h1>لوحة ربحية العملاء</h1>
+  <p class="subtitle" id="subtitle"></p>
+
+  <div class="note critical" id="cashNote"></div>
+
+  <h2>المؤشرات الرئيسية</h2>
+  <div class="grid grid-4" id="kpiRow"></div>
+
+  <h2>أفضل 20 عميل (بالإيراد + Drill-down للبراند والصنف)</h2>
+  <input class="search" id="custSearch" placeholder="ابحث عن عميل بالاسم أو الكود...">
+  <div class="card" id="custTree"></div>
+
+  <h2>باريتو تراكمي للعملاء</h2>
+  <div class="card"><div id="paretoLine"></div></div>
+
+  <p class="footer-note">
+    "ربحية العميل" هنا مبنية على الإيراد فقط (Revenue-based proxy)، وليست ربحية حقيقية بعد خصم تكلفة البضاعة المباعة،
+    لعدم توفر بيانات تكلفة/مشتريات في الملفات المرفوعة. القيمة الدائمة للعميل (CLV) المعروضة هي متوسط الإيراد الشهري
+    × عدد الأشهر النشطة، وليست CLV ربحية.
+  </p>
+</main>
+<script src="data.js"></script>
+<script src="charts.js"></script>
+<script>
+const D = DASHBOARD_DATA;
+const fs = D.financial_summary;
+const dq = D.data_quality_metrics;
+
+document.getElementById('subtitle').textContent = `${fmtNum(D.customer_ranking.length)} عميل مسجل بالكود`;
+
+document.getElementById('cashNote').innerHTML =
+  `<b>تنبيه جودة بيانات:</b> الكود "1" (عميل نقدى) يجمع ${fmtNum(dq.cash_customer_code_1_invoice_count)} فاتورة
+   لعملاء نقديين مختلفين فعليًا (${fmtPct(dq.cash_customer_code_1_revenue_pct)} من الإيراد الكلي) تحت كود واحد مشترك
+   — لذلك رقم هذا "العميل" في أي ترتيب لا يمثل عميلًا حقيقيًا واحدًا، بل يمثل تجميع كل مبيعات الكاش.`;
+
+const kpiRow = document.getElementById('kpiRow');
+kpiTile(kpiRow, 'عدد العملاء (بالكود)', fmtNum(fs.n_customers));
+kpiTile(kpiRow, 'مؤشر تركز العملاء HHI', fmtNum(fs.customer_hhi), 'أقل من 1500 = تركز منخفض');
+kpiTile(kpiRow, 'حصة أكبر عميل', fmtPct(fs.top1_customer_pct));
+kpiTile(kpiRow, 'حصة أكبر 10 عملاء', fmtPct(fs.top10_customer_pct));
+
+function money(v){ return fmtNum(v,0)+' ج.م'; }
+
+function renderTree(filter) {
+  const root = document.getElementById('custTree');
+  root.innerHTML = '';
+  let nodes = D.hierarchy_tree.slice(0, 300);
+  if (filter) {
+    const f = filter.trim();
+    nodes = nodes.filter(c => c.customer_name.includes(f) || String(c.customer_code).includes(f));
+  }
+  nodes = nodes.slice(0, 20);
+  nodes.forEach(cust => {
+    const det = document.createElement('details');
+    det.className = 'tree-node';
+    const sum = document.createElement('summary');
+    sum.innerHTML = `<div class="tree-row"><span class="name">${cust.customer_name} <span style="color:var(--text-muted);font-weight:400">(${cust.customer_code})</span></span>
+      <span class="metrics">${money(cust.sales)} · ${fmtPct(cust.contribution_pct,2)} · نمو نصف سنوي ${cust.growth_pct_h2h!==null ? fmtPct(cust.growth_pct_h2h) : '—'}</span></div>`;
+    det.appendChild(sum);
+    cust.brands.forEach(b => {
+      const bdet = document.createElement('details');
+      bdet.className = 'tree-node';
+      const bsum = document.createElement('summary');
+      bsum.innerHTML = `<div class="tree-row"><span class="name">🏷 ${b.brand}</span>
+        <span class="metrics">${money(b.sales)} · ${fmtPct(b.contribution_pct_of_customer)} من إيراد العميل</span></div>`;
+      bdet.appendChild(bsum);
+      const itemsDiv = document.createElement('div');
+      b.items.forEach(it => {
+        const row = document.createElement('div');
+        row.className = 'tree-row';
+        row.style.padding = '4px 8px 4px 20px';
+        row.innerHTML = `<span>${it.item_name}</span><span class="metrics">${money(it.sales)} · ك:${fmtNum(it.qty)} · س.و:${fmtNum(it.avg_price,2)}</span>`;
+        itemsDiv.appendChild(row);
+      });
+      bdet.appendChild(itemsDiv);
+      det.appendChild(bdet);
+    });
+    root.appendChild(det);
+  });
+}
+renderTree('');
+document.getElementById('custSearch').addEventListener('input', e => renderTree(e.target.value));
+
+// pareto cumulative line
+const cr = D.customer_ranking;
+lineChart(document.getElementById('paretoLine'), [{
+  name:'التراكم %', points: cr.map((r,i) => ({x: (i+1)%10===0||i===0?String(i+1):'', y: r.cum_contribution_pct}))
+}], {h:260, fmtY: v=>fmtPct(v,0)});
+</script>
+</body>
+</html>

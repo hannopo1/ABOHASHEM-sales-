@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>ABOHASHEM | لوحة القيادة التنفيذية</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="brand">ABOHASHEM FOR MEAT — منصة الذكاء المالي<small>لوحة القيادة التنفيذية (مالية + مبيعات)</small></div>
+  <nav class="tabs">
+    <a href="index.html" class="active">التنفيذية</a>
+    <a href="customer_profitability.html">ربحية العملاء</a>
+    <a href="brand_performance.html">أداء البراندات</a>
+    <a href="product_performance.html">أداء الأصناف</a>
+    <a href="manufacturing_inventory.html">التصنيع والمخزون</a>
+    <a href="forecast_dashboard.html">التنبؤ</a>
+  </nav>
+</div>
+<main>
+  <h1>اللوحة التنفيذية المالية والمبيعات</h1>
+  <p class="subtitle" id="subtitle"></p>
+
+  <div class="note" id="scopeNote"></div>
+
+  <h2>المؤشرات الرئيسية (KPIs)</h2>
+  <div class="grid grid-4" id="kpiRow"></div>
+
+  <h2>الاتجاه الشهري للمبيعات (2025-01 إلى 2026-06)</h2>
+  <div class="card"><div id="monthlyTrend"></div></div>
+
+  <div class="grid grid-2" style="margin-top:14px">
+    <div class="card">
+      <h2 style="margin-top:0">أفضل 10 عملاء (بالإيراد)</h2>
+      <div id="top10Customers"></div>
+    </div>
+    <div class="card">
+      <h2 style="margin-top:0">حصة البراندات من الإيراد</h2>
+      <div id="brandDonut"></div>
+    </div>
+  </div>
+
+  <div class="grid grid-2" style="margin-top:14px">
+    <div class="card">
+      <h2 style="margin-top:0">أفضل 10 أصناف (بالإيراد)</h2>
+      <div id="top10Items"></div>
+    </div>
+    <div class="card">
+      <h2 style="margin-top:0">تحليل باريتو 80/20</h2>
+      <div id="paretoTable"></div>
+      <p class="subtitle">النسبة المئوية من عدد العملاء/الأصناف اللازمة لتحقيق 80% من الإيراد.</p>
+    </div>
+  </div>
+
+  <h2>مؤشرات التركز (مخاطر الاعتماد على عميل / براند / صنف واحد)</h2>
+  <div class="grid grid-4" id="concentrationRow"></div>
+
+  <h2>الذمم المدينة (حسب عمر الفاتورة)</h2>
+  <div class="card"><div id="arAging"></div></div>
+  <div class="note warn">
+    ملاحظة منهجية هامة: حقل «الباقي» في فواتير المبيعات يعكس الرصيد وقت تحرير الفاتورة نفسها فقط، ولا تتوفر لدينا سجلات
+    تحصيل/سداد لاحقة منفصلة ضمن الملفات المرفوعة. لذلك لا يجوز تفسير هذا الرقم كدَين متعثر فعلي أو كمعدل تحصيل نهائي؛
+    هو مؤشر أولي على حجم الرصيد الدفتري المسجل وقت البيع فقط، ويتطلب مطابقته بدفتر الأستاذ العام وكشوف التحصيل الفعلية.
+  </div>
+
+  <p class="footer-note">
+    جميع الأرقام محسوبة مباشرة من ملفات الفواتير المرفوعة (4,902 فاتورة، يناير 2025 – يونيو 2026). لا تتضمن هذه اللوحة
+    تكلفة البضاعة المباعة (COGS) أو هامش الربح أو EBITDA أو صافي الربح، حيث لم يتم رفع بيانات تكلفة/مشتريات أو ميزانية
+    عمومية — راجع لوحة «التصنيع والمخزون» وتقرير الجودة للتفاصيل الكاملة حول حدود البيانات.
+  </p>
+</main>
+<script src="data.js"></script>
+<script src="charts.js"></script>
+<script>
+const D = DASHBOARD_DATA;
+const fs = D.financial_summary;
+const ds = D.descriptive_stats;
+
+document.getElementById('subtitle').textContent =
+  `الفترة: ${ds.date_min || '2025-01-01'} إلى ${ds.date_max || '2026-06-30'} · ${fmtNum(ds.invoices)} فاتورة · ${fmtNum(ds.customers)} عميل · ${fmtNum(ds.items)} صنف`;
+
+document.getElementById('scopeNote').innerHTML =
+  `<b>نطاق البيانات:</b> هذه اللوحة مبنية حصريًا على فواتير المبيعات المرفوعة (ملفي Markdown) وملفي تصنيف الأصناف
+   وسعة الكرتونة. لا توجد بيانات تكلفة أو مشتريات أو مخزون فعلي في الملفات المرفوعة، وبالتالي فإن كل الأرقام هنا
+   إيرادية (Revenue-side) وليست ربحية.`;
+
+const kpiRow = document.getElementById('kpiRow');
+kpiTile(kpiRow, 'إجمالي الإيراد (2025-01 إلى 2026-06)', fmtEGP(fs.total_revenue));
+kpiTile(kpiRow, 'عدد الفواتير', fmtNum(ds.invoices));
+kpiTile(kpiRow, 'متوسط قيمة الفاتورة', fmtEGP(ds.avg_invoice_value), `الوسيط: ${fmtEGP(ds.median_invoice_value)}`);
+kpiTile(kpiRow, 'متوسط سعر البيع (ASP)', fmtNum(ds.avg_selling_price_overall, 2) + ' ج.م/وحدة');
+
+// monthly trend
+const ms = D.monthly_sales;
+lineChart(document.getElementById('monthlyTrend'), [{
+  name: 'الإيراد الشهري', points: ms.map(r => ({x: r.month, y: r.revenue}))
+}], {h: 280, fmtY: v => fmtNum(v/1e6,1)+'م'});
+
+// top 10 customers
+const top10c = D.customer_ranking.slice(0,10).map(r => ({label: r.canonical_name, value: r.revenue}));
+hBarChart(document.getElementById('top10Customers'), top10c, {fmt: fmtEGP, labelW: 190});
+
+// brand donut
+const brandRows = D.brand_ranking.filter(r => r.revenue > 0);
+donutChart(document.getElementById('brandDonut'), brandRows.map(r => ({label:r.brand, value:r.revenue})), {fmt: fmtEGP});
+
+// top 10 items
+const top10i = D.item_ranking.slice(0,10).map(r => ({label: r.item_name, value: r.revenue}));
+hBarChart(document.getElementById('top10Items'), top10i, {fmt: fmtEGP, labelW: 190, color: seriesColor(1)});
+
+// pareto table
+dataTable(document.getElementById('paretoTable'),
+  [{label:'الشريحة', key:'segment'}, {label:'الإجمالي', key:'n_total'},
+   {label:'العدد اللازم لـ 80%', key:'n_to_reach_80pct_revenue'},
+   {label:'% من المجموع', key:'pct_of_population_driving_80pct_revenue', fmt: v=>fmtPct(v)}],
+  D.pareto_summary);
+
+// concentration
+const cr = document.getElementById('concentrationRow');
+kpiTile(cr, 'مؤشر هيرفندال-هيرشمان للعملاء (HHI)', fmtNum(fs.customer_hhi), fs.customer_hhi < 1500 ? 'تركز منخفض (صحي)' : 'تركز مرتفع');
+kpiTile(cr, 'حصة أكبر 10 عملاء', fmtPct(fs.top10_customer_pct));
+kpiTile(cr, 'مؤشر تركز البراندات (HHI)', fmtNum(fs.brand_hhi), fs.brand_hhi > 2500 ? 'تركز مرتفع' : 'معتدل');
+kpiTile(cr, 'حصة أكبر صنف واحد', fmtPct(fs.top1_item_pct));
+
+// AR aging
+const aging = D.ar_aging;
+hBarChart(document.getElementById('arAging'), aging.map(r=>({label: r.age_bucket_days + ' يوم', value: r.outstanding_amount})), {fmt: fmtEGP, color: seriesColor(5)});
+</script>
+</body>
+</html>

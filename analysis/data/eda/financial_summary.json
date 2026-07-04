@@ -1,0 +1,31 @@
+{
+  "total_revenue": 57590362.160000004,
+  "total_tax_collected": 0.0,
+  "total_paid": 3861716.83,
+  "total_remaining_receivables": 53727824.35,
+  "pct_revenue_outstanding": 93.29,
+  "total_gross_value_before_discount": 63578497.05,
+  "total_discount_value": 89058.65,
+  "avg_discount_pct_weighted": 0.14,
+  "n_invoices_with_outstanding_balance": 3400,
+  "n_invoices_fully_paid": 1502,
+  "customer_hhi": 322.7,
+  "top1_customer_pct": 8.02,
+  "top5_customer_pct": 31.83,
+  "top10_customer_pct": 49.76,
+  "n_customers": 337,
+  "brand_hhi": 4389.5,
+  "top_brand_pct": 58.91,
+  "item_hhi": 773.1,
+  "top1_item_pct": 14.36,
+  "top5_item_pct": 55.11,
+  "top10_item_pct": 75.24,
+  "NOT_AVAILABLE_from_uploaded_files": [
+    "COGS (Cost of Goods Sold) - no purchase/production cost ledger uploaded",
+    "Gross Profit / Gross Margin - requires COGS",
+    "Operating Margin / EBITDA / Net Profit - requires opex and full P&L, not uploaded",
+    "Working Capital - requires balance sheet (current assets/liabilities), not uploaded",
+    "Inventory Turnover - requires stock/inventory level data, not uploaded",
+    "Customer Lifetime Value (profit-based) - requires margin data; a revenue-based proxy is provided instead in the dashboards"
+  ]
+}

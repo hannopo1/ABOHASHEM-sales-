@@ -1,0 +1,12 @@
+,value
+invoices,4902.0
+line_items,13324.0
+customers,337.0
+brands,4.0
+items,87.0
+total_revenue,57590362.160000004
+total_qty,1182006.85
+avg_invoice_value,11748.33989392085
+median_invoice_value,3357.08
+std_invoice_value,23772.490355277638
+avg_selling_price_overall,48.7225282662279

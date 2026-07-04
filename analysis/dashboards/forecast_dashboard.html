@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>ABOHASHEM | لوحة التنبؤ</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="brand">ABOHASHEM FOR MEAT — منصة الذكاء المالي<small>لوحة التنبؤ — 7 أشهر قادمة</small></div>
+  <nav class="tabs">
+    <a href="index.html">التنفيذية</a>
+    <a href="customer_profitability.html">ربحية العملاء</a>
+    <a href="brand_performance.html">أداء البراندات</a>
+    <a href="product_performance.html">أداء الأصناف</a>
+    <a href="manufacturing_inventory.html">التصنيع والمخزون</a>
+    <a href="forecast_dashboard.html" class="active">التنبؤ</a>
+  </nav>
+</div>
+<main>
+  <h1>لوحة التنبؤ بالمبيعات</h1>
+
+  <div class="note critical" id="caveat"></div>
+
+  <h2>مقارنة النماذج (Rolling-Origin Cross-Validation)</h2>
+  <div class="card" id="modelCompare"></div>
+
+  <h2>تنبؤ إجمالي مبيعات الشركة (7 أشهر قادمة)</h2>
+  <div class="card"><div id="companyForecast"></div></div>
+  <div class="grid grid-3" id="scenarioRow" style="margin-top:14px"></div>
+
+  <h2>تنبؤ حسب البراند</h2>
+  <div class="card" id="brandForecastTable"></div>
+
+  <h2>تنبؤ أفضل 10 عملاء</h2>
+  <div class="card" id="custForecastTable"></div>
+
+  <h2>تنبؤ أفضل 10 أصناف (بالإيراد)</h2>
+  <div class="card" id="itemForecastTable"></div>
+
+  <p class="footer-note">
+    النطاقات المتفائل/المتحفظ = فترة ثقة 95% حول التنبؤ الأساسي (± 1.96 × الانحراف المعياري لأخطاء النموذج داخل العينة،
+    متسعة مع الأفق الزمني). هذه ليست سيناريوهات عمل (مثل إطلاق منتج/حملة تسويقية) بل نطاق عدم يقين إحصائي بحت.
+  </p>
+</main>
+<script src="data.js"></script>
+<script src="charts.js"></script>
+<script>
+const D = DASHBOARD_DATA;
+const meta = D.forecast_meta;
+
+document.getElementById('caveat').innerHTML =
+  `<b>تنبيه منهجي:</b> السلسلة الشهرية لإجمالي مبيعات الشركة تحتوي على ${meta.n_obs} نقطة بيانات شهرية فقط
+   (يناير 2025 – يونيو 2026)، وهو أقل بكثير من الـ 24 نقطة (دورتين موسميتين كاملتين) اللازمة عادة لتقدير موثوق
+   لنموذج موسمي (SARIMA/Holt-Winters الموسمي). لذلك تم استبعاد النماذج الموسمية من مجموعة المرشحين، واختير أفضل نموذج
+   (<b>${meta.best_model}</b>) عبر التحقق المتدرج زمنيًا (rolling-origin CV). التنبؤات لأكثر من 3-4 أشهر قادمة تحمل
+   عدم يقين متزايد ويجب معاملتها كاتجاه إرشادي وليس رقمًا تعاقديًا.`;
+
+dataTable(document.getElementById('modelCompare'),
+  [{label:'النموذج', key:'model'}, {label:'عدد جولات التحقق', key:'n_folds'},
+   {label:'RMSE', key:'rmse', fmt:v=>fmtNum(v)}, {label:'MAE', key:'mae', fmt:v=>fmtNum(v)},
+   {label:'MAPE %', key:'mape', fmt:v=>fmtPct(v)}],
+  D.forecast_model_comparison);
+
+// company forecast: historical + forecast with band
+const hist = D.monthly_sales.map(r => ({x:r.month, y:r.revenue}));
+const fc = D.forecast_company.map(r => ({x:r.month, y:r.forecast_base, lo:r.ci95_lower, hi:r.ci95_upper}));
+lineChart(document.getElementById('companyForecast'), [
+  {name:'فعلي', points: hist},
+  {name:'تنبؤ (أساسي)', points: fc, dashed:true, color: seriesColor(5)}
+], {h:300, legend:true, fmtY: v=>fmtNum(v/1e6,1)+'م'});
+
+const sr = document.getElementById('scenarioRow');
+const totalBase = D.forecast_company.reduce((a,r)=>a+r.forecast_base,0);
+const totalOpt = D.forecast_company.reduce((a,r)=>a+r.forecast_optimistic,0);
+const totalCons = D.forecast_company.reduce((a,r)=>a+r.forecast_conservative,0);
+kpiTile(sr, 'إجمالي متحفظ (7 أشهر)', fmtEGP(totalCons));
+kpiTile(sr, 'إجمالي أساسي (7 أشهر)', fmtEGP(totalBase));
+kpiTile(sr, 'إجمالي متفائل (7 أشهر)', fmtEGP(totalOpt));
+
+function forecastTable(container, rows, nameMap) {
+  const grouped = {};
+  rows.forEach(r => { (grouped[r.series_id] = grouped[r.series_id]||[]).push(r); });
+  const flat = Object.keys(grouped).map(id => {
+    const g = grouped[id];
+    const total = g.reduce((a,r)=>a+r.forecast_base,0);
+    return {id: nameMap ? (nameMap[id]||id) : id, total_7m: total};
+  }).sort((a,b)=>b.total_7m-a.total_7m);
+  dataTable(container, [{label:'المعرف', key:'id'}, {label:'إجمالي متوقع (7 أشهر)', key:'total_7m', fmt: fmtEGP}], flat);
+}
+forecastTable(document.getElementById('brandForecastTable'), D.forecast_brand);
+
+const custNameMap = {}; D.customer_ranking.forEach(c => custNameMap[String(c.customer_code)] = c.canonical_name);
+forecastTable(document.getElementById('custForecastTable'), D.forecast_top_customers, custNameMap);
+
+const itemNameMap = {}; D.item_ranking.forEach(i => itemNameMap[String(i.item_code)] = i.item_name);
+forecastTable(document.getElementById('itemForecastTable'), D.forecast_top_items, itemNameMap);
+</script>
+</body>
+</html>

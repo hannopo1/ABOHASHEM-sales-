@@ -1,0 +1,4 @@
+pandas==3.0.3
+numpy
+scipy
+statsmodels==0.14.6

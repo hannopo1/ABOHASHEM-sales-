@@ -1,0 +1,395 @@
+{
+  "n_rows": 13324,
+  "n_invoices": 4902,
+  "date_min": "2025-01-01 00:00:00",
+  "date_max": "2026-06-30 00:00:00",
+  "n_unparseable_dates": 0,
+  "missing_values": {
+    "customer_code": {
+      "n_missing": 0,
+      "pct_missing": 0.0
+    },
+    "customer_name_raw": {
+      "n_missing": 0,
+      "pct_missing": 0.0
+    },
+    "phone": {
+      "n_missing": 4214,
+      "pct_missing": 31.627
+    },
+    "item_code": {
+      "n_missing": 0,
+      "pct_missing": 0.0
+    },
+    "item_name_raw": {
+      "n_missing": 0,
+      "pct_missing": 0.0
+    },
+    "qty": {
+      "n_missing": 0,
+      "pct_missing": 0.0
+    },
+    "unit_price": {
+      "n_missing": 0,
+      "pct_missing": 0.0
+    },
+    "discount_pct": {
+      "n_missing": 0,
+      "pct_missing": 0.0
+    },
+    "tax_pct": {
+      "n_missing": 2,
+      "pct_missing": 0.015
+    },
+    "line_total": {
+      "n_missing": 0,
+      "pct_missing": 0.0
+    },
+    "brand": {
+      "n_missing": 0,
+      "pct_missing": 0.0
+    }
+  },
+  "n_duplicate_line_candidates": 0,
+  "invoice_numbers_in_both_sources": 0,
+  "n_zero_price_lines": 1029,
+  "n_zero_total_lines": 1028,
+  "n_negative_qty": 0,
+  "n_negative_total": 0,
+  "n_bonus_lines": 438,
+  "bonus_share_of_lines_pct": 3.287,
+  "formula_check_mean_abs_residual": 0.0105,
+  "formula_check_max_abs_residual": 126.0,
+  "formula_check_pct_within_1_egp": 99.977,
+  "discount_pct_range": [
+    0.0,
+    15.0
+  ],
+  "tax_pct_range": [
+    0.0,
+    25.0
+  ],
+  "n_invoices_reconciliation_mismatch_over_1egp": 0,
+  "price_outliers_by_item": [
+    {
+      "item_code": 101,
+      "item_name": "كفته الهنا 800 جرام طبق",
+      "n_outliers": 341,
+      "n_total": 1332,
+      "price_range_normal": [
+        56.0,
+        56.0
+      ],
+      "outlier_price_min": 42.0,
+      "outlier_price_max": 90.0
+    },
+    {
+      "item_code": 13,
+      "item_name": "سجق شرقى 3 ك ابو هاشم كيس 3 كيلو",
+      "n_outliers": 280,
+      "n_total": 639,
+      "price_range_normal": [
+        320.0,
+        320.0
+      ],
+      "outlier_price_min": 240.0,
+      "outlier_price_max": 410.0
+    },
+    {
+      "item_code": 120,
+      "item_name": "برجر الهنا 900 جرام طبق",
+      "n_outliers": 254,
+      "n_total": 1098,
+      "price_range_normal": [
+        58.5,
+        58.5
+      ],
+      "outlier_price_min": 44.0,
+      "outlier_price_max": 70.0
+    },
+    {
+      "item_code": 104,
+      "item_name": "برجر الهنا 400 جرام طبق",
+      "n_outliers": 172,
+      "n_total": 991,
+      "price_range_normal": [
+        28.5,
+        28.5
+      ],
+      "outlier_price_min": 23.0,
+      "outlier_price_max": 36.0
+    },
+    {
+      "item_code": 102,
+      "item_name": "كفته الهنا 350 طبق",
+      "n_outliers": 164,
+      "n_total": 1001,
+      "price_range_normal": [
+        27.5,
+        27.5
+      ],
+      "outlier_price_min": 25.0,
+      "outlier_price_max": 53.6
+    },
+    {
+      "item_code": 1,
+      "item_name": "مفروم صافى 400 جم طبق",
+      "n_outliers": 133,
+      "n_total": 355,
+      "price_range_normal": [
+        80.0,
+        80.0
+      ],
+      "outlier_price_min": 30.0,
+      "outlier_price_max": 100.0
+    },
+    {
+      "item_code": 7,
+      "item_name": "سجق 350 جم ابو هاشم طبق",
+      "n_outliers": 107,
+      "n_total": 337,
+      "price_range_normal": [
+        45.0,
+        45.0
+      ],
+      "outlier_price_min": 31.0,
+      "outlier_price_max": 61.0
+    },
+    {
+      "item_code": 108,
+      "item_name": "سجق الهنا 350 طبق",
+      "n_outliers": 101,
+      "n_total": 689,
+      "price_range_normal": [
+        30.0,
+        30.0
+      ],
+      "outlier_price_min": 25.0,
+      "outlier_price_max": 39.0
+    },
+    {
+      "item_code": 107,
+      "item_name": "سجق 800 ابو هاشم طبق",
+      "n_outliers": 100,
+      "n_total": 372,
+      "price_range_normal": [
+        75.0,
+        110.0
+      ],
+      "outlier_price_min": 65.0,
+      "outlier_price_max": 132.0
+    },
+    {
+      "item_code": 114,
+      "item_name": "كفته ابو هاشم 800 طبق",
+      "n_outliers": 80,
+      "n_total": 358,
+      "price_range_normal": [
+        70.0,
+        105.0
+      ],
+      "outlier_price_min": 65.0,
+      "outlier_price_max": 120.0
+    },
+    {
+      "item_code": 8,
+      "item_name": "كفته 350 جم ابو هاشم طبق",
+      "n_outliers": 66,
+      "n_total": 286,
+      "price_range_normal": [
+        40.0,
+        40.0
+      ],
+      "outlier_price_min": 31.0,
+      "outlier_price_max": 85.0
+    },
+    {
+      "item_code": 421,
+      "item_name": "برجر ابو هاشم 1 ك طبق",
+      "n_outliers": 50,
+      "n_total": 122,
+      "price_range_normal": [
+        110.0,
+        110.0
+      ],
+      "outlier_price_min": 70.0,
+      "outlier_price_max": 133.5
+    },
+    {
+      "item_code": 6,
+      "item_name": "برجر 400 جم ابو هاشم طبق",
+      "n_outliers": 38,
+      "n_total": 186,
+      "price_range_normal": [
+        45.0,
+        45.0
+      ],
+      "outlier_price_min": 1.0,
+      "outlier_price_max": 61.0
+    },
+    {
+      "item_code": 262,
+      "item_name": "بانيه 900 جرام طبق",
+      "n_outliers": 36,
+      "n_total": 91,
+      "price_range_normal": [
+        55.0,
+        55.0
+      ],
+      "outlier_price_min": 50.0,
+      "outlier_price_max": 65.0
+    },
+    {
+      "item_code": 420,
+      "item_name": "برجر الهنا 800 جرام طبق",
+      "n_outliers": 29,
+      "n_total": 109,
+      "price_range_normal": [
+        49.0,
+        56.0
+      ],
+      "outlier_price_min": 44.0,
+      "outlier_price_max": 61.0
+    },
+    {
+      "item_code": 346,
+      "item_name": "بانيه 800 جرام طبق",
+      "n_outliers": 28,
+      "n_total": 742,
+      "price_range_normal": [
+        44.0,
+        58.0
+      ],
+      "outlier_price_min": 40.0,
+      "outlier_price_max": 60.0
+    },
+    {
+      "item_code": 397,
+      "item_name": "بانيه 800 جرام اسباشيل كيس",
+      "n_outliers": 21,
+      "n_total": 84,
+      "price_range_normal": [
+        50.0,
+        50.0
+      ],
+      "outlier_price_min": 49.0,
+      "outlier_price_max": 53.5
+    },
+    {
+      "item_code": 292,
+      "item_name": "عجينه سجق 5 كيلو الهنا طبق",
+      "n_outliers": 11,
+      "n_total": 49,
+      "price_range_normal": [
+        200.0,
+        200.0
+      ],
+      "outlier_price_min": 230.0,
+      "outlier_price_max": 260.0
+    },
+    {
+      "item_code": 96,
+      "item_name": "عرض مصنعات طبق",
+      "n_outliers": 5,
+      "n_total": 26,
+      "price_range_normal": [
+        55.0,
+        55.0
+      ],
+      "outlier_price_min": 40.0,
+      "outlier_price_max": 600.0
+    },
+    {
+      "item_code": 270,
+      "item_name": "برجر اسبشيال طبق",
+      "n_outliers": 5,
+      "n_total": 15,
+      "price_range_normal": [
+        45.0,
+        62.5
+      ],
+      "outlier_price_min": 40.0,
+      "outlier_price_max": 65.0
+    }
+  ],
+  "n_items_with_price_outliers": 32,
+  "n_distinct_customer_codes": 337,
+  "n_distinct_customer_names_raw": 454,
+  "n_distinct_item_codes": 87,
+  "n_distinct_item_names_raw": 151,
+  "n_distinct_brands": 4,
+  "revenue_share_unclassified_brand_pct": 0.0257,
+  "monthly_invoice_count_reconciliation": {
+    "2025-01": {
+      "stated": 320,
+      "parsed": 320
+    },
+    "2025-02": {
+      "stated": 256,
+      "parsed": 256
+    },
+    "2025-03": {
+      "stated": 322,
+      "parsed": 322
+    },
+    "2025-04": {
+      "stated": 244,
+      "parsed": 244
+    },
+    "2025-05": {
+      "stated": 277,
+      "parsed": 277
+    },
+    "2025-06": {
+      "stated": 184,
+      "parsed": 184
+    },
+    "2025-07": {
+      "stated": 227,
+      "parsed": 227
+    },
+    "2025-08": {
+      "stated": 283,
+      "parsed": 283
+    },
+    "2025-09": {
+      "stated": 314,
+      "parsed": 314
+    },
+    "2025-10": {
+      "stated": 319,
+      "parsed": 319
+    },
+    "2025-11": {
+      "stated": 250,
+      "parsed": 250
+    },
+    "2025-12": {
+      "stated": 260,
+      "parsed": 260
+    },
+    "2026-01": {
+      "stated": 266,
+      "parsed": 266
+    },
+    "2026-02": {
+      "stated": 270,
+      "parsed": 270
+    },
+    "2026-03": {
+      "stated": 231,
+      "parsed": 231
+    },
+    "2026-04": {
+      "stated": 287,
+      "parsed": 287
+    },
+    "2026-05": {
+      "stated": 281,
+      "parsed": 281
+    }
+  },
+  "monthly_invoice_count_mismatches": {},
+  "total_revenue_egp": 57590362.16,
+  "total_qty_units": 1182006.85
+}

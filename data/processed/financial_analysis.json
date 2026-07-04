@@ -1,0 +1,129 @@
+{
+  "total_revenue_egp": 57590362.16,
+  "period": {
+    "start": "2025-01-01",
+    "end": "2026-06-30",
+    "n_months": 18
+  },
+  "trailing_12m_revenue_egp": 41459553.33,
+  "trailing_12m_months": [
+    "2025-07",
+    "2025-08",
+    "2025-09",
+    "2025-10",
+    "2025-11",
+    "2025-12",
+    "2026-01",
+    "2026-02",
+    "2026-03",
+    "2026-04",
+    "2026-05",
+    "2026-06"
+  ],
+  "avg_monthly_revenue_t12_egp": 3454962.7775,
+  "gross_list_value_egp": 63578497.05,
+  "net_invoiced_value_egp": 57590362.16,
+  "aggregate_deduction_value_egp": 5988134.890000001,
+  "aggregate_deduction_rate_pct": 9.418490791455412,
+  "deduction_field_note": "الحقل المصدري المسمّى \"نسبة الضريبة\" (tax %) يعمل فعليًا كنسبة استقطاع تُخصم من حاصل ضرب الكمية × سعر الوحدة للوصول إلى إجمالي بند الفاتورة — وهذا مؤكَّد بمطابقة تامة مع الإجمالي المطبوع في كل فاتورة على حدة (صفر فروقات تتجاوز جنيهًا واحدًا عبر 4,902 فاتورة). لذلك يُعرض هنا كاستقطاع إجمالي (Aggregate Deduction) وليس كضريبة قيمة مضافة، لأن النسب المرصودة (0-25%) لا تطابق نسبة ضريبة القيمة المضافة المصرية القياسية (14%) وتتفاوت حسب الفاتورة/العميل — وهو ما يتسق مع نظام خصم/حسم تجاري خاص بالعميل أو بقناة التوزيع أكثر من كونه ضريبة نظامية.",
+  "qty_weighted_avg_discount_pct_field": 0.12545612574072645,
+  "qty_weighted_avg_deduction_pct_field": 11.357352742921918,
+  "bonus_lines_count": 437,
+  "bonus_qty_total": 26758.0,
+  "bonus_estimated_value_at_asp_egp": 782742.8905967675,
+  "bonus_value_pct_of_revenue": 1.3591560484063598,
+  "hhi_customers": 322.6894709557452,
+  "top5_customer_share_pct": 31.827137245771397,
+  "top10_customer_share_pct": 49.75779719076524,
+  "top20_customer_share_pct": 66.63573057308241,
+  "n_customers": 337,
+  "hhi_brands": 4391.645497876578,
+  "brand_shares_pct": {
+    "الهنا": 58.91,
+    "ابوهاشم": 26.78,
+    "اسبشيال": 14.29,
+    "غير مصنف": 0.03
+  },
+  "hhi_items": 773.1671420963203,
+  "top10_item_share_pct": 75.23595485408214,
+  "avg_revenue_per_active_month_per_customer_egp": 18003.13025813223,
+  "median_revenue_per_active_month_per_customer_egp": 5861.0,
+  "ar_total_net_balance_egp": 3368959.3200000008,
+  "ar_total_debit_egp": 3378516.87,
+  "ar_total_credit_egp": 9557.550000000001,
+  "ar_n_customers_with_debit_balance": 187,
+  "ar_n_customers_with_credit_balance": 55,
+  "ar_by_rep": [
+    {
+      "rep": "ايمن فارس",
+      "net_balance": 506621.2999999999,
+      "n_customers": 37.0,
+      "debit": 506804.27999999997,
+      "credit": 182.98000000000002
+    },
+    {
+      "rep": "حسام حسن",
+      "net_balance": 344932.24999999994,
+      "n_customers": 33.0,
+      "debit": 345862.92,
+      "credit": 930.67
+    },
+    {
+      "rep": "شعبان",
+      "net_balance": 15206.37,
+      "n_customers": 5.0,
+      "debit": 15210.87,
+      "credit": 4.5
+    },
+    {
+      "rep": "محمد امام",
+      "net_balance": 447758.80999999994,
+      "n_customers": 52.0,
+      "debit": 448365.51,
+      "credit": 606.7
+    },
+    {
+      "rep": "محمد امام الصعيد",
+      "net_balance": 1293494.6800000002,
+      "n_customers": 18.0,
+      "debit": 1298995.9300000002,
+      "credit": 5501.25
+    },
+    {
+      "rep": "محمد بشرى",
+      "net_balance": 452026.05000000005,
+      "n_customers": 60.0,
+      "debit": 454354.30000000005,
+      "credit": 2328.25
+    },
+    {
+      "rep": "محمد خليل",
+      "net_balance": 54844.82,
+      "n_customers": 17.0,
+      "debit": 54847.82,
+      "credit": 3.0
+    },
+    {
+      "rep": "هانى",
+      "net_balance": 254075.04,
+      "n_customers": 20.0,
+      "debit": 254075.24000000002,
+      "credit": 0.2
+    }
+  ],
+  "dso_proxy_days": 29.65951277893327,
+  "dso_proxy_method_note": "طريقة الاحتساب التقريبية = صافي رصيد المديونية (2026/7/4) ÷ (إيراد آخر 12 شهرًا ÷ 365). هذا تقدير تقريبي وليس مؤشر DSO رسميًا محسوبًا من كشف حركة مديونية متسلسل زمنيًا، نظرًا لتوفر لقطة واحدة فقط لرصيد المديونية في نقطة زمنية محددة (بلا رصيد افتتاحي، وبلا تصنيف أعمار الديون حسب تاريخ كل فاتورة).",
+  "ar_top10_debtor_share_pct": 58.95733177144088,
+  "ar_hhi_debtors": 423.9320202536295,
+  "not_computable_due_to_missing_cost_data": [
+    "COGS (تكلفة البضاعة المباعة)",
+    "Gross Profit / إجمالي الربح",
+    "Gross Margin / هامش الربح الإجمالي",
+    "Operating Margin / الهامش التشغيلي",
+    "EBITDA",
+    "Net Profit / صافي الربح",
+    "Working Capital (يتطلب بيانات الأصول/الخصوم المتداولة الكاملة)",
+    "Inventory Turnover (لا توجد بيانات مخزون/أرصدة مخزنية)",
+    "Receivables Turnover الرسمي (يتطلب سلسلة أرصدة مدينين تاريخية، وليس لقطة واحدة)"
+  ]
+}

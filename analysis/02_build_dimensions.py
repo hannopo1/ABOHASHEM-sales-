@@ -20,6 +20,7 @@ guessed, per the no-invented-data constraint, and is flagged in the parse log.
 """
 import re
 import json
+import difflib
 import pandas as pd
 from pathlib import Path
 
@@ -139,6 +140,20 @@ def main():
             match_type = "master_list"
             log["matched_master"] += 1
         else:
+            # 2) fuzzy match (handles spelling variants like صافى/صاف, اسبيشيال/اسبشيال
+            # that exact containment misses) -- SequenceMatcher ratio on normalized strings
+            best_fuzzy = None
+            for mnorm, mname, mbrand, mcarton in master_norm:
+                if not mnorm:
+                    continue
+                ratio = difflib.SequenceMatcher(None, mnorm, norm_name).ratio()
+                if best_fuzzy is None or ratio > best_fuzzy[0]:
+                    best_fuzzy = (ratio, mbrand, mcarton, mname)
+            if best_fuzzy and best_fuzzy[0] >= 0.72:
+                brand, carton, master_name = best_fuzzy[1], best_fuzzy[2], best_fuzzy[3]
+                match_type = "master_list_fuzzy"
+                log["matched_master_fuzzy"] = log.get("matched_master_fuzzy", 0) + 1
+        if brand is None:
             for pat, kw_brand in BRAND_KEYWORDS:
                 if pat.search(r["item_name"]):
                     brand = kw_brand

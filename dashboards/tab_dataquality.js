@@ -36,6 +36,12 @@ function renderDataQuality(){
         <div id="dq-recon"></div>
       </div>
     </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h3>عملاء لديهم رصيد مديونية لكن بدون أي فاتورة مبيعات مطابقة في بيانات هذا المشروع</h3>
+      <div class="scroll-x"><table id="dq-zero-invoice"></table></div>
+      <div class="note">هؤلاء العملاء ظهروا في لقطة المديونية (2026/7/4) لكن لم يُعثر على كودهم في فواتير المبيعات المُحلَّلة (2025/1/1 – 2026/6/30). السبب الأرجح: رصيد افتتاحي/تسوية سابقة على يناير 2025، أو معاملات بين 2026/6/30 و2026/7/4 خارج نطاق الملفات المرفوعة — وليس بالضرورة خطأ بيانات.</div>
+    </div>
   </section>`;
 }
 
@@ -98,5 +104,11 @@ function mountDataQuality(){
       <b>${17-mismatches} من 17 شهرًا</b> (يناير 2025 – مايو 2026، الفترة المغطاة بفهرس صريح في الملف).
       ${mismatches===0? 'مطابقة كاملة 100% — لا فروقات.' : ''}
     </div>
+  `;
+
+  const zeroInv = D.ar_zero_invoice_customers;
+  document.getElementById('dq-zero-invoice').innerHTML = `
+    <tr><th>العميل</th><th>المندوب</th><th>صافي رصيد المديونية</th></tr>
+    ${zeroInv.map(c=>`<tr><td>${c.customer_name}</td><td>${c.rep}</td><td>${fmtEGP(c.net_balance)}</td></tr>`).join('')}
   `;
 }

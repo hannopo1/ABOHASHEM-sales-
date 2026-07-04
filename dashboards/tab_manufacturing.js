@@ -20,8 +20,9 @@ function renderManufacturing(){
     </div>
 
     <div class="card">
-      <h3>جدول مرجعي: سعة الكرتونة/الكيس لكل صنف والعلامة التجارية</h3>
+      <h3>جدول مرجعي: سعة الكرتونة/الكيس، الكمية الإجمالية بالكرتونة، ومتوسط سعر البيع لكل صنف</h3>
       <div class="scroll-x"><table id="mf-table"></table></div>
+      <div class="note">"الكمية بالكرتونة" = إجمالي الكمية المباعة خلال 18 شهرًا ÷ سعة الكرتونة/الكيس. متوسط سعر البيع (ASP) = صافي المبيعات ÷ الكمية (بالوحدة الأصلية: كيلو/طبق/قطعة حسب الصنف).</div>
     </div>
   </section>`;
 }
@@ -51,8 +52,11 @@ function mountManufacturing(){
   document.getElementById('mf-season-note').textContent =
     `الأشهر بالأحمر أعلى من المتوسط بأكثر من 10% (ذروة تحتاج تخطيط طاقة تعبئة)، والأزرق أقل من المتوسط بأكثر من 10%. تنبيه منهجي: الأشهر (${lowYearMonths.join('، ')}) مبنية على رصد سنة واحدة فقط (2025) وليس متوسط سنتين، فموثوقيتها أقل من بقية الأشهر.`;
 
+  const aspBoxes = D.item_asp_boxes;
   document.getElementById('mf-table').innerHTML = `
-    <tr><th>الصنف</th><th>العلامة التجارية</th><th>سعة الكرتونة/الكيس</th><th>إجمالي الكمية المباعة (18 شهرًا)</th></tr>
-    ${[...carton].sort((a,b)=>b.total_qty-a.total_qty).map(c=>`<tr><td>${c.item_name}</td><td>${c.brand}</td><td>${c.carton_capacity}</td><td>${fmt0(c.total_qty)}</td></tr>`).join('')}
+    <tr><th>الصنف</th><th>العلامة التجارية</th><th>سعة الكرتونة/الكيس</th><th>إجمالي الكمية (18 شهرًا)</th><th>الكمية بالكرتونة/الكيس</th><th>متوسط سعر البيع</th></tr>
+    ${[...aspBoxes].sort((a,b)=>b.total_qty-a.total_qty).map(c=>`<tr><td>${c.item_name}</td><td>${c.brand}</td>
+      <td>${c.carton_capacity||'—'}</td><td>${fmt0(c.total_qty)}</td>
+      <td>${c.qty_in_boxes!=null?fmt1(c.qty_in_boxes):'—'}</td><td>${c.asp_egp!=null?fmt2(c.asp_egp):'—'}</td></tr>`).join('')}
   `;
 }

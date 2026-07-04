@@ -172,6 +172,15 @@ def main():
         tx = pd.read_csv(P / "sales_transactions_enriched.csv")
         write_df(writer, tx, "17_تفاصيل بنود الفواتير الكاملة")
 
+        # 14. Item ASP + quantity in boxes/cartons
+        write_df(writer, pd.read_csv(P / "item_asp_and_boxes.csv"), "18_متوسط سعر الصنف والكمية بالكرتونة")
+
+        # 15. Per-customer sales + bonus %
+        write_df(writer, pd.read_csv(P / "customer_sales_bonus_summary.csv"), "19_مبيعات وبونص كل عميل")
+
+        # 16. AR customers with zero invoices in the sales data
+        write_df(writer, pd.read_csv(P / "ar_customers_zero_invoices.csv"), "20_مديونين بدون فواتير مبيعات")
+
         # reorder: put summary sheet first (already inserted first by write order)
         writer.book.move_sheet("0_الملخص التنفيذي", offset=-len(writer.book.sheetnames))
 

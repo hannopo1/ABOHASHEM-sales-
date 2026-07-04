@@ -69,6 +69,15 @@ def main():
     dim_items = rd_csv("dim_items.csv")
     data["dim_items"] = json.loads(dim_items.to_json(orient="records"))
 
+    item_asp_boxes = rd_csv("item_asp_and_boxes.csv")
+    data["item_asp_boxes"] = json.loads(item_asp_boxes.to_json(orient="records"))
+
+    customer_bonus = rd_csv("customer_sales_bonus_summary.csv")
+    data["customer_bonus_summary"] = json.loads(customer_bonus.to_json(orient="records"))
+
+    ar_zero_invoice = rd_csv("ar_customers_zero_invoices.csv")
+    data["ar_zero_invoice_customers"] = json.loads(ar_zero_invoice.to_json(orient="records"))
+
     dim_customers = rd_csv("dim_customers.csv")
     data["dim_customers"] = json.loads(dim_customers.to_json(orient="records"))
 

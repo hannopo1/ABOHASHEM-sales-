@@ -23,9 +23,16 @@ function renderCustomer(){
       <div class="note">X = طلب مستقر (CV ≤ 0.5) · Y = متوسط التذبذب (0.5–1.0) · Z = تذبذب مرتفع أو نشاط متقطع جدًا. عملاء AZ/AY (إيراد مرتفع + تذبذب) هم أولوية لإدارة علاقة أوثق لضمان استقرار الطلب.</div>
     </div>
 
-    <div class="card">
+    <div class="card" style="margin-bottom:16px;">
       <h3>أعلى 25 عميلاً — التفصيل الكامل</h3>
       <div class="scroll-x"><table id="cu-table"></table></div>
+    </div>
+
+    <div class="card">
+      <h3>مبيعات كل عميل ونسبة البونص (كل 337 عميلاً)</h3>
+      <input class="search" id="cu-bonus-search" placeholder="ابحث باسم العميل...">
+      <div class="scroll-x" style="max-height:600px;overflow-y:auto;"><table id="cu-bonus-table"></table></div>
+      <div class="note">نسبة البونص من قيمة المبيعات = القيمة التقديرية للكمية المجانية ("بونص") مُسعَّرة بمتوسط سعر بيع الصنف نفسه، مقسومة على إجمالي مبيعات العميل. الجدول مرتّب تنازليًا حسب إجمالي المبيعات.</div>
     </div>
   </section>`;
 }
@@ -83,4 +90,21 @@ function mountCustomer(){
         <td>${dim.rep||'—'}</td><td>${dim.ar_net_balance!=null?fmtEGP(dim.ar_net_balance):'—'}</td></tr>`;
     }).join('')}
   `;
+
+  // Full per-customer sales + bonus % table
+  const bonusData = D.customer_bonus_summary;
+  function renderBonusTable(filter){
+    const q = (filter||'').trim();
+    const rows = (q ? bonusData.filter(c=>c.customer_name.includes(q)) : bonusData).slice(0, q?200:337);
+    return `
+      <tr><th>العميل</th><th>إجمالي المبيعات</th><th>كمية البونص</th><th>قيمة البونص التقديرية</th><th>% البونص من المبيعات</th><th>المندوب</th><th>عدد الفواتير</th></tr>
+      ${rows.map(c=>`<tr><td>${c.customer_name}</td><td>${fmtEGP(c.total_sales_egp)}</td><td>${fmt0(c.bonus_qty)}</td>
+        <td>${fmtEGP(c.bonus_estimated_value_egp)}</td><td>${fmt2(c.bonus_pct_of_sales_value)}%</td>
+        <td>${c.rep||'—'}</td><td>${fmt0(c.n_invoices)}</td></tr>`).join('')}
+    `;
+  }
+  document.getElementById('cu-bonus-table').innerHTML = renderBonusTable('');
+  document.getElementById('cu-bonus-search').addEventListener('input', (e)=>{
+    document.getElementById('cu-bonus-table').innerHTML = renderBonusTable(e.target.value);
+  });
 }

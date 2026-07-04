@@ -1,6 +1,6 @@
 {
   "matched_master": 54,
-  "matched_keyword": 18,
+  "matched_keyword": 7,
   "unclassified": [
     {
       "item_code": 87,
@@ -38,5 +38,6 @@
       "revenue": 640.0
     }
   ],
-  "n_items": 87
+  "n_items": 87,
+  "matched_master_fuzzy": 15
 }

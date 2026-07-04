@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>ABOHASHEM | أداء البراندات</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="brand">ABOHASHEM FOR MEAT — منصة الذكاء المالي<small>لوحة أداء البراندات</small></div>
+  <nav class="tabs">
+    <a href="index.html">التنفيذية</a>
+    <a href="customer_profitability.html">ربحية العملاء</a>
+    <a href="brand_performance.html" class="active">أداء البراندات</a>
+    <a href="product_performance.html">أداء الأصناف</a>
+    <a href="manufacturing_inventory.html">التصنيع والمخزون</a>
+    <a href="forecast_dashboard.html">التنبؤ</a>
+  </nav>
+</div>
+<main>
+  <h1>لوحة أداء البراندات الثلاثة</h1>
+  <p class="subtitle">البراندات: الهنا · ابوهاشم · اسبشيال (مصدر التصنيف: ملف "تصنيف الاصناف كبراند")</p>
+
+  <div class="grid grid-4" id="kpiRow"></div>
+
+  <div class="grid grid-2" style="margin-top:14px">
+    <div class="card">
+      <h2 style="margin-top:0">حصة كل براند من الإيراد الكلي</h2>
+      <div id="brandDonut"></div>
+    </div>
+    <div class="card">
+      <h2 style="margin-top:0">جدول أداء البراندات</h2>
+      <div id="brandTable"></div>
+    </div>
+  </div>
+
+  <h2>الاتجاه الشهري للإيراد لكل براند</h2>
+  <div class="card"><div id="brandTrend"></div></div>
+
+  <div class="note" id="unclassifiedNote"></div>
+
+  <p class="footer-note">جميع الأرقام إيرادية (revenue-side)؛ لا توجد بيانات تكلفة لكل براند لحساب هامش الربح.</p>
+</main>
+<script src="data.js"></script>
+<script src="charts.js"></script>
+<script>
+const D = DASHBOARD_DATA;
+const dq = D.data_quality_metrics;
+const brands = D.brand_ranking;
+
+// Fixed brand -> color mapping (by overall revenue rank) reused across every
+// chart on this page, so a brand never changes color between the donut and
+// the trend line (color must follow the entity, not incidental sort order).
+const BRAND_COLOR = {};
+brands.forEach((b, i) => { BRAND_COLOR[b.brand] = seriesColor(i); });
+
+const kpiRow = document.getElementById('kpiRow');
+brands.forEach((b,i) => kpiTile(kpiRow, b.brand, fmtEGP(b.revenue), `${fmtPct(b.contribution_pct)} من الإيراد · ك:${fmtNum(b.qty)}`));
+
+donutChart(document.getElementById('brandDonut'), brands.filter(b=>b.revenue>0).map(b=>({label:b.brand, value:b.revenue, color: BRAND_COLOR[b.brand]})), {fmt: fmtEGP});
+
+dataTable(document.getElementById('brandTable'),
+  [{label:'البراند', key:'brand'}, {label:'الإيراد', key:'revenue', fmt: fmtEGP},
+   {label:'الكمية', key:'qty', fmt: v=>fmtNum(v)}, {label:'متوسط السعر', key:'asp', fmt: v=>fmtNum(v,2)},
+   {label:'% المساهمة', key:'contribution_pct', fmt: fmtPct}],
+  brands);
+
+// brand monthly trend - brand order (and therefore color) taken from the
+// revenue ranking, not from groupby's incidental alphabetical order.
+const bm = D.brand_monthly;
+const brandNames = brands.map(b => b.brand).filter(b => !b.startsWith('غير مصنف'));
+const months = [...new Set(bm.map(r=>r.month))].sort();
+const series = brandNames.map((b) => ({
+  name: b, color: BRAND_COLOR[b],
+  points: months.map(m => { const r = bm.find(x=>x.brand===b && x.month===m); return {x:m, y: r? r.line_total : 0}; })
+}));
+lineChart(document.getElementById('brandTrend'), series, {h:300, legend:true, fmtY: v=>fmtNum(v/1e6,1)+'م'});
+
+document.getElementById('unclassifiedNote').innerHTML =
+  `<b>ملاحظة تصنيف:</b> ${dq.items_unclassified_brand} من ${D.item_master.length} صنف (${fmtPct(dq.revenue_unclassified_brand_pct,3)} فقط من الإيراد)
+   لم يتم العثور له على تطابق موثوق في ملف تصنيف الأصناف كبراند — على الأرجح أصناف جديدة أُضيفت بعد إعداد ذلك الملف
+   المرجعي. تم تصنيفها "غير مصنف" بدلاً من تخمين براند لها.`;
+</script>
+</body>
+</html>

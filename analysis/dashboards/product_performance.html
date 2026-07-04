@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>ABOHASHEM | أداء الأصناف</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="brand">ABOHASHEM FOR MEAT — منصة الذكاء المالي<small>لوحة أداء الأصناف — تصنيف ABC/XYZ</small></div>
+  <nav class="tabs">
+    <a href="index.html">التنفيذية</a>
+    <a href="customer_profitability.html">ربحية العملاء</a>
+    <a href="brand_performance.html">أداء البراندات</a>
+    <a href="product_performance.html" class="active">أداء الأصناف</a>
+    <a href="manufacturing_inventory.html">التصنيع والمخزون</a>
+    <a href="forecast_dashboard.html">التنبؤ</a>
+  </nav>
+</div>
+<main>
+  <h1>لوحة أداء الأصناف (87 صنف)</h1>
+  <p class="subtitle">تصنيف ABC حسب مساهمة الإيراد التراكمية، وتصنيف XYZ حسب معامل تغير الطلب الشهري (CoV)</p>
+
+  <div class="grid grid-4" id="kpiRow"></div>
+
+  <h2>مصفوفة ABC × XYZ (عدد الأصناف)</h2>
+  <div class="card"><div id="matrix"></div></div>
+
+  <h2>أفضل 15 صنف (بالإيراد)</h2>
+  <div class="card"><div id="topItems"></div></div>
+
+  <h2>جدول تصنيف الأصناف الكامل</h2>
+  <input class="search" id="itemSearch" placeholder="ابحث عن صنف...">
+  <div class="card" id="itemTable"></div>
+
+  <div class="note">
+    <b>تفسير التصنيف:</b> A = أعلى 80% من الإيراد (أصناف حرجة)، B = 80-95%، C = آخر 5% (ذيل طويل).
+    X = طلب مستقر (تباين منخفض)، Y = طلب متوسط التذبذب، Z = طلب متقطع/غير منتظم.
+    أصناف A×Z (إيراد عالٍ لكن طلب غير منتظم) تستحق أولوية تخطيط إنتاج خاصة.
+  </div>
+
+  <p class="footer-note">التصنيف مبني على بيانات الفواتير فقط، دون معرفة تكلفة التصنيع أو هامش الربح لكل صنف.</p>
+</main>
+<script src="data.js"></script>
+<script src="charts.js"></script>
+<script>
+const D = DASHBOARD_DATA;
+const items = D.item_ranking;
+
+const kpiRow = document.getElementById('kpiRow');
+kpiTile(kpiRow, 'عدد الأصناف', fmtNum(items.length));
+kpiTile(kpiRow, 'أصناف A (حرجة)', fmtNum(items.filter(i=>i.abc_class==='A').length));
+kpiTile(kpiRow, 'حصة أكبر صنف', fmtPct(items[0].contribution_pct,2));
+kpiTile(kpiRow, 'حصة أفضل 10 أصناف', fmtPct(items.slice(0,10).reduce((a,i)=>a+i.contribution_pct,0),2));
+
+// ABC x XYZ matrix
+const abcCats = ['A','B','C'], xyzCats = ['X','Y','Z'];
+const matrixDiv = document.getElementById('matrix');
+const table = document.createElement('table'); table.className='viz-table';
+let thead = '<thead><tr><th></th>' + xyzCats.map(x=>`<th>${x}</th>`).join('') + '</tr></thead>';
+let tbody = '<tbody>';
+abcCats.forEach(a => {
+  tbody += `<tr><th>${a}</th>` + xyzCats.map(x => {
+    const n = items.filter(i=>i.abc_class===a && i.xyz_class===x).length;
+    return `<td>${n}</td>`;
+  }).join('') + '</tr>';
+});
+tbody += '</tbody>';
+table.innerHTML = thead + tbody;
+matrixDiv.appendChild(table);
+
+hBarChart(document.getElementById('topItems'), items.slice(0,15).map(i=>({label:i.item_name, value:i.revenue})), {fmt: fmtEGP, labelW: 190});
+
+function renderTable(filter) {
+  let rows = items;
+  if (filter) rows = rows.filter(r => r.item_name.includes(filter) || String(r.item_code).includes(filter));
+  dataTable(document.getElementById('itemTable'),
+    [{label:'الكود', key:'item_code'}, {label:'اسم الصنف', key:'item_name'}, {label:'البراند', key:'brand'},
+     {label:'الإيراد', key:'revenue', fmt:fmtEGP}, {label:'الكمية', key:'qty', fmt:v=>fmtNum(v)},
+     {label:'م.السعر', key:'asp', fmt:v=>fmtNum(v,2)}, {label:'ABC', key:'abc_class'}, {label:'XYZ', key:'xyz_class'}],
+    rows, {limit: 100});
+}
+renderTable('');
+document.getElementById('itemSearch').addEventListener('input', e => renderTable(e.target.value));
+</script>
+</body>
+</html>

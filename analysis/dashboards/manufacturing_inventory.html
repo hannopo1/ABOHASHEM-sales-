@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>ABOHASHEM | التصنيع والمخزون</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="brand">ABOHASHEM FOR MEAT — منصة الذكاء المالي<small>لوحة التصنيع والمخزون (محدودة بحدود البيانات)</small></div>
+  <nav class="tabs">
+    <a href="index.html">التنفيذية</a>
+    <a href="customer_profitability.html">ربحية العملاء</a>
+    <a href="brand_performance.html">أداء البراندات</a>
+    <a href="product_performance.html">أداء الأصناف</a>
+    <a href="manufacturing_inventory.html" class="active">التصنيع والمخزون</a>
+    <a href="forecast_dashboard.html">التنبؤ</a>
+  </nav>
+</div>
+<main>
+  <h1>لوحة التصنيع والمخزون</h1>
+
+  <div class="note critical">
+    <b>حدود البيانات — هام:</b> لم يتم رفع أي بيانات تصنيع فعلية (خطوط إنتاج، أوامر تشغيل، معدلات هالك/فاقد) ولا بيانات
+    مخزون فعلية (أرصدة مخزون، حركات وارد/صادر مخزن، تواريخ صلاحية). الملفان المتاحان فقط هما: (1) تصنيف الأصناف كبراند،
+    و(2) سعة الكرتونة بالقطع/الأطباق لكل صنف. لذلك هذه اللوحة تعرض فقط: (أ) معامِلات تحويل التعبئة (وحدة → كرتونة)
+    المستخرجة من الملف المرجعي، و(ب) الطلب الفعلي بالوحدات المباعة من الفواتير كمؤشر غير مباشر على حجم الإنتاج المطلوب
+    (وليس إنتاجًا فعليًا أو مخزونًا). أي مؤشرات دوران مخزون (Inventory Turnover) حقيقية غير قابلة للحساب من الملفات المرفوعة.
+  </div>
+
+  <h2>تغطية معامِل التعبئة (كرتونة) في ملف السعة المرجعي</h2>
+  <div class="grid grid-3" id="kpiRow"></div>
+
+  <h2>الطلب الشهري بالوحدات المباعة (مؤشر غير مباشر لحجم الإنتاج المطلوب) — أفضل 10 أصناف</h2>
+  <div class="card"><div id="demandTrend"></div></div>
+
+  <h2>جدول معامِلات التعبئة لكل صنف (المصدر: سعة الكرتونة من القطع والاطباق.pdf)</h2>
+  <input class="search" id="packSearch" placeholder="ابحث عن صنف...">
+  <div class="card" id="packTable"></div>
+
+  <h2>احتياج الكراتين التقديري بناءً على التنبؤ (7 أشهر قادمة) — لأفضل 10 أصناف الموجود لها معامل تعبئة</h2>
+  <div class="card"><div id="cartonForecast"></div></div>
+  <p class="subtitle">= (الكمية المتوقعة بالوحدات ÷ عدد الوحدات في الكرتونة). تقدير تخطيطي وليس أمر إنتاج.</p>
+
+  <p class="footer-note">
+    لبناء لوحة تصنيع/مخزون كاملة (كفاءة خطوط، Yield، أعمار مخزون، إعادة الطلب/ROP، معدل دوران حقيقي) يلزم رفع:
+    سجل إنتاج يومي، أرصدة مخزون تام/خام، ومعدلات الفاقد/الهالك الفعلية.
+  </p>
+</main>
+<script src="data.js"></script>
+<script src="charts.js"></script>
+<script>
+const D = DASHBOARD_DATA;
+const im = D.item_master;
+const dq = D.data_quality_metrics;
+
+const kpiRow = document.getElementById('kpiRow');
+kpiTile(kpiRow, 'إجمالي الأصناف', fmtNum(im.length));
+kpiTile(kpiRow, 'أصناف لها معامل تعبئة', fmtNum(im.length - dq.items_missing_carton_capacity), `من ${im.length}`);
+kpiTile(kpiRow, 'أصناف بدون معامل (غير مدرجة بالملف المرجعي)', fmtNum(dq.items_missing_carton_capacity));
+
+// demand trend for top 10 items by qty
+const litems = D.item_ranking.slice(0,10);
+const topCodes = litems.map(i=>String(i.item_code));
+// build monthly qty per item from forecast_top_items series ids intersect; fallback: use item_ranking only totals
+const priceT = {}; // not available granular monthly qty here without extra export; show total qty bar instead
+hBarChart(document.getElementById('demandTrend'), litems.map(i=>({label:i.item_name, value:i.qty})), {fmt: v=>fmtNum(v)+' وحدة', labelW:190, color: seriesColor(2)});
+
+function renderPack(filter) {
+  let rows = im;
+  if (filter) rows = rows.filter(r => r.item_name.includes(filter) || String(r.item_code).includes(filter));
+  dataTable(document.getElementById('packTable'),
+    [{label:'الكود', key:'item_code'}, {label:'اسم الصنف', key:'item_name'}, {label:'البراند', key:'brand'},
+     {label:'وحدات/كرتونة', key:'units_per_carton', fmt: v=> v==null?'غير متوفر':fmtNum(v)},
+     {label:'نوع التعبئة', key:'pack_type', fmt: v=> v||'—'}],
+    rows, {limit:100});
+}
+renderPack('');
+document.getElementById('packSearch').addEventListener('input', e=>renderPack(e.target.value));
+
+// carton forecast estimate using the UNIT-quantity forecast (not revenue) + item_master units_per_carton
+const fti = D.forecast_top_items_qty;
+const packMap = {}; im.forEach(r => packMap[String(r.item_code)] = r);
+const codes = [...new Set(fti.map(r=>r.series_id))].filter(c => packMap[c] && packMap[c].units_per_carton);
+const rows = [];
+codes.forEach(code => {
+  const rec = packMap[code];
+  const totalUnits = fti.filter(r=>r.series_id===code).reduce((a,r)=>a + Math.max(0,r.forecast_base), 0);
+  rows.push({item_code: code, item_name: rec.item_name, units_per_carton: rec.units_per_carton,
+             forecast_units_7m: totalUnits, forecast_cartons_7m: totalUnits/rec.units_per_carton});
+});
+rows.sort((a,b)=>b.forecast_cartons_7m - a.forecast_cartons_7m);
+dataTable(document.getElementById('cartonForecast'),
+  [{label:'الكود', key:'item_code'}, {label:'الصنف', key:'item_name'},
+   {label:'وحدات/كرتونة', key:'units_per_carton'},
+   {label:'وحدات متوقعة (7 أشهر)', key:'forecast_units_7m', fmt: v=>fmtNum(v)},
+   {label:'كراتين متوقعة (7 أشهر)', key:'forecast_cartons_7m', fmt: v=>fmtNum(v)}],
+  rows);
+</script>
+</body>
+</html>

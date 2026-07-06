@@ -11,6 +11,22 @@ invoices.
 pip install polars openpyxl xlsxwriter
 python3 analysis/scripts/parse_invoices.py   # -> analysis/data/invoices_header.csv, invoices_lines.csv
 python3 analysis/scripts/build_analysis.py   # -> analysis/data/*.csv + sales_debt_analysis.xlsx
+python3 analysis/scripts/build_dashboard.py  # -> analysis/dashboard.html
+```
+
+### Single-period views (e.g. one month)
+
+`build_analysis.py` and `build_dashboard.py` both take optional flags to scope the sales/item/
+bonus tables to a date range while keeping the rep debt & arrears section as the full, latest
+snapshot (a balance doesn't have a "month" of its own). `analysis/dashboard_2026_06.html` /
+`analysis/data_2026_06/` were generated this way for June 2026:
+
+```bash
+python3 analysis/scripts/build_analysis.py --start 2026-06-01 --end 2026-06-30 \
+  --out-dir analysis/data_2026_06
+python3 analysis/scripts/build_dashboard.py --data-dir analysis/data_2026_06 \
+  --out analysis/dashboard_2026_06.html --title-suffix "(يونيو 2026)" \
+  --date-range-label "فواتير: 2026/6/1 → 2026/6/30"
 ```
 
 `analysis/data/debt_by_customer.csv` was transcribed by hand from the 8 `مديونية <rep> 4-7.pdf`

@@ -6,8 +6,8 @@ Writes two files:
 
 Run after build_analysis.py.
 """
+import argparse
 import json
-import sys
 from pathlib import Path
 
 import polars as pl
@@ -26,14 +26,13 @@ PALETTE = {
 }
 
 
-def load():
-    rep = pl.read_csv(DATA / "rep_debt_arrears_summary.csv")
-    cust_sales = pl.read_csv(DATA / "customer_sales_bonus_summary.csv", infer_schema_length=0)
-    cust_debt = pl.read_csv(DATA / "customer_debt_arrears_detail.csv", infer_schema_length=0)
-    items = pl.read_csv(DATA / "item_summary.csv", infer_schema_length=0)
-    zero_inv = pl.read_csv(DATA / "zero_invoices.csv", infer_schema_length=0)
-    headers = pl.read_csv(DATA / "invoices_header.csv", infer_schema_length=0)
-    return rep, cust_sales, cust_debt, items, zero_inv, headers
+def load(data_dir):
+    rep = pl.read_csv(data_dir / "rep_debt_arrears_summary.csv")
+    cust_sales = pl.read_csv(data_dir / "customer_sales_bonus_summary.csv", infer_schema_length=0)
+    cust_debt = pl.read_csv(data_dir / "customer_debt_arrears_detail.csv", infer_schema_length=0)
+    items = pl.read_csv(data_dir / "item_summary.csv", infer_schema_length=0)
+    zero_inv = pl.read_csv(data_dir / "zero_invoices.csv", infer_schema_length=0)
+    return rep, cust_sales, cust_debt, items, zero_inv
 
 
 def to_num(df, cols):
@@ -135,7 +134,7 @@ FRAGMENT_TEMPLATE = r"""
 </style>
 
 <div class="dash">
-  <h1>تحليل المبيعات والمديونية — أبو هاشم للحوم</h1>
+  <h1>{title}</h1>
   <div class="subtitle">{date_range} · تاريخ المديونية: 2026/7/4 · عدد الفواتير: {invoice_count}</div>
 
   <div class="kpis">
@@ -194,7 +193,7 @@ FRAGMENT_TEMPLATE = r"""
     </div>
   </section>
 
-  <footer>تم إنشاؤه من ملفات فواتير المبيعات (2025/1/1 - 2026/6/30) وتقارير مديونية المندوبين (2026/7/4). راجع analysis/README.md للمنهجية والقيود الكاملة.</footer>
+  <footer>جداول المبيعات والأصناف والبونص مبنية على {date_range} فقط. قسم مديونية المندوبين يعرض دائمًا الرصيد الكامل والأحدث (تقرير 2026/7/4) بصرف النظر عن هذه الفترة. راجع analysis/README.md للمنهجية والقيود الكاملة.</footer>
 </div>
 
 <script>
@@ -335,11 +334,21 @@ document.getElementById('zero-filter').addEventListener('input', (e) => {{
 
 
 def main():
-    rep, cust_sales, cust_debt, items, zero_inv, headers = load()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--data-dir", default=str(DATA), help="Directory with the summary CSVs (default: analysis/data).")
+    parser.add_argument("--out", default=str(OUT_FULL), help="Path for the full standalone HTML document.")
+    parser.add_argument("--fragment-out", help="Optional path for the body-only fragment (for the Artifact tool).")
+    parser.add_argument("--title-suffix", default="", help="Text appended to the page title/heading, e.g. '(يونيو 2026)'.")
+    parser.add_argument("--date-range-label", default="فواتير: 2025/1/1 → 2026/6/30", help="Subtitle line describing the invoice period covered.")
+    args = parser.parse_args()
+
+    data_dir = Path(args.data_dir)
+    rep, cust_sales, cust_debt, items, zero_inv = load(data_dir)
 
     rep = to_num(rep, ["debt_pdf_snapshot_net_2026_07_04", "total_debt", "current_amount", "arrears_amount", "total_credit_balance", "customer_count"])
     items = to_num(items, ["total_qty", "paid_qty", "paid_value", "avg_selling_price", "line_count"])
     zero_inv = to_num(zero_inv, ["qty"])
+    cust_sales = to_num(cust_sales, ["invoice_count"])
 
     cust360 = build_customers_360(cust_sales, cust_debt)
 
@@ -348,12 +357,15 @@ def main():
     total_debt = rep["total_debt"].sum()
     total_arrears = rep["arrears_amount"].sum()
     zero_count = zero_inv.height
-    invoice_count = headers.height
-    zero_pct = round(zero_count / invoice_count * 100, 1)
+    invoice_count = int(cust_sales["invoice_count"].sum())
+    zero_pct = round(zero_count / invoice_count * 100, 1) if invoice_count else 0.0
     cust_count = cust360.height
 
+    title = "تحليل المبيعات والمديونية — أبو هاشم للحوم" + (f" {args.title_suffix}" if args.title_suffix else "")
+
     fragment = FRAGMENT_TEMPLATE.format(
-        date_range="فواتير: 2025/1/1 → 2026/6/30",
+        title=title,
+        date_range=args.date_range_label,
         invoice_count=f"{invoice_count:,}",
         total_sales=fmt_money(total_sales),
         total_qty=fmt_money(total_qty),
@@ -373,18 +385,21 @@ def main():
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>تحليل المبيعات والمديونية — أبو هاشم للحوم</title>
+<title>{title}</title>
 </head>
 <body>
 {fragment}
 </body>
 </html>
 """
-    OUT_FULL.write_text(full_doc, encoding="utf-8")
-    print(f"Wrote {OUT_FULL}")
+    out_path = Path(args.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(full_doc, encoding="utf-8")
+    print(f"Wrote {out_path}")
 
-    if len(sys.argv) > 1:
-        frag_path = Path(sys.argv[1])
+    if args.fragment_out:
+        frag_path = Path(args.fragment_out)
+        frag_path.parent.mkdir(parents=True, exist_ok=True)
         frag_path.write_text(fragment, encoding="utf-8")
         print(f"Wrote fragment {frag_path}")
 

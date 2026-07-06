@@ -30,6 +30,7 @@ Methodology (see analysis/README.md for full write-up):
     الهنا -> الهنا, else -> ابوهاشم), since the source brand-classification
     PDF has no item codes to join on positionally.
 """
+import argparse
 import re
 from datetime import date
 from pathlib import Path
@@ -111,10 +112,12 @@ def build_zero_invoices(headers: pl.DataFrame) -> pl.DataFrame:
     return zero
 
 
-def build_item_summary(lines: pl.DataFrame) -> pl.DataFrame:
+def build_item_summary(lines: pl.DataFrame, name_source: pl.DataFrame | None = None) -> pl.DataFrame:
     # Most frequent item_name per item_code, to smooth over OCR spelling variants.
+    # Uses name_source (defaults to `lines` itself) so a period-filtered call can
+    # still borrow the cleaner name chosen over the full multi-year history.
     name_mode = (
-        lines.group_by(["item_code", "item_name"])
+        (name_source if name_source is not None else lines).group_by(["item_code", "item_name"])
         .agg(pl.len().alias("n"))
         .sort(["item_code", "n"], descending=[False, True])
         .group_by("item_code", maintain_order=True)
@@ -159,9 +162,9 @@ def build_item_summary(lines: pl.DataFrame) -> pl.DataFrame:
     return out
 
 
-def build_customer_summary(headers: pl.DataFrame) -> pl.DataFrame:
+def build_customer_summary(headers: pl.DataFrame, name_source: pl.DataFrame | None = None) -> pl.DataFrame:
     name_mode = (
-        headers.group_by(["customer_code", "customer_name"])
+        (name_source if name_source is not None else headers).group_by(["customer_code", "customer_name"])
         .agg(pl.len().alias("n"))
         .sort(["customer_code", "n"], descending=[False, True])
         .group_by("customer_code", maintain_order=True)
@@ -240,35 +243,59 @@ def build_rep_debt_arrears(headers: pl.DataFrame, debt: pl.DataFrame) -> tuple[p
 
 
 def main():
-    headers = load_headers()
-    lines = load_lines()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--start", help="Restrict sales tables (customers/items/zero-invoices) to invoices on/after this date (YYYY-MM-DD).")
+    parser.add_argument("--end", help="Restrict sales tables to invoices on/before this date (YYYY-MM-DD).")
+    parser.add_argument("--out-dir", help="Output directory for the generated tables (default: analysis/data).")
+    args = parser.parse_args()
+
+    out_dir = Path(args.out_dir) if args.out_dir else DATA
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    all_headers = load_headers()
+    all_lines = load_lines()
     debt = load_debt()
 
-    zero_invoices = build_zero_invoices(headers)
-    item_summary = build_item_summary(lines)
-    customer_summary = build_customer_summary(headers)
-    rep_summary, customer_arrears = build_rep_debt_arrears(headers, debt)
+    # Rep debt & arrears is always computed from the *full* invoice history:
+    # "last invoice date" (used for the arrears proxy) needs to see invoices
+    # outside the sales-table period too, otherwise a period filter would
+    # wrongly mark every customer as stale/arrears.
+    rep_summary, customer_arrears = build_rep_debt_arrears(all_headers, debt)
 
-    zero_invoices.write_csv(DATA / "zero_invoices.csv")
-    item_summary.write_csv(DATA / "item_summary.csv")
-    customer_summary.write_csv(DATA / "customer_sales_bonus_summary.csv")
-    rep_summary.write_csv(DATA / "rep_debt_arrears_summary.csv")
-    customer_arrears.write_csv(DATA / "customer_debt_arrears_detail.csv")
+    headers, lines = all_headers, all_lines
+    if args.start or args.end:
+        start_d = date.fromisoformat(args.start) if args.start else date.min
+        end_d = date.fromisoformat(args.end) if args.end else date.max
+        headers = all_headers.filter(
+            pl.col("date_d").is_not_null() & (pl.col("date_d") >= start_d) & (pl.col("date_d") <= end_d)
+        )
+        lines = all_lines.filter(pl.col("invoice_no").is_in(headers["invoice_no"]))
+
+    zero_invoices = build_zero_invoices(headers)
+    item_summary = build_item_summary(lines, name_source=all_lines)
+    customer_summary = build_customer_summary(headers, name_source=all_headers)
+
+    zero_invoices.write_csv(out_dir / "zero_invoices.csv")
+    item_summary.write_csv(out_dir / "item_summary.csv")
+    customer_summary.write_csv(out_dir / "customer_sales_bonus_summary.csv")
+    rep_summary.write_csv(out_dir / "rep_debt_arrears_summary.csv")
+    customer_arrears.write_csv(out_dir / "customer_debt_arrears_detail.csv")
 
     with pl.Config(fmt_str_lengths=60):
+        print(f"period filter: start={args.start} end={args.end} -> {headers.height}/{all_headers.height} invoices")
         print("=== Zero invoices ===")
-        print(f"count: {zero_invoices.height} / {headers.height} total invoices")
+        print(f"count: {zero_invoices.height} / {headers.height} invoices in period")
         print("\n=== Item summary (top 10 by paid value) ===")
         print(item_summary.head(10))
         print("\n=== Customer summary (top 10 by sales) ===")
         print(customer_summary.head(10))
-        print("\n=== Rep debt & arrears summary ===")
+        print("\n=== Rep debt & arrears summary (always full history) ===")
         print(rep_summary)
 
     # bundle summaries into one workbook for convenience
     import xlsxwriter  # noqa: F401  (ensures dependency presence is checked early)
     with pl.Config():
-        workbook_path = DATA / "sales_debt_analysis.xlsx"
+        workbook_path = out_dir / "sales_debt_analysis.xlsx"
         summaries = {
             "rep_debt_arrears": rep_summary,
             "customer_sales_bonus": customer_summary,

@@ -1,0 +1,43 @@
+{
+  "matched_master": 54,
+  "matched_keyword": 7,
+  "unclassified": [
+    {
+      "item_code": 87,
+      "name": "جلتومات الصوديوم طبق",
+      "revenue": 1875.0
+    },
+    {
+      "item_code": 190,
+      "name": "صميد طبق",
+      "revenue": 3625.0
+    },
+    {
+      "item_code": 319,
+      "name": "عجينه حواوشي طبق",
+      "revenue": 5280.0
+    },
+    {
+      "item_code": 379,
+      "name": "بكرة لزق شفاف طبق",
+      "revenue": 25.0
+    },
+    {
+      "item_code": 383,
+      "name": "كيلو عجينة سجق مخصوص طبق",
+      "revenue": 450.0
+    },
+    {
+      "item_code": 385,
+      "name": "برجر مخصوص 600 جرام طبق",
+      "revenue": 2900.0
+    },
+    {
+      "item_code": 11111,
+      "name": "كفته حاتي سيخ طبق",
+      "revenue": 640.0
+    }
+  ],
+  "n_items": 87,
+  "matched_master_fuzzy": 15
+}

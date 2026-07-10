@@ -1,0 +1,11 @@
+{
+  "invoices_found_main": 4591,
+  "invoices_parsed_main": 4591,
+  "invoices_reconciliation_fail_main": 0,
+  "invoice_blocks_no_items_main": 0,
+  "invoices_found_june": 311,
+  "invoices_parsed_june": 311,
+  "line_items_total": 13324,
+  "reconciliation_fail_examples": [],
+  "unparsed_examples": []
+}

@@ -1,0 +1,70 @@
+{
+  "total_revenue": 57590362.16,
+  "total_qty": 1182006.85,
+  "n_customers": 337,
+  "n_brands": 4,
+  "n_items": 86,
+  "n_months": 18,
+  "avg_monthly_revenue": 3199464.564444444,
+  "std_monthly_revenue": 660616.9704778829,
+  "cv_monthly_revenue": 0.206477351810456,
+  "n_a_class_customers": 35,
+  "top10_customers_revenue_share_pct": 49.76,
+  "hhi_customers": 322.7,
+  "hhi_brands": 4391.6,
+  "hhi_items": 773.2,
+  "abc_customer_counts": {
+    "C": 246,
+    "B": 56,
+    "A": 35
+  },
+  "abc_item_counts": {
+    "C": 60,
+    "B": 14,
+    "A": 12
+  },
+  "xyz_item_counts": {
+    "Z": 56,
+    "X": 18,
+    "Y": 12
+  },
+  "xyz_customer_counts": {
+    "Z": 282,
+    "Y": 33,
+    "X": 22
+  },
+  "seasonality_index_by_month": {
+    "1": 87.3,
+    "2": 87.5,
+    "3": 103.4,
+    "4": 108.0,
+    "5": 114.1,
+    "6": 93.2,
+    "7": 82.3,
+    "8": 94.8,
+    "9": 120.6,
+    "10": 115.6,
+    "11": 94.4,
+    "12": 98.8
+  },
+  "seasonality_n_years_observed_by_month": {
+    "1": 2,
+    "2": 2,
+    "3": 2,
+    "4": 2,
+    "5": 2,
+    "6": 2,
+    "7": 1,
+    "8": 1,
+    "9": 1,
+    "10": 1,
+    "11": 1,
+    "12": 1
+  },
+  "brand_revenue_share": {
+    "الهنا": 58.91,
+    "ابوهاشم": 26.78,
+    "اسبشيال": 14.29,
+    "غير مصنف": 0.03
+  }
+}

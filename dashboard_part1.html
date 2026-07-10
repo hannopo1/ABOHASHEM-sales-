@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة تحكم المبيعات والمديونيات - يونيو 2026</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Cairo', 'sans-serif'] },
+                    colors: {
+                        dark: { 900: '#0a0e1a', 800: '#111827', 700: '#1a2236', 600: '#232d45', 500: '#2d3a54' },
+                        accent: { blue: '#3b82f6', cyan: '#06b6d4', purple: '#8b5cf6', green: '#10b981', 
+                                yellow: '#f59e0b', red: '#ef4444', orange: '#f97316', pink: '#ec4899' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { font-family: 'Cairo', sans-serif; }
+        body { background: #0a0e1a; color: #e2e8f0; }
+        .glass { background: rgba(17,24,39,0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
+        .glass-light { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); }
+        .kpi-card { transition: all 0.3s ease; }
+        .kpi-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
+        .chart-container { height: 350px; }
+        .nav-item { cursor: pointer; transition: all 0.2s; border-radius: 8px; padding: 10px 16px; }
+        .nav-item:hover, .nav-item.active { background: rgba(59,130,246,0.15); color: #3b82f6; }
+        .section { display: none; }
+        .section.active { display: block; }
+        .data-table { width: 100%; border-collapse: collapse; }
+        .data-table th { background: rgba(59,130,246,0.15); padding: 12px; text-align: right; font-weight: 600; border-bottom: 2px solid rgba(59,130,246,0.3); }
+        .data-table td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .data-table tr:hover { background: rgba(255,255,255,0.03); }
+        .zero-invoice { background: rgba(239,68,68,0.15) !important; color: #fca5a5; }
+        .bonus-badge { padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+        .bonus-0 { background: rgba(239,68,68,0.2); color: #fca5a5; }
+        .bonus-1 { background: rgba(245,158,11,0.2); color: #fcd34d; }
+        .bonus-2 { background: rgba(249,115,22,0.2); color: #fdba74; }
+        .bonus-3 { background: rgba(16,185,129,0.2); color: #6ee7b7; }
+        .bonus-5 { background: rgba(59,130,246,0.2); color: #93c5fd; }
+        .aging-30 { color: #10b981; }
+        .aging-60 { color: #f59e0b; }
+        .aging-90 { color: #f97316; }
+        .aging-120 { color: #ef4444; }
+        .aging-over { color: #dc2626; font-weight: 700; }
+        .progress-bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,0.1); overflow: hidden; }
+        .progress-fill { height: 100%; border-radius: 3px; transition: width 1s ease; }
+        .filter-bar { position: sticky; top: 0; z-index: 100; }
+        .export-btn { transition: all 0.2s; }
+        .export-btn:hover { transform: scale(1.05); }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0a0e1a; }
+        ::-webkit-scrollbar-thumb { background: #2d3a54; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3b82f6; }
+        .search-input { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 16px; color: white; outline: none; }
+        .search-input:focus { border-color: #3b82f6; }
+        .drill-modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; overflow: auto; }
+        .drill-content { background: #111827; margin: 40px auto; max-width: 1200px; border-radius: 16px; padding: 32px; border: 1px solid rgba(255,255,255,0.1); }
+        .gauge-container { height: 250px; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-in { animation: fadeIn 0.5s ease forwards; }
+        .tab-btn { padding: 8px 20px; border-radius: 8px; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; }
+        .tab-btn.active { background: rgba(59,130,246,0.2); border-color: #3b82f6; color: #3b82f6; }
+        .tab-btn:hover:not(.active) { background: rgba(255,255,255,0.05); }
+    </style>
+</head>
+<body class="min-h-screen">

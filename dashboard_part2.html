@@ -1,0 +1,84 @@
+
+    <!-- Sidebar -->
+    <div class="fixed right-0 top-0 h-full w-64 glass z-50 overflow-y-auto" id="sidebar">
+        <div class="p-6 border-b border-white/10">
+            <h1 class="text-xl font-bold text-blue-400"><i class="fas fa-chart-line ml-2"></i>لوحة التحكم</h1>
+            <p class="text-xs text-gray-400 mt-1">يونيو 2026</p>
+        </div>
+        <nav class="p-4 space-y-1">
+            <div class="nav-item active" onclick="showSection('dashboard')">
+                <i class="fas fa-home ml-2 w-5"></i>الرئيسية
+            </div>
+            <div class="nav-item" onclick="showSection('kpis')">
+                <i class="fas fa-chart-pie ml-2 w-5"></i>مؤشرات الأداء
+            </div>
+            <div class="nav-item" onclick="showSection('sales')">
+                <i class="fas fa-shopping-cart ml-2 w-5"></i>تحليل المبيعات
+            </div>
+            <div class="nav-item" onclick="showSection('customers')">
+                <i class="fas fa-users ml-2 w-5"></i>تحليل العملاء
+            </div>
+            <div class="nav-item" onclick="showSection('debt')">
+                <i class="fas fa-file-invoice-dollar ml-2 w-5"></i>المديونيات
+            </div>
+            <div class="nav-item" onclick="showSection('invoices')">
+                <i class="fas fa-receipt ml-2 w-5"></i>تقرير الفواتير
+            </div>
+            <div class="nav-item" onclick="showSection('products')">
+                <i class="fas fa-boxes ml-2 w-5"></i>تحليل الأصناف
+            </div>
+            <div class="nav-item" onclick="showSection('comparison')">
+                <i class="fas fa-balance-scale ml-2 w-5"></i>مقارنة العملاء
+            </div>
+            <div class="nav-item" onclick="showSection('heatmap')">
+                <i class="fas fa-fire ml-2 w-5"></i>Heat Map
+            </div>
+            <div class="nav-item" onclick="showSection('pareto')">
+                <i class="fas fa-chart-bar ml-2 w-5"></i>تحليل باريتو
+            </div>
+            <div class="nav-item" onclick="showSection('debt-dashboard')">
+                <i class="fas fa-exclamation-triangle ml-2 w-5"></i>داشبورد المديونية
+            </div>
+            <div class="nav-item" onclick="showSection('executive')">
+                <i class="fas fa-crown ml-2 w-5"></i>صفحة الإدارة
+            </div>
+        </nav>
+        <div class="p-4 border-t border-white/10 mt-auto">
+            <button onclick="exportDashboard()" class="export-btn w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg text-sm font-medium">
+                <i class="fas fa-download ml-1"></i>تصدير التقرير
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="mr-64 p-6">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-6 glass rounded-xl p-4">
+            <div>
+                <h2 class="text-2xl font-bold">لوحة تحكم المبيعات والمديونيات</h2>
+                <p class="text-gray-400 text-sm">تقرير شهر يونيو 2026 | تاريخ التحديث: 4 يوليو 2026</p>
+            </div>
+            <div class="flex gap-3">
+                <select id="monthFilter" class="search-input" onchange="applyFilters()">
+                    <option value="6">يونيو 2026</option>
+                </select>
+                <select id="salespersonFilter" class="search-input" onchange="applyFilters()">
+                    <option value="">كل المناديب</option>
+                    <option value="بشرى">بشرى</option>
+                    <option value="شعبان">شعبان</option>
+                    <option value="محمد امام">محمد امام</option>
+                    <option value="محمد خليل">محمد خليل</option>
+                    <option value="هاني">هاني</option>
+                    <option value="ايمن فارس">ايمن فارس</option>
+                    <option value="حسام حسن">حسام حسن</option>
+                    <option value="الصعيد">الصعيد</option>
+                </select>
+                <select id="brandFilter" class="search-input" onchange="applyFilters()">
+                    <option value="">كل البراندات</option>
+                    <option value="ابو هاشم">أبو هاشم</option>
+                    <option value="الهنا">الهنا</option>
+                    <option value="اسبشيال">اسبشيال</option>
+                </select>
+                <input type="text" id="searchInput" placeholder="بحث سريع..." class="search-input w-48" oninput="applyFilters()">
+            </div>
+        </div>

@@ -81,7 +81,8 @@ def build(kpis, customers, products, receivables, insights, path=C.OUT_PDF):
         )
         row.append(cell)
         if len(row) == 3:
-            data.append(row); row = []
+            data.append(row)
+            row = []
     if row:
         while len(row) < 3:
             row.append("")

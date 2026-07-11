@@ -1,0 +1,12 @@
+# Executive Financial Dashboard — build pipeline dependencies
+# All aggregation runs on Polars (scales to 1M+ rows); pandas is only glue for
+# the Excel/PDF writers. The dashboard itself ships pre-aggregated JSON and needs
+# no Python at view time.
+polars>=1.0
+pandas>=2.0
+numpy>=1.24
+plotly>=5.20
+reportlab>=4.0
+arabic-reshaper>=3.0
+python-bidi>=0.4
+openpyxl>=3.1

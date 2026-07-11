@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>أبو هاشم للحوم — لوحة الأداء التنفيذي · يونيو ٢٠٢٦</title>
+
+<!-- Vendored, fully offline (no CDN / no backend) -->
+<link rel="stylesheet" href="vendor/bootstrap.rtl.min.css">
+<link rel="stylesheet" href="vendor/dataTables.dataTables.min.css">
+<link rel="stylesheet" href="vendor/buttons.dataTables.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-theme="dark">
+
+<!-- ===== Top bar ===== -->
+<header class="topbar glass">
+  <button id="navToggle" class="icon-btn d-lg-none" aria-label="القائمة">
+    <svg viewBox="0 0 24 24" class="ic"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+  </button>
+  <div class="brand">
+    <div class="brand-mark">أ.ه</div>
+    <div class="brand-txt">
+      <h1>أبو هاشم للحوم — Food Industries</h1>
+      <span class="brand-sub">لوحة الأداء التنفيذي المالي · <b id="periodLabel">يونيو ٢٠٢٦</b></span>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <button class="pill-btn" id="btnExportAll" title="تصدير كل الجداول Excel">
+      <svg viewBox="0 0 24 24" class="ic"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg><span>تصدير</span>
+    </button>
+    <button class="pill-btn" id="btnPrint" title="طباعة / حفظ PDF">
+      <svg viewBox="0 0 24 24" class="ic"><path d="M6 9V3h12v6M6 18H4v-6h16v6h-2M8 14h8v7H8z"/></svg><span>طباعة</span>
+    </button>
+    <button class="pill-btn" id="btnTheme" title="تبديل المظهر">
+      <svg viewBox="0 0 24 24" class="ic"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg><span>المظهر</span>
+    </button>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- ===== Sidebar nav ===== -->
+  <nav id="sidebar" class="sidebar glass">
+    <div class="nav-group-label">الأقسام</div>
+    <div class="nav-item active" data-section="overview"><svg viewBox="0 0 24 24" class="ic"><path d="M3 13h8V3H3zM13 21h8V3h-8zM3 21h8v-6H3z"/></svg><span>لوحة المعلومات</span></div>
+    <div class="nav-item" data-section="sales"><svg viewBox="0 0 24 24" class="ic"><path d="M3 3v18h18M7 15l4-4 3 3 5-6"/></svg><span>المبيعات</span></div>
+    <div class="nav-item" data-section="customers"><svg viewBox="0 0 24 24" class="ic"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87"/></svg><span>العملاء</span></div>
+    <div class="nav-item" data-section="products"><svg viewBox="0 0 24 24" class="ic"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.3 7L12 12l8.7-5M12 22V12"/></svg><span>المنتجات</span></div>
+    <div class="nav-item" data-section="receivables"><svg viewBox="0 0 24 24" class="ic"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg><span>المديونية والأعمار</span></div>
+    <div class="nav-item" data-section="collections"><svg viewBox="0 0 24 24" class="ic"><path d="M12 22a10 10 0 100-20 10 10 0 000 20zM12 6v6l4 2"/></svg><span>التحصيل</span></div>
+    <div class="nav-item" data-section="bonus"><svg viewBox="0 0 24 24" class="ic"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg><span>حوافز التحصيل</span></div>
+    <div class="nav-item" data-section="analytics"><svg viewBox="0 0 24 24" class="ic"><path d="M4 4v16h16M8 16l3-4 3 2 4-6"/></svg><span>التحليلات المتقدمة</span></div>
+    <div class="nav-item" data-section="quality"><svg viewBox="0 0 24 24" class="ic"><path d="M22 11.08V12a10 10 0 11-5.93-9.14M22 4L12 14.01l-3-3"/></svg><span>جودة البيانات</span></div>
+    <div class="nav-note" id="dataNote"></div>
+  </nav>
+
+  <!-- ===== Main ===== -->
+  <main class="content">
+    <!-- Filter bar -->
+    <section class="filterbar glass">
+      <div class="filters" id="filters">
+        <label>السنة<select id="f_year" disabled><option>2026</option></select></label>
+        <label>الشهر<select id="f_month" disabled><option>يونيو</option></select></label>
+        <label>العميل<select id="f_customer"><option value="">الكل</option></select></label>
+        <label>المندوب<select id="f_rep"><option value="">الكل</option></select></label>
+        <label>الصنف<select id="f_item"><option value="">الكل</option></select></label>
+        <label>العلامة/الفئة<select id="f_brand"><option value="">الكل</option></select></label>
+        <label>الفرع<select id="f_branch"><option value="">كل الفروع</option></select></label>
+        <label>حالة الفاتورة<select id="f_status">
+          <option value="">الكل</option><option value="unpaid">غير محصّلة</option>
+          <option value="paid">محصّلة</option><option value="zero">صفرية</option></select></label>
+        <label>فئة العمر<select id="f_aging"><option value="">الكل</option></select></label>
+      </div>
+      <div class="filter-actions">
+        <input type="search" id="globalSearch" class="search-input" placeholder="بحث سريع…">
+        <button class="pill-btn ghost" id="btnReset">إعادة تعيين</button>
+      </div>
+      <div class="chips" id="filterChips"></div>
+    </section>
+
+    <!-- Sections are populated by script.js -->
+    <div id="sections"></div>
+  </main>
+</div>
+
+<!-- ===== Drill-through modal ===== -->
+<div class="drill-modal" id="drillModal">
+  <div class="drill-content glass">
+    <div class="drill-head">
+      <h2 id="drillTitle">كشف حساب العميل</h2>
+      <button class="icon-btn" id="drillClose" aria-label="إغلاق">
+        <svg viewBox="0 0 24 24" class="ic"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div id="drillBody"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<!-- Vendored scripts -->
+<script src="vendor/jquery.min.js"></script>
+<script src="vendor/bootstrap.bundle.min.js"></script>
+<script src="vendor/echarts.min.js"></script>
+<script src="vendor/plotly.min.js"></script>
+<script src="vendor/jszip.min.js"></script>
+<script src="vendor/dataTables.min.js"></script>
+<script src="vendor/dataTables.buttons.min.js"></script>
+<script src="vendor/buttons.html5.min.js"></script>
+<script src="vendor/buttons.print.min.js"></script>
+<script src="data.js"></script>
+<script src="script.js"></script>
+</body>
+</html>

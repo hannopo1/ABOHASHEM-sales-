@@ -228,7 +228,7 @@ def validate(lines_all, invoices_all, jl, ji, june, receivables, dq, months) -> 
           f"({tot_lines:,.0f} vs {tot_inv:,.0f})")
 
     # 3. coverage
-    check("6 months present (Jan–Jun 2026)", len(months) == 6, f"({', '.join(months)})")
+    check("≥6 months present (2026)", len(months) >= 6, f"({', '.join(months)})")
 
     # 4. June default month unchanged (regression guard)
     check("June = 311 invoices", kpis["n_invoices"] == 311, f"({kpis['n_invoices']})")

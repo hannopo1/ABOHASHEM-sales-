@@ -904,8 +904,10 @@ function exportAll(){const t=tables[Object.keys(tables)[0]];
 /* ========================================================================== */
 function boot(){
   document.getElementById("periodLabel").textContent=curMonthLabel();
+  const dm=D.meta.data_months||[];
+  const span=dm.length?`${monthName(dm[0]).split(" ")[0]}–${monthName(dm[dm.length-1]).split(" ")[0]}`:"";
   document.getElementById("dataNote").innerHTML=
-    `المصدر: فواتير ٢٠٢٦ (يناير–يونيو) · لقطة مديونية ${D.meta.as_of}.<br>`+
+    `المصدر: فواتير 2026 (${span}) · لقطة مديونية ${D.meta.as_of}.<br>`+
     `قيود: لا تكلفة (لا هامش)، لا موازنة، الأعمار تقديرية.`;
   fillFilters();wireSearch();
   document.querySelectorAll(".nav-item").forEach(n=>n.addEventListener("click",()=>showSection(n.dataset.section)));

@@ -207,8 +207,10 @@ def parse_all(year: int | None = None) -> tuple[pl.DataFrame, pl.DataFrame]:
     June is taken exclusively from the dedicated June file (higher-fidelity table
     extraction); the main file supplies every earlier month.
     """
+    from . import july as july_mod
     lm, im = parse_main()
     lj, ij = parse_june()
+    l7, i7 = july_mod.parse_july()          # July 1–15 2026 (PDF); empty if absent
     # main file already contains an (older-format) June? keep the dedicated June
     # file authoritative for 2026-06 and drop any 2026-06 rows from the main set.
     def _drop_june26(df):
@@ -216,8 +218,10 @@ def parse_all(year: int | None = None) -> tuple[pl.DataFrame, pl.DataFrame]:
                            & (pl.col("invoice_date").dt.month() == 6)))
     lm, im = _drop_june26(lm), _drop_june26(im)
 
-    lines = pl.concat([lm, lj], how="vertical_relaxed")
-    invoices = pl.concat([im, ij], how="vertical_relaxed")
+    frames_l = [lm, lj] + ([l7] if l7.height else [])
+    frames_i = [im, ij] + ([i7] if i7.height else [])
+    lines = pl.concat(frames_l, how="vertical_relaxed")
+    invoices = pl.concat(frames_i, how="vertical_relaxed")
     lines = lines.with_columns(pl.col("invoice_date").dt.strftime("%Y-%m").alias("month"))
     invoices = invoices.with_columns(pl.col("invoice_date").dt.strftime("%Y-%m").alias("month"))
     if year is not None:

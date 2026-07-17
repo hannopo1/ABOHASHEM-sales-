@@ -17,6 +17,9 @@ REPO_ROOT = APP_DIR.parent                            # repository root
 
 SRC_JUNE_MD = REPO_ROOT / "فواتير_المبيعات_يونيو_2026-1.md"
 SRC_MAIN_MD = REPO_ROOT / "فواتير المبيعات من 112025 الى 3152026.md"
+# July 1–15 2026 sales invoices (Pioneers-template PDF with an extractable text
+# layer). Parsed geometrically at 100% invoice reconciliation.
+SRC_JULY_PDF = REPO_ROOT / "فواتير المبيعات من 1_7_2026الى 15_7_2026.pdf"
 PROCESSED = REPO_ROOT / "data" / "processed"
 JUNE_AGG = REPO_ROOT / "analysis" / "data_2026_06"
 

@@ -22,13 +22,17 @@ const num = x => (Math.round((x||0)*100)/100).toLocaleString("en-US");
 const int = x => Math.round(x||0).toLocaleString("en-US");
 const pct = (x,d=1) => ((x||0)*100).toFixed(d) + "%";
 const MONTHLABEL = Object.fromEntries((D.meta.available_months||[]).map(m=>[m.v,m.l]));
+const ALL_LABEL = D.meta.all_months_label || "جميع الشهور";
+const DATA_MONTHS = new Set(D.meta.data_months || []);      // months carrying source data
+const monthHasData = m => !m || m==="all" || DATA_MONTHS.has(m);
 const monthName = ym => MONTHLABEL[ym] || ym;
 // code -> display name (derived once from the line-level data)
 const CUST_NAME = {}, ITEM_NAME = {};
 D.lines.forEach(l => { CUST_NAME[l.customer_code] = l.customer_name; ITEM_NAME[l.item_code] = l.item_name; });
 const curMonthLabel = () => {
   const m = (typeof state!=="undefined" && state.filters.month) || D.meta.default_month;
-  return (!m || m==="all") ? "كل شهور ٢٠٢٦" : (MONTHLABEL[m] || m);
+  if (!m || m==="all") return ALL_LABEL;
+  return (MONTHLABEL[m] || m) + (monthHasData(m) ? "" : " — لا توجد بيانات");
 };
 
 /* ---- state --------------------------------------------------------------- */
@@ -213,7 +217,11 @@ window.addEventListener("resize", () => Object.values(charts).forEach(c=>c&&c.re
 /*  Insight box                                                                */
 /* ========================================================================== */
 function insight(key) {
-  const set = D.insights_by_month[state.filters.month] || D.insights_by_month["all"] || {};
+  // Months with no source data carry no insights — show nothing rather than
+  // falling back to another period's commentary.
+  const mk = state.filters.month;
+  const set = (mk && mk !== "all") ? D.insights_by_month[mk] : D.insights_by_month["all"];
+  if (!set) return "";
   const it = set[key];
   if (!it) return "";
   const p = it.priority.includes("عالية")?"p-high":it.priority.includes("متوسطة")?"p-med":"p-low";
@@ -241,14 +249,20 @@ function card(o) { // {id,title,sub,cls,tall,short,approx,insightKey,plotly}
     <div class="card-head"><div><h3>${o.title}${approx}</h3>${o.sub?`<span class="sub">${o.sub}</span>`:""}</div>
       <div class="card-tools">${tools}</div></div>
     ${chartEl}
-    ${o.insightKey?insight(o.insightKey):""}</div>`;
+    ${o.insightKey?`<div class="ins-slot" data-ins="${o.insightKey}"></div>`:""}</div>`;
 }
 function tableCard(o) { // {id,title,approx}
   return `<div class="card span-2">
     <div class="card-head"><div><h3>${o.title}${o.approx?'<span class="tag-approx">تقديري</span>':''}</h3>
       ${o.sub?`<span class="sub">${o.sub}</span>`:""}</div></div>
     <div class="tbl-wrap"><table id="${o.id}" class="display" style="width:100%"></table></div>
-    ${o.insightKey?insight(o.insightKey):""}</div>`;
+    ${o.insightKey?`<div class="ins-slot" data-ins="${o.insightKey}"></div>`:""}</div>`;
+}
+/* Refresh all insight slots in the active section for the current month. */
+function paintInsights(){
+  document.querySelectorAll(".section.active .ins-slot").forEach(el=>{
+    el.innerHTML = insight(el.dataset.ins);
+  });
 }
 
 /* ========================================================================== */
@@ -756,12 +770,13 @@ function showSection(id){
   el.classList.add("active");
   const X=buildContext();
   SECTIONS[id].update(X);
+  paintInsights();
   built[id]=true;
   bindPng();
   setTimeout(()=>Object.values(charts).forEach(c=>c&&c.resize&&c.resize()),60);
   document.getElementById("sidebar").classList.remove("open");
 }
-function refreshActive(){ if(state.section) SECTIONS[state.section].update(buildContext()); }
+function refreshActive(){ if(state.section){ SECTIONS[state.section].update(buildContext()); paintInsights(); } }
 
 /* ---- PNG export per chart ---- */
 function bindPng(){
@@ -825,7 +840,7 @@ function fillFilters(){
   // in the data plus an "All months" option; defaults to June.
   const fm=document.getElementById("f_month");
   fm.innerHTML="";
-  opt(fm,[{v:"all",l:"كل شهور ٢٠٢٦"}, ...D.meta.available_months]);
+  opt(fm,[{v:"all",l:ALL_LABEL}, ...D.meta.available_months]);
   fm.value=state.filters.month;
 
   opt(document.getElementById("f_customer"),pairs(CUST_NAME));
@@ -840,7 +855,10 @@ function fillFilters(){
              f_brand:"brand",f_branch:"rep",f_status:"status",f_aging:"aging"};
   Object.keys(map).forEach(fid=>document.getElementById(fid).addEventListener("change",e=>{
     state.filters[map[fid]]=e.target.value;
-    if(fid==="f_month") document.getElementById("periodLabel").textContent=curMonthLabel();
+    if(fid==="f_month"){
+      document.getElementById("periodLabel").textContent=curMonthLabel();
+      if(!monthHasData(e.target.value)) toast("لا توجد بيانات مبيعات لهذا الشهر بالمصدر");
+    }
     renderChips(); refreshActive(); }));
 }
 function renderChips(){

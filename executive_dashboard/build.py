@@ -149,7 +149,12 @@ def main() -> int:
         "meta": {
             "period_label": C.month_label_ar(C.DEFAULT_MONTH),
             "default_month": C.DEFAULT_MONTH,
-            "available_months": [{"v": m, "l": C.month_label_ar(m)} for m in months],
+            # All twelve months are offered in the selector; `data_months` records
+            # which actually carry source data so the client shows an honest empty
+            # state (not fabricated values) for the rest.
+            "available_months": [{"v": m, "l": C.month_label_ar(m)} for m in C.ALL_MONTHS],
+            "data_months": months,
+            "all_months_label": C.ALL_MONTHS_LABEL,
             "as_of": C.AS_OF_DATE,
             "net_terms_days": C.NET_TERMS_DAYS,
             "bonus_rules": C.BONUS_RULES,
@@ -252,6 +257,22 @@ def validate(lines_all, invoices_all, jl, ji, june, receivables, dq, months) -> 
                  bonus_pct(0.80) == 0.02 and bonus_pct(0.90) == 0.03 and
                  bonus_pct(0.95) == 0.05 and bonus_pct(1.0) == 0.05)
     check("bonus ladder boundaries", ladder_ok)
+
+    # 10. extended data-quality gates (reported here; no dashboard UI change)
+    dup_cust = (invoices_all.group_by("customer_code")
+                .agg(pl.col("customer_name").n_unique().alias("names"))
+                .filter(pl.col("names") > 1).height)
+    print(f"  [INFO] customer codes with >1 name variant: {dup_cust}")
+    invalid_dates = invoices_all.filter(
+        ~pl.col("invoice_date").cast(pl.Utf8).str.starts_with(str(C.PERIOD_YEAR))).height
+    check("no invalid / out-of-year dates", invalid_dates == 0, f"({invalid_dates})")
+    neg_qty = lines_all.filter(pl.col("qty") < 0).height
+    check("no negative quantities", neg_qty == 0, f"({neg_qty})")
+    bal = invoices_all.filter(
+        ((pl.col("paid").fill_null(0) + pl.col("remaining").fill_null(0)
+          - pl.col("reported_total").fill_null(0)).abs() > 1.0)).height
+    check("invoice balances consistent (paid+remaining=total)",
+          bal <= invoices_all.height * 0.02, f"({bal} mismatches)")
 
     passed = all(checks)
     print("=" * 64)

@@ -55,13 +55,16 @@ MONTHS_AR = {
     1: "يناير", 2: "فبراير", 3: "مارس", 4: "أبريل", 5: "مايو", 6: "يونيو",
     7: "يوليو", 8: "أغسطس", 9: "سبتمبر", 10: "أكتوبر", 11: "نوفمبر", 12: "ديسمبر",
 }
-AR_DIGITS = str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩")
+ALL_MONTHS_LABEL = "جميع الشهور"
+# Every calendar month of the period year — the month selector lists all twelve;
+# months with no source data render an honest empty state (never fabricated).
+ALL_MONTHS = [f"{PERIOD_YEAR}-{m:02d}" for m in range(1, 13)]
 
 
 def month_label_ar(ym: str) -> str:
-    """'2026-06' -> 'يونيو ٢٠٢٦'."""
+    """'2026-06' -> 'يونيو 2026' (matches the requested selector labels exactly)."""
     y, m = ym.split("-")
-    return f"{MONTHS_AR[int(m)]} {y.translate(AR_DIGITS)}"
+    return f"{MONTHS_AR[int(m)]} {y}"
 
 # ---------------------------------------------------------------------------
 # Business rules (all configurable in one place)

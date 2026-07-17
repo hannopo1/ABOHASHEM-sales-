@@ -297,4 +297,12 @@ def enrich_lines(lines_df: pl.DataFrame, dim_items: pl.DataFrame) -> pl.DataFram
         .then(pl.col("qty") / pl.col("carton_units"))
         .otherwise(None).alias("boxes"),
     ])
+    # Display-only brand relabelling (config.BRAND_OVERRIDES) — leaves every
+    # financial value untouched, changes only the shown brand label.
+    if C.BRAND_OVERRIDES:
+        out = out.with_columns(
+            pl.col("item_code").replace(C.BRAND_OVERRIDES, default=None).alias("_brand_ovr")
+        ).with_columns(
+            pl.coalesce(["_brand_ovr", "brand"]).alias("brand")
+        ).drop("_brand_ovr")
     return out

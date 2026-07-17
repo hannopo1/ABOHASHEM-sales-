@@ -47,9 +47,9 @@ FONT_BOLD = APP_DIR / "vendor" / "fonts" / "Amiri-Bold.ttf"
 # Period
 # ---------------------------------------------------------------------------
 PERIOD_YEAR = 2026
-PERIOD_MONTH = 6
-PERIOD_LABEL_AR = "يونيو ٢٠٢٦"
-DEFAULT_MONTH = "2026-06"          # month the dashboard opens on
+PERIOD_MONTH = 7
+PERIOD_LABEL_AR = "يوليو ٢٠٢٦"
+DEFAULT_MONTH = "2026-07"          # month the dashboard opens on
 # AR snapshot date used for the receivable/overdue analysis. Updated to the
 # FINAL post-July customer balances (مديونية …-16_7_2026.pdf).
 AS_OF_DATE = "2026-07-16"
@@ -108,6 +108,18 @@ AGING_BUCKETS = [
     ("d91_120", "91–120 يوم", 91, 120),
     ("d120p", "أكثر من 120 يوم", 121, 10_000),
 ]
+
+
+# Display-only brand relabelling (master/reference mapping override). Keys are
+# item codes; values are the brand label to show. Applied at enrichment time —
+# it NEVER touches any financial value (sales, qty, price), only the shown brand.
+# Requested change: the beef-paste product «العجينة البقري» (عجينة بقرى 1ك/500جم/5ك,
+# codes 433/435/436) moves from «أبو هاشم» to «اسبشيال».
+BRAND_OVERRIDES: dict[str, str] = {
+    "433": "اسبشيال",
+    "435": "اسبشيال",
+    "436": "اسبشيال",
+}
 
 
 def bonus_pct(collection_rate: float) -> float:

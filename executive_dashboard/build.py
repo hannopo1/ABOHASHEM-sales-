@@ -270,13 +270,19 @@ def validate(lines_all, invoices_all, jl, ji, june, receivables, dq, months) -> 
     # 3. coverage
     check("≥6 months present (2026)", len(months) >= 6, f"({', '.join(months)})")
 
-    # 4. June default month unchanged (regression guard)
-    check("June = 311 invoices", kpis["n_invoices"] == 311, f"({kpis['n_invoices']})")
-    check("June = 116 customers", kpis["n_customers"] == 116, f"({kpis['n_customers']})")
+    # 4. June regression guard — historical June figures must stay byte-identical
+    #    regardless of the default month.
+    jun_inv = invoices_all.filter(pl.col("month") == "2026-06")
+    jn = int(jun_inv["invoice_no"].n_unique())
+    jc = int(jun_inv["customer_code"].n_unique())
+    jsales = float(jun_inv["reported_total"].sum())
+    check("June = 311 invoices (unchanged)", jn == 311, f"({jn})")
+    check("June = 116 customers (unchanged)", jc == 116, f"({jc})")
+    check("June sales = 3,867,491 (unchanged)", abs(jsales - 3867491) < 1.0, f"({jsales:,.0f})")
 
-    # 5. customer sales sum == month total
+    # 5. customer sales sum == default-month total
     csum = sum(c["sales"] for c in customers)
-    check("Σ customer sales == June total", abs(csum - kpis["total_sales"]) < 1.0,
+    check("Σ customer sales == default-month total", abs(csum - kpis["total_sales"]) < 1.0,
           f"({csum:,.0f})")
 
     # 6. product contribution sums ~100%

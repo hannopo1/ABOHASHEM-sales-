@@ -16,6 +16,7 @@ APP_DIR = PKG_DIR.parent                              # executive_dashboard
 REPO_ROOT = APP_DIR.parent                            # repository root
 
 SRC_JUNE_MD = REPO_ROOT / "فواتير_المبيعات_يونيو_2026-1.md"
+SRC_MAIN_MD = REPO_ROOT / "فواتير المبيعات من 112025 الى 3152026.md"
 PROCESSED = REPO_ROOT / "data" / "processed"
 JUNE_AGG = REPO_ROOT / "analysis" / "data_2026_06"
 
@@ -45,8 +46,22 @@ FONT_BOLD = APP_DIR / "vendor" / "fonts" / "Amiri-Bold.ttf"
 PERIOD_YEAR = 2026
 PERIOD_MONTH = 6
 PERIOD_LABEL_AR = "يونيو ٢٠٢٦"
+DEFAULT_MONTH = "2026-06"          # month the dashboard opens on
 # AR debt snapshot date the arrears files were extracted at.
 AS_OF_DATE = "2026-07-04"
+
+# Arabic month names (used to label the month selector).
+MONTHS_AR = {
+    1: "يناير", 2: "فبراير", 3: "مارس", 4: "أبريل", 5: "مايو", 6: "يونيو",
+    7: "يوليو", 8: "أغسطس", 9: "سبتمبر", 10: "أكتوبر", 11: "نوفمبر", 12: "ديسمبر",
+}
+AR_DIGITS = str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩")
+
+
+def month_label_ar(ym: str) -> str:
+    """'2026-06' -> 'يونيو ٢٠٢٦'."""
+    y, m = ym.split("-")
+    return f"{MONTHS_AR[int(m)]} {y.translate(AR_DIGITS)}"
 
 # ---------------------------------------------------------------------------
 # Business rules (all configurable in one place)

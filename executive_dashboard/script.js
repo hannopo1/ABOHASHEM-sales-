@@ -21,9 +21,19 @@ const egpK = x => { x=x||0; const a=Math.abs(x);
 const num = x => (Math.round((x||0)*100)/100).toLocaleString("en-US");
 const int = x => Math.round(x||0).toLocaleString("en-US");
 const pct = (x,d=1) => ((x||0)*100).toFixed(d) + "%";
+const MONTHLABEL = Object.fromEntries((D.meta.available_months||[]).map(m=>[m.v,m.l]));
+const monthName = ym => MONTHLABEL[ym] || ym;
+// code -> display name (derived once from the line-level data)
+const CUST_NAME = {}, ITEM_NAME = {};
+D.lines.forEach(l => { CUST_NAME[l.customer_code] = l.customer_name; ITEM_NAME[l.item_code] = l.item_name; });
+const curMonthLabel = () => {
+  const m = (typeof state!=="undefined" && state.filters.month) || D.meta.default_month;
+  return (!m || m==="all") ? "كل شهور ٢٠٢٦" : (MONTHLABEL[m] || m);
+};
 
 /* ---- state --------------------------------------------------------------- */
-const state = { filters:{customer:"",rep:"",brand:"",item:"",status:"",aging:""}, section:"overview" };
+const state = { filters:{month:(D.meta.default_month||"2026-06"),
+  customer:"",rep:"",brand:"",item:"",status:"",aging:""}, section:"overview" };
 const charts = {};                       // id -> echarts instance
 const tables = {};                       // id -> DataTable
 const isLight = () => document.body.getAttribute("data-theme") === "light";
@@ -33,31 +43,92 @@ const isLight = () => document.body.getAttribute("data-theme") === "light";
 /* ========================================================================== */
 function buildContext() {
   const f = state.filters;
+  const mAll = !f.month || f.month === "all";
   let lines = D.lines.filter(l =>
+    (mAll || l.month === f.month) &&
     (!f.customer || l.customer_code === f.customer) &&
     (!f.rep      || l.rep === f.rep) &&
     (!f.brand    || l.brand === f.brand) &&
     (!f.item     || l.item_code === f.item));
   const invSet = new Set(lines.map(l => l.invoice_no));
   let invoices = D.invoices.filter(v =>
+    (mAll || v.month === f.month) &&
     (!f.customer || v.customer_code === f.customer) &&
     (!f.rep      || v.rep === f.rep) &&
     (!f.status   || v.status === f.status) &&
     ((!f.brand && !f.item) || invSet.has(v.invoice_no)));
   if (f.status) { const s = new Set(invoices.map(v => v.invoice_no)); lines = lines.filter(l => s.has(l.invoice_no)); }
 
+  // Receivables is a fixed AR snapshot; narrow it to the month's active cohort.
+  const active = new Set(invoices.map(v => v.customer_code));
   const recv = D.receivables.rows.filter(r =>
+    (mAll || active.has(r.customer_code)) &&
     (!f.customer || r.customer_code === f.customer) &&
     (!f.rep      || r.rep === f.rep) &&
     (!f.aging    || r.bucket === f.aging));
 
-  const customers = D.customers.filter(c =>
-    (!f.customer || c.customer_code === f.customer) &&
-    (!f.rep      || c.rep === f.rep));
-
+  const customers = aggCustomers(lines, invoices);
   return { lines, invoices, recv, customers, products: aggProducts(lines),
+           buckets: bucketsFromRows(recv),
            kpis: aggKpis(lines, invoices, recv, customers) };
 }
+
+/* Per-customer monthly aggregates joined with the fixed AR / bonus snapshot. */
+function aggCustomers(lines, invoices) {
+  const asOf = new Date(D.meta.as_of);
+  const net = D.meta.net_terms_days;
+  const m = new Map();
+  for (const v of invoices) {
+    let o = m.get(v.customer_code);
+    if (!o) { o = { customer_code:v.customer_code, customer_name:v.customer_name,
+      sales:0, collections:0, invs:new Set(), unpaid:[] }; m.set(v.customer_code, o); }
+    o.sales += v.reported_total||0; o.collections += v.paid||0; o.invs.add(v.invoice_no);
+    if (v.remaining>0 && v.reported_total>0) o.unpaid.push(v);
+  }
+  const lm = new Map();
+  for (const l of lines) {
+    let o = lm.get(l.customer_code);
+    if (!o) { o = { units:0, boxes:0, items:new Set() }; lm.set(l.customer_code, o); }
+    o.units += l.qty||0; o.boxes += l.boxes||0; o.items.add(l.item_code);
+  }
+  const rows = [...m.values()].map(o => {
+    const ar = D.customer_ar[o.customer_code] || {};
+    const l = lm.get(o.customer_code) || { units:0, boxes:0, items:new Set() };
+    const nInv = o.invs.size;
+    const rec = {
+      customer_code:o.customer_code, customer_name:o.customer_name,
+      rep: ar.rep || "غير محدد", city: ar.city || "",
+      sales: round2(o.sales), collections: round2(o.collections),
+      n_invoices: nInv, n_items: l.items.size, units: round2(l.units), boxes: round2(l.boxes),
+      avg_invoice_value: nInv ? round2(o.sales/nInv) : 0,
+      total_billed: ar.total_billed != null ? ar.total_billed : round2(o.sales),
+      outstanding: ar.outstanding != null ? ar.outstanding : null,
+      collection_rate: ar.collection_rate != null ? ar.collection_rate : null,
+      bonus_pct: ar.bonus_pct || 0, has_ar: !!ar.has_ar,
+    };
+    rec.bonus_value = round2(o.sales * rec.bonus_pct);
+    if (o.unpaid.length) {
+      o.unpaid.sort((a,b)=>a.invoice_date<b.invoice_date?-1:1);
+      const u = o.unpaid[0]; const due = new Date(u.invoice_date); due.setDate(due.getDate()+net);
+      rec.oldest_invoice_no = u.invoice_no; rec.oldest_invoice_date = u.invoice_date;
+      rec.oldest_due_date = due.toISOString().slice(0,10);
+      rec.oldest_days_overdue = Math.max(0, Math.round((asOf-due)/864e5));
+      rec.oldest_amount = round2(u.remaining);
+    }
+    return rec;
+  }).sort((a,b)=>b.sales-a.sales);
+  rows.forEach((r,i)=>r.rank=i+1);
+  return rows;
+}
+
+/* Aging buckets recomputed from the (filtered) AR rows — keeps the chart in
+   sync with the month / cross-filter selection. */
+function bucketsFromRows(rows) {
+  const b = { current:0, d1_30:0, d31_60:0, d61_90:0, d91_120:0, d120p:0 };
+  for (const r of rows) { b.current += r.current||0; if (r.overdue>0) b[r.bucket] += r.overdue||0; }
+  return b;
+}
+const round2 = x => Math.round((x||0)*100)/100;
 
 function aggKpis(lines, invoices, recv, customers) {
   const total_sales = sum(invoices, "reported_total");
@@ -142,7 +213,8 @@ window.addEventListener("resize", () => Object.values(charts).forEach(c=>c&&c.re
 /*  Insight box                                                                */
 /* ========================================================================== */
 function insight(key) {
-  const it = D.insights[key];
+  const set = D.insights_by_month[state.filters.month] || D.insights_by_month["all"] || {};
+  const it = set[key];
   if (!it) return "";
   const p = it.priority.includes("عالية")?"p-high":it.priority.includes("متوسطة")?"p-med":"p-low";
   const row = (k,v)=>`<div class="row"><span class="k">${k}:</span><span>${v}</span></div>`;
@@ -199,11 +271,18 @@ function kpiCard(icon, val, label, accent, sub, subCls, delay) {
 }
 function kpiGrid(k) {
   const mon = Object.fromEntries(D.monthly.map(m=>[m.month,m.net_sales]));
-  const may = mon["2026-05"]||0, jun = k.total_sales;
-  const dv = may ? (jun-may)/may : 0;
+  const keys = D.monthly.map(m=>m.month);
+  const cm = (state.filters.month && state.filters.month!=="all") ? state.filters.month : null;
+  let salesSub="", salesCls="";
+  if (cm) {
+    const idx = keys.indexOf(cm), prevK = idx>0?keys[idx-1]:null;
+    const prev = prevK?mon[prevK]:0, dv = prev?(k.total_sales-prev)/prev:0;
+    salesSub = prevK ? (dv>=0?"▲ ":"▼ ")+pct(Math.abs(dv))+" مقابل "+monthName(prevK) : "";
+    salesCls = dv>=0?"up":"down";
+  } else { salesSub = "كل شهور ٢٠٢٦"; salesCls = "na"; }
   let i=0; const d=()=>0.04*(i++);
   return `<div class="kpi-grid">
-    ${kpiCard("sales",egpK(k.total_sales),"إجمالي المبيعات","#3b82f6",(dv>=0?"▲ ":"▼ ")+pct(Math.abs(dv))+" مقابل مايو",dv>=0?"up":"down",d())}
+    ${kpiCard("sales",egpK(k.total_sales),"إجمالي المبيعات","#3b82f6",salesSub,salesCls,d())}
     ${kpiCard("money",egpK(k.net_sales),"صافي المبيعات","#8b5cf6","","",d())}
     ${kpiCard("money",egpK(k.collections_at_issue),"التحصيل عند الإصدار","#06b6d4","بيع آجل","na",d())}
     ${kpiCard("money",egpK(k.outstanding),"المديونية القائمة","#f59e0b","لقطة "+D.meta.as_of,"na",d())}
@@ -223,12 +302,15 @@ function kpiGrid(k) {
 /*  Chart builders (each takes context D-like `X`)                             */
 /* ========================================================================== */
 function chMonthly(id,X){const b=ecBase();const rows=D.monthly.filter(m=>m.month>="2025-01");
+  const cm=(state.filters.month&&state.filters.month!=="all")?state.filters.month:null;
   ec(id,{...b,tooltip:{...b.tooltip,trigger:"axis",valueFormatter:egp},
     xAxis:axis(b,{type:"category",data:rows.map(r=>r.month)}),
     yAxis:axis(b,{type:"value",axisLabel:{color:b._muted,formatter:egpK}}),
     series:[{type:"line",smooth:true,data:rows.map(r=>Math.round(r.net_sales)),
       areaStyle:{opacity:.22},lineStyle:{width:3,color:PAL[0]},itemStyle:{color:PAL[0]},
-      markPoint:{data:[{type:"max",name:"الأعلى"}]}}]});}
+      markPoint:{data:[{type:"max",name:"الأعلى"}]},
+      markLine:cm?{symbol:"none",data:[{xAxis:cm}],lineStyle:{color:PAL[3],type:"dashed",width:2},
+        label:{show:true,color:b._muted,formatter:"الشهر المحدد"}}:undefined}]});}
 
 function chDaily(id,X){const b=ecBase();
   const m=groupSum(X.invoices,"invoice_date","reported_total");
@@ -274,7 +356,7 @@ function chPareto(id,X){const b=ecBase();
        itemStyle:{color:PAL[3]},markLine:{data:[{yAxis:80,name:"80%"}],
        lineStyle:{color:PAL[4],type:"dashed"},label:{formatter:"80%",color:b._muted}}}]});}
 
-function chAgingBar(id){const b=ecBase();const bk=D.receivables.buckets;const lab=D.receivables.bucket_labels;
+function chAgingBar(id,X){const b=ecBase();const bk=X.buckets;const lab=D.receivables.bucket_labels;
   ec(id,{...b,tooltip:{...b.tooltip,trigger:"axis",valueFormatter:egp},
     xAxis:axis(b,{type:"category",data:AGING_KEYS.map(k=>lab[k])}),
     yAxis:axis(b,{type:"value",axisLabel:{color:b._muted,formatter:egpK}}),
@@ -282,7 +364,7 @@ function chAgingBar(id){const b=ecBase();const bk=D.receivables.buckets;const la
       itemStyle:{color:p=>AGING_COLORS[AGING_KEYS[p.dataIndex]],borderRadius:[6,6,0,0]},
       label:{show:true,position:"top",color:b._muted,formatter:o=>egpK(o.value)}}]});}
 
-function chAgingWaterfall(id){const b=ecBase();const bk=D.receivables.buckets;const lab=D.receivables.bucket_labels;
+function chAgingWaterfall(id,X){const b=ecBase();const bk=X.buckets;const lab=D.receivables.bucket_labels;
   let acc=0;const base=[],val=[];
   AGING_KEYS.forEach(k=>{base.push(acc);val.push(Math.round(bk[k]));acc+=bk[k];});
   ec(id,{...b,tooltip:{...b.tooltip,trigger:"axis",formatter:p=>{const i=p[1].dataIndex;
@@ -341,7 +423,7 @@ function chBox(id,X){const b=ecBase();
 function chScatter(id,X){const b=ecBase();
   const pts=X.customers.filter(c=>c.outstanding!=null).map(c=>[Math.round(c.sales),Math.round(c.outstanding),c.customer_name,c.collection_rate]);
   ec(id,{...b,tooltip:{...b.tooltip,formatter:p=>`${p.data[2]}<br/>مبيعات: ${egp(p.data[0])}<br/>مديونية: ${egp(p.data[1])}<br/>تحصيل: ${p.data[3]!=null?pct(p.data[3]):"—"}`},
-    xAxis:axis(b,{type:"value",name:"مبيعات يونيو",axisLabel:{color:b._muted,formatter:egpK}}),
+    xAxis:axis(b,{type:"value",name:"مبيعات الفترة",axisLabel:{color:b._muted,formatter:egpK}}),
     yAxis:axis(b,{type:"value",name:"المديونية القائمة",axisLabel:{color:b._muted,formatter:egpK}}),
     series:[{type:"scatter",symbolSize:d=>Math.max(8,Math.sqrt(d[0])/12),
       itemStyle:{color:p=>p.data[3]>=.9?PAL[2]:p.data[3]>=.7?PAL[3]:PAL[4],opacity:.75},data:pts}]});}
@@ -426,9 +508,9 @@ function chHistogram(id,X){ // Plotly histogram of invoice values
   charts[id]={_plotly:true,dispose(){Plotly.purge(id);},resize(){Plotly.Plots.resize(id);},
     getDataURL(){return null;}};}
 
-function chBonusDist(id){const b=ecBase();
+function chBonusDist(id,X){const b=ecBase();
   const tiers={0:0,1:0,2:0,3:0,5:0};
-  D.customers.forEach(c=>{const t=Math.round(c.bonus_pct*100);if(tiers[t]!=null)tiers[t]++;});
+  X.customers.forEach(c=>{const t=Math.round(c.bonus_pct*100);if(tiers[t]!=null)tiers[t]++;});
   const labels={0:"0%",1:"1%",2:"2%",3:"3%",5:"5%"};
   ec(id,{...b,tooltip:{...b.tooltip,trigger:"axis"},
     xAxis:axis(b,{type:"category",data:Object.keys(tiers).map(t=>labels[t])}),
@@ -468,18 +550,19 @@ const ageCls=b=>`age-${b}`;
 const SECTIONS = {
   overview:{ label:"لوحة المعلومات",
     dom:()=>`<div class="section-head"><div><h2>لوحة المعلومات التنفيذية</h2>
-        <p>ملخص أداء ${D.meta.period_label} — المبيعات والتحصيل والمديونية</p></div></div>
+        <p>ملخص أداء <span id="ovPeriod"></span> — المبيعات والتحصيل والمديونية</p></div></div>
       <div id="kpiHost"></div>
       <div class="grid g-2">
         ${card({id:"c_monthly",title:"اتجاه المبيعات الشهري",sub:"السلسلة الكاملة",insightKey:"monthly_trend"})}
-        ${card({id:"c_daily",title:"المبيعات والتحصيل اليومي",sub:D.meta.period_label})}
+        ${card({id:"c_daily",title:"المبيعات والتحصيل اليومي",sub:""})}
         ${card({id:"c_aging",title:"أعمار الديون",approx:true,insightKey:"aging"})}
         ${card({id:"c_gauge",title:"معدل التحصيل التراكمي",short:true})}
         ${card({id:"c_brand",title:"توزيع المبيعات حسب العلامة"})}
         ${card({id:"c_top10",title:"أعلى ١٠ عملاء",insightKey:"top_customers"})}
       </div>`,
     update:(X)=>{ document.getElementById("kpiHost").innerHTML=kpiGrid(X.kpis);
-      chMonthly("c_monthly",X);chDaily("c_daily",X);chAgingBar("c_aging");chGauge("c_gauge",X.kpis.collection_rate);
+      const ov=document.getElementById("ovPeriod"); if(ov) ov.textContent=curMonthLabel();
+      chMonthly("c_monthly",X);chDaily("c_daily",X);chAgingBar("c_aging",X);chGauge("c_gauge",X.kpis.collection_rate);
       chDonut("c_brand",[...groupSum(X.lines,"brand","line_total")].sort((a,b)=>b[1]-a[1]));
       chTopCustomers("c_top10",X,10); }},
 
@@ -552,7 +635,7 @@ const SECTIONS = {
         ${card({id:"r_donut",title:"جاري مقابل متأخرات"})}
       </div>
       ${tableCard({id:"t_recv",title:"تفاصيل المديونية حسب العميل",approx:true,sub:"الرصيد · جاري · متأخرات · أيام التأخر"})}`,
-    update:(X)=>{ chAgingBar("r_aging");chAgingWaterfall("r_water");chByRep("r_rep",X);
+    update:(X)=>{ chAgingBar("r_aging",X);chAgingWaterfall("r_water",X);chByRep("r_rep",X);
       chDonut("r_donut",[["جاري",sum(X.recv,"current")],["متأخرات",sum(X.recv,"overdue")]]);
       dt("t_recv",[
         {title:"المندوب",data:"rep"},{title:"العميل",data:"customer_name"},
@@ -603,16 +686,16 @@ const SECTIONS = {
           <div id="ladderHost" class="note"></div></div>
       </div>
       ${tableCard({id:"t_bonus",title:"تقرير الحوافز",sub:"معدل التحصيل · نسبة الحافز · القيمة المستحقة"})}`,
-    update:(X)=>{ chBonusDist("b_dist");
+    update:(X)=>{ chBonusDist("b_dist",X);
       const rules=[["أقل من 70%","0%"],["70% – 80%","1%"],["80% – 90%","2%"],["90% – 95%","3%"],["95% – 100%","5%"]];
-      const tot=D.customers.reduce((a,c)=>a+(c.bonus_value||0),0);
+      const tot=X.customers.reduce((a,c)=>a+(c.bonus_value||0),0);
       document.getElementById("ladderHost").innerHTML=
         rules.map(r=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border2)"><span>${r[0]}</span><b>${r[1]}</b></div>`).join("")+
         `<div style="margin-top:10px">إجمالي الحافز المستحق: <b class="pos">${egp(tot)}</b></div>`;
       const rows=X.customers.filter(c=>c.has_ar).map(c=>c);
       dt("t_bonus",[
         {title:"العميل",data:"customer_name"},{title:"المندوب",data:"rep"},
-        {title:"مبيعات يونيو",data:"sales",render:num},{title:"إجمالي مُفوتر",data:"total_billed",render:num},
+        {title:"مبيعات الشهر",data:"sales",render:num},{title:"إجمالي مُفوتر",data:"total_billed",render:num},
         {title:"المديونية",data:"outstanding",render:d=>d==null?"—":num(d)},
         {title:"معدل التحصيل",data:"collection_rate",render:d=>d==null?"—":pct(d)},
         {title:"الحافز %",data:"bonus_pct",render:bonusBadge},
@@ -694,9 +777,13 @@ function bindPng(){
 /*  Drill-through — customer statement                                         */
 /* ========================================================================== */
 function openDrill(code){
-  const c=D.customers.find(x=>x.customer_code===code);if(!c)return;
+  // Full-year 2026 statement for the customer (independent of the month filter),
+  // joined with the fixed AR / bonus snapshot.
   const inv=D.invoices.filter(v=>v.customer_code===code);
   const lines=D.lines.filter(l=>l.customer_code===code);
+  if(!inv.length && !lines.length) return;
+  const [c]=aggCustomers(lines,inv);
+  if(!c) return;
   const items=[...groupSum(lines,"item_name","line_total")].sort((a,b)=>b[1]-a[1]);
   const mk=(v,l)=>`<div class="mini-kpi"><div class="v num">${v}</div><div class="l">${l}</div></div>`;
   const invRows=inv.sort((a,b)=>b.reported_total-a.reported_total).map(v=>`<tr>
@@ -707,7 +794,7 @@ function openDrill(code){
   document.getElementById("drillTitle").textContent="كشف حساب — "+c.customer_name;
   document.getElementById("drillBody").innerHTML=`
     <div class="mini-kpis">
-      ${mk("#"+c.rank,"الترتيب")}${mk(egpK(c.sales),"مبيعات يونيو")}${mk(int(c.n_invoices),"الفواتير")}
+      ${mk(egpK(c.sales),"مبيعات ٢٠٢٦")}${mk(int(c.n_invoices),"الفواتير")}
       ${mk(int(c.n_items),"الأصناف")}${mk(c.outstanding==null?"—":egpK(c.outstanding),"المديونية")}
       ${mk(c.collection_rate==null?"—":pct(c.collection_rate),"معدل التحصيل")}${mk(bonusBadge(c.bonus_pct),"الحافز")}
     </div>
@@ -730,36 +817,50 @@ function closeDrill(){document.getElementById("drillModal").classList.remove("op
 /* ========================================================================== */
 function fillFilters(){
   const uniq=(arr,k)=>[...new Set(arr.map(x=>x[k]).filter(Boolean))].sort();
-  const opt=(el,vals,labelFn)=>{vals.forEach(v=>{const o=document.createElement("option");
-    o.value=typeof v==="object"?v.v:v;o.textContent=labelFn?labelFn(v):(typeof v==="object"?v.l:v);el.appendChild(o);});};
-  opt(document.getElementById("f_customer"),D.customers.map(c=>({v:c.customer_code,l:c.customer_name})));
+  const pairs=(map)=>Object.entries(map).map(([v,l])=>({v,l})).sort((a,b)=>a.l.localeCompare(b.l,"ar"));
+  const opt=(el,vals)=>{vals.forEach(v=>{const o=document.createElement("option");
+    o.value=typeof v==="object"?v.v:v;o.textContent=typeof v==="object"?v.l:v;el.appendChild(o);});};
+
+  // Month selector — the one new feature. Populated with the 2026 months present
+  // in the data plus an "All months" option; defaults to June.
+  const fm=document.getElementById("f_month");
+  fm.innerHTML="";
+  opt(fm,[{v:"all",l:"كل شهور ٢٠٢٦"}, ...D.meta.available_months]);
+  fm.value=state.filters.month;
+
+  opt(document.getElementById("f_customer"),pairs(CUST_NAME));
   opt(document.getElementById("f_rep"),uniq(D.lines,"rep"));
-  opt(document.getElementById("f_item"),D.products.map(p=>({v:p.item_code,l:p.item_name})));
+  opt(document.getElementById("f_item"),pairs(ITEM_NAME));
   opt(document.getElementById("f_brand"),uniq(D.lines,"brand"));
   opt(document.getElementById("f_branch"),uniq(D.lines,"rep"));  // no branch field → salesperson region
   const ag=document.getElementById("f_aging");
   AGING_KEYS.forEach(k=>{const o=document.createElement("option");o.value=k;o.textContent=D.receivables.bucket_labels[k];ag.appendChild(o);});
-  const map={f_customer:"customer",f_rep:"rep",f_item:"item",f_brand:"brand",f_branch:"rep",f_status:"status",f_aging:"aging"};
+
+  const map={f_month:"month",f_customer:"customer",f_rep:"rep",f_item:"item",
+             f_brand:"brand",f_branch:"rep",f_status:"status",f_aging:"aging"};
   Object.keys(map).forEach(fid=>document.getElementById(fid).addEventListener("change",e=>{
-    state.filters[map[fid]]=e.target.value; renderChips(); refreshActive(); }));
+    state.filters[map[fid]]=e.target.value;
+    if(fid==="f_month") document.getElementById("periodLabel").textContent=curMonthLabel();
+    renderChips(); refreshActive(); }));
 }
 function renderChips(){
   const f=state.filters;const host=document.getElementById("filterChips");host.innerHTML="";
   const labels={customer:"العميل",rep:"المندوب",item:"الصنف",brand:"العلامة",status:"الحالة",aging:"العمر"};
-  const disp={};D.customers.forEach(c=>disp[c.customer_code]=c.customer_name);
-  D.products.forEach(p=>disp[p.item_code]=p.item_name);
   const statusL={unpaid:"غير محصّلة",paid:"محصّلة",zero:"صفرية"};
-  Object.entries(f).forEach(([k,v])=>{if(!v)return;
-    let txt=disp[v]||statusL[v]||(k==="aging"?D.receivables.bucket_labels[v]:v);
+  Object.entries(f).forEach(([k,v])=>{if(!v||k==="month")return;  // month has its own selector
+    let txt=CUST_NAME[v]||ITEM_NAME[v]||statusL[v]||(k==="aging"?D.receivables.bucket_labels[v]:v);
     const c=document.createElement("span");c.className="chip";c.innerHTML=`${labels[k]||k}: <b>${txt}</b> ✕`;
     c.onclick=()=>{state.filters[k]="";syncSelects();renderChips();refreshActive();};host.appendChild(c);});
 }
 function syncSelects(){
-  const m={f_customer:"customer",f_rep:"rep",f_item:"item",f_brand:"brand",f_status:"status",f_aging:"aging"};
+  const m={f_month:"month",f_customer:"customer",f_rep:"rep",f_item:"item",
+           f_brand:"brand",f_status:"status",f_aging:"aging"};
   Object.entries(m).forEach(([fid,k])=>{const el=document.getElementById(fid);if(el)el.value=state.filters[k];});
   const br=document.getElementById("f_branch");if(br&&br.value!==state.filters.rep)br.value=state.filters.rep;
 }
-function resetFilters(){state.filters={customer:"",rep:"",brand:"",item:"",status:"",aging:""};
+function resetFilters(){  // reset cross-filters but keep the selected month
+  const month=state.filters.month;
+  state.filters={month,customer:"",rep:"",brand:"",item:"",status:"",aging:""};
   syncSelects();renderChips();refreshActive();toast("أُعيد ضبط الفلاتر");}
 
 /* ---- global quick search: routes to active DataTable ---- */
@@ -784,9 +885,9 @@ function exportAll(){const t=tables[Object.keys(tables)[0]];
 /*  Boot                                                                        */
 /* ========================================================================== */
 function boot(){
-  document.getElementById("periodLabel").textContent=D.meta.period_label;
+  document.getElementById("periodLabel").textContent=curMonthLabel();
   document.getElementById("dataNote").innerHTML=
-    `المصدر: فواتير ${D.meta.period_label} · لقطة مديونية ${D.meta.as_of}.<br>`+
+    `المصدر: فواتير ٢٠٢٦ (يناير–يونيو) · لقطة مديونية ${D.meta.as_of}.<br>`+
     `قيود: لا تكلفة (لا هامش)، لا موازنة، الأعمار تقديرية.`;
   fillFilters();wireSearch();
   document.querySelectorAll(".nav-item").forEach(n=>n.addEventListener("click",()=>showSection(n.dataset.section)));

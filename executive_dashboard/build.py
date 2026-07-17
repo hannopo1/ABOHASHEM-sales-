@@ -36,118 +36,133 @@ def _jsonable(obj):
     raise TypeError(type(obj))
 
 
-def main() -> int:
-    print("● Loading + parsing June 2026 source …")
-    lines_raw, invoices = load.parse_june()
-    dims = load.load_dimensions()
-    lines = load.enrich_lines(lines_raw, dims["dim_items"])
-    monthly = load.load_history_monthly().to_dicts()
+def _rep_map(dim_customers):
+    return {str(r["customer_code"]): (r["rep"] or "غير محدد")
+            for r in dim_customers.with_columns(pl.col("customer_code").cast(pl.Utf8))
+            .iter_rows(named=True)}
 
-    print("● Data-quality scan …")
-    dq = data_quality.run(lines, invoices)
 
-    print("● Receivables & aging …")
-    receivables = recv_mod.compute(dims["debt_detail"])
-
-    print("● Customer analysis + bonus …")
-    customers = cust_mod.compute(lines, invoices, dims["dim_customers"])
-
-    print("● Product analysis …")
-    products = prod_mod.compute(lines)
-    top_codes = [p["item_code"] for p in products[:6]]
-    prod_daily = prod_mod.daily_trend_by_item(lines, top_codes)
-
-    print("● Executive KPIs …")
-    kpis = kpi_mod.compute(lines, invoices, customers, receivables)
-
-    print("● Insights …")
-    insights = ins_mod.generate(kpis, customers, products, receivables, monthly, dq)
-
-    # --- extra chart-ready aggregates ------------------------------------
-    daily = (
-        invoices.with_columns(pl.col("invoice_date").cast(pl.Utf8).alias("day"))
-        .group_by("day").agg([
-            pl.col("reported_total").sum().alias("sales"),
-            pl.col("paid").sum().alias("collections"),
-            pl.col("invoice_no").n_unique().alias("invoices"),
-        ]).sort("day")
-    ).to_dicts()
-
-    brand_mix = (
-        lines.group_by("brand").agg([
-            pl.col("line_total").sum().alias("sales"),
-            pl.col("qty").sum().alias("qty"),
-        ]).sort("sales", descending=True)
-    ).to_dicts()
-
-    # customer -> brand -> item hierarchy for treemap / sunburst / sankey (top slices)
-    hier = (
-        lines.group_by(["customer_name", "brand", "item_name"]).agg(
-            pl.col("line_total").sum().alias("sales")
-        ).sort("sales", descending=True)
-    ).to_dicts()
-
-    # price dispersion for box plot (top items)
-    price_box = {}
-    for code in top_codes:
-        pv = lines.filter((pl.col("item_code") == code) & (pl.col("unit_price") > 0))
-        price_box[code] = {
-            "item_name": products_name(products, code),
-            "prices": [round(float(x), 2) for x in pv["unit_price"].to_list()],
-        }
-
-    # line-level + invoice-level records (with salesperson) for client-side
-    # cross-filtering — small enough to ship inline (800 lines / 311 invoices).
-    rep_map = {
-        str(r["customer_code"]): (r["rep"] or "غير محدد")
-        for r in dims["dim_customers"].with_columns(
-            pl.col("customer_code").cast(pl.Utf8)).iter_rows(named=True)
-    }
-    lines_export = lines.with_columns(
+def _export_frames(lines, invoices, rep_map):
+    """Line-level + invoice-level records (with salesperson, status and month)
+    for client-side cross-filtering. Small enough to ship inline."""
+    lx = lines.with_columns(
         pl.col("invoice_date").cast(pl.Utf8),
-        pl.col("customer_code").cast(pl.Utf8).replace_strict(
-            rep_map, default="غير محدد").alias("rep"),
+        pl.col("customer_code").cast(pl.Utf8).replace_strict(rep_map, default="غير محدد").alias("rep"),
     ).select(
-        "invoice_no", "invoice_date", "customer_code", "customer_name", "rep",
-        "item_code", "item_name", "brand", "qty", "unit_price", "line_total",
-        "boxes", "is_bonus",
+        "invoice_no", "invoice_date", "month", "customer_code", "customer_name", "rep",
+        "item_code", "item_name", "brand", "qty", "unit_price", "line_total", "boxes", "is_bonus",
     ).to_dicts()
-    invoices_export = invoices.with_columns(
+    ix = invoices.with_columns(
         pl.col("invoice_date").cast(pl.Utf8),
-        pl.col("customer_code").cast(pl.Utf8).replace_strict(
-            rep_map, default="غير محدد").alias("rep"),
+        pl.col("customer_code").cast(pl.Utf8).replace_strict(rep_map, default="غير محدد").alias("rep"),
         pl.when(pl.col("reported_total").fill_null(0) == 0).then(pl.lit("zero"))
         .when(pl.col("remaining").fill_null(0) <= 0).then(pl.lit("paid"))
         .otherwise(pl.lit("unpaid")).alias("status"),
     ).select(
-        "invoice_no", "invoice_date", "customer_code", "customer_name", "rep",
-        "reported_total", "paid", "remaining", "qty_total", "n_lines",
-        "is_bonus", "status",
+        "invoice_no", "invoice_date", "month", "customer_code", "customer_name", "rep",
+        "reported_total", "paid", "remaining", "qty_total", "n_lines", "is_bonus", "status",
     ).to_dicts()
+    return lx, ix
+
+
+def _customer_ar(dim_customers):
+    """Month-independent AR / bonus attributes per customer (from the 2026-07-04
+    snapshot). Monthly sales are recomputed client-side; these stay fixed."""
+    out = {}
+    for r in dim_customers.with_columns(pl.col("customer_code").cast(pl.Utf8)).iter_rows(named=True):
+        billed = float(r["total_revenue"] or 0.0)
+        has_ar = str(r.get("has_ar_snapshot")).lower() in ("true", "1")
+        outstanding = float(r["ar_net_balance"] or 0.0) if has_ar else None
+        rate = (max(0.0, min(1.0, (billed - (outstanding or 0.0)) / billed))
+                if (has_ar and billed > 0) else None)
+        out[r["customer_code"]] = {
+            "total_billed": round(billed, 2),
+            "outstanding": round(outstanding, 2) if outstanding is not None else None,
+            "collection_rate": round(rate, 4) if rate is not None else None,
+            "bonus_pct": C.bonus_pct(rate) if rate is not None else 0.0,
+            "rep": r["rep"] or "غير محدد", "city": r["city"] or "", "has_ar": has_ar,
+        }
+    return out
+
+
+def _month_subset(lines_all, invoices_all, month):
+    if month == "all":
+        return lines_all, invoices_all
+    return (lines_all.filter(pl.col("month") == month),
+            invoices_all.filter(pl.col("month") == month))
+
+
+def _receivables_for(dims, receivables_full, invoices_sub, month):
+    """Receivables snapshot restricted to the customers active in the month
+    (the AR balance itself is a fixed snapshot; only the cohort narrows)."""
+    if month == "all":
+        return receivables_full
+    active = invoices_sub["customer_code"].cast(pl.Utf8).unique().to_list()
+    dd = dims["debt_detail"].with_columns(pl.col("customer_code").cast(pl.Utf8))
+    return recv_mod.compute(dd.filter(pl.col("customer_code").is_in(active)))
+
+
+def _bundle(lines_all, invoices_all, dims, receivables_full, monthly, month):
+    """Full analytics bundle (kpis/customers/products/receivables/insights) for a
+    single month, or 'all' for the whole year."""
+    sl, si = _month_subset(lines_all, invoices_all, month)
+    products = prod_mod.compute(sl)
+    customers = cust_mod.compute(sl, si, dims["dim_customers"])
+    recv = _receivables_for(dims, receivables_full, si, month)
+    dq_m = data_quality.run(sl, si)
+    kpis = kpi_mod.compute(sl, si, customers, recv)
+    focus = None if month == "all" else month
+    insights = ins_mod.generate(kpis, customers, products, recv, monthly, dq_m, focus_month=focus)
+    return dict(kpis=kpis, customers=customers, products=products, receivables=recv, insights=insights)
+
+
+def main() -> int:
+    print("● Loading + parsing all 2026 sources …")
+    lines_raw, invoices_all = load.parse_all(year=C.PERIOD_YEAR)
+    dims = load.load_dimensions()
+    lines_all = load.enrich_lines(lines_raw, dims["dim_items"])
+    monthly = load.load_history_monthly().to_dicts()
+
+    print("● Data-quality scan (all 2026) …")
+    dq = data_quality.run(lines_all, invoices_all)
+
+    print("● Receivables & aging (snapshot) …")
+    receivables = recv_mod.compute(dims["debt_detail"])
+
+    months = sorted(invoices_all["month"].unique().to_list())
+    print(f"● Months found: {', '.join(months)}")
+
+    # Per-month + whole-year insight sets (client picks by selected month).
+    print("● Per-month analytics + insights …")
+    insights_by_month = {
+        m: _bundle(lines_all, invoices_all, dims, receivables, monthly, m)["insights"]
+        for m in months + ["all"]
+    }
+
+    # Default-month (June) bundle — drives the PDF and the validation report.
+    june = _bundle(lines_all, invoices_all, dims, receivables, monthly, C.DEFAULT_MONTH)
+
+    rep_map = _rep_map(dims["dim_customers"])
+    lines_x, invoices_x = _export_frames(lines_all, invoices_all, rep_map)
 
     payload = {
         "meta": {
-            "period_label": C.PERIOD_LABEL_AR,
+            "period_label": C.month_label_ar(C.DEFAULT_MONTH),
+            "default_month": C.DEFAULT_MONTH,
+            "available_months": [{"v": m, "l": C.month_label_ar(m)} for m in months],
             "as_of": C.AS_OF_DATE,
             "net_terms_days": C.NET_TERMS_DAYS,
             "bonus_rules": C.BONUS_RULES,
             "generated_utc": date.today().isoformat(),
         },
-        "kpis": kpis,
-        "lines": lines_export,
-        "invoices": invoices_export,
-        "customers": customers,
-        "products": products,
-        "product_daily": prod_daily,
-        "price_box": price_box,
+        "lines": lines_x,
+        "invoices": invoices_x,
+        "customer_ar": _customer_ar(dims["dim_customers"]),
         "receivables": receivables,
         "monthly": monthly,
-        "daily": daily,
-        "brand_mix": brand_mix,
-        "hierarchy": hier,
         "zero_invoices": dq["zero_invoices"],
         "data_quality": dq["summary"],
-        "insights": insights,
+        "insights_by_month": insights_by_month,
     }
 
     # --- write deliverables ----------------------------------------------
@@ -155,16 +170,17 @@ def main() -> int:
     js = "window.DASH = " + json.dumps(payload, ensure_ascii=False, default=_jsonable) + ";\n"
     C.OUT_DATA_JS.write_text(js, encoding="utf-8")
 
-    # processed_data.csv (cleaned June line items)
-    lines.with_columns(pl.col("invoice_date").cast(pl.Utf8)).write_csv(C.OUT_PROCESSED_CSV)
+    # processed_data.csv — all cleaned 2026 line items
+    lines_all.with_columns(pl.col("invoice_date").cast(pl.Utf8)).write_csv(C.OUT_PROCESSED_CSV)
 
     C.OUT_INSIGHTS.write_text(
-        json.dumps(insights, ensure_ascii=False, indent=2), encoding="utf-8")
+        json.dumps(insights_by_month, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # PDF (best-effort; never blocks the data build)
+    # PDF (best-effort; never blocks the data build) — default-month headline
     try:
         from src import pdf_report
-        pdf_report.build(kpis, customers, products, receivables, insights)
+        pdf_report.build(june["kpis"], june["customers"], june["products"],
+                         june["receivables"], june["insights"])
         print("  ✓ executive_summary.pdf")
     except Exception as e:  # pragma: no cover
         print(f"  ! PDF skipped: {e}")
@@ -172,15 +188,9 @@ def main() -> int:
     render_index()
 
     # --- validation report ------------------------------------------------
-    ok = validate(lines, invoices, kpis, customers, products, receivables, dq)
+    jl, ji = _month_subset(lines_all, invoices_all, C.DEFAULT_MONTH)
+    ok = validate(lines_all, invoices_all, jl, ji, june, receivables, dq, months)
     return 0 if ok else 1
-
-
-def products_name(products, code):
-    for p in products:
-        if p["item_code"] == code:
-            return p["item_name"]
-    return code
 
 
 def render_index():
@@ -189,7 +199,7 @@ def render_index():
         C.OUT_INDEX.write_text(tpl.read_text(encoding="utf-8"), encoding="utf-8")
 
 
-def validate(lines, invoices, kpis, customers, products, receivables, dq) -> bool:
+def validate(lines_all, invoices_all, jl, ji, june, receivables, dq, months) -> bool:
     print("\n" + "=" * 64)
     print("VALIDATION REPORT")
     print("=" * 64)
@@ -199,41 +209,44 @@ def validate(lines, invoices, kpis, customers, products, receivables, dq) -> boo
         checks.append(cond)
         print(f"  [{'PASS' if cond else 'FAIL'}] {name} {detail}")
 
-    # 1. reconciliation
+    kpis, customers, products = june["kpis"], june["customers"], june["products"]
+
+    # 1. reconciliation (all 2026)
     s = dq["summary"]
     check("invoice reconciliation ≥ 99%", s["reconciliation_rate"] >= 0.99,
           f"({s['reconciliation_rate']*100:.1f}%)")
 
-    # 2. totals cross-check
-    tot_lines = float(lines["line_total"].sum())
-    tot_inv = float(invoices["reported_total"].sum())
-    check("Σ line_total == Σ reported_total", abs(tot_lines - tot_inv) < 1.0,
+    # 2. totals cross-check (all 2026)
+    tot_lines = float(lines_all["line_total"].sum())
+    tot_inv = float(invoices_all["reported_total"].sum())
+    check("Σ line_total == Σ reported_total (2026)", abs(tot_lines - tot_inv) < 1.0,
           f"({tot_lines:,.0f} vs {tot_inv:,.0f})")
 
-    # 3. counts
-    check("311 invoices", kpis["n_invoices"] == 311, f"({kpis['n_invoices']})")
-    check("116 customers", kpis["n_customers"] == 116, f"({kpis['n_customers']})")
+    # 3. coverage
+    check("6 months present (Jan–Jun 2026)", len(months) == 6, f"({', '.join(months)})")
 
-    # 4. customer sales sum == total
+    # 4. June default month unchanged (regression guard)
+    check("June = 311 invoices", kpis["n_invoices"] == 311, f"({kpis['n_invoices']})")
+    check("June = 116 customers", kpis["n_customers"] == 116, f"({kpis['n_customers']})")
+
+    # 5. customer sales sum == month total
     csum = sum(c["sales"] for c in customers)
-    check("Σ customer sales == total", abs(csum - kpis["total_sales"]) < 1.0,
+    check("Σ customer sales == June total", abs(csum - kpis["total_sales"]) < 1.0,
           f"({csum:,.0f})")
 
-    # 5. product contribution sums ~100%
+    # 6. product contribution sums ~100%
     contrib = sum(p["contribution_pct"] for p in products)
     check("Σ product contribution ≈ 100%", abs(contrib - 100) < 0.5, f"({contrib:.2f}%)")
 
-    # 6. ASP recompute for top product
-    if products:
-        p = products[0]
-        check("top product ASP = value/qty", p["asp"] > 0)
+    # 7. ASP recompute for top product
+    check("top product ASP = value/qty", bool(products) and products[0]["asp"] > 0)
 
-    # 7. aging buckets sum == outstanding
+    # 8. aging buckets sum == outstanding (full snapshot)
     bsum = sum(receivables["buckets"].values())
     check("aging buckets == outstanding", abs(bsum - receivables["total_outstanding"]) < 1.0,
           f"({bsum:,.0f})")
 
-    # 8. bonus ladder boundaries
+    # 9. bonus ladder boundaries
     from src.config import bonus_pct
     ladder_ok = (bonus_pct(0.69) == 0.0 and bonus_pct(0.70) == 0.01 and
                  bonus_pct(0.80) == 0.02 and bonus_pct(0.90) == 0.03 and

@@ -125,11 +125,15 @@ function aggCustomers(lines, invoices) {
   return rows;
 }
 
-/* Aging buckets recomputed from the (filtered) AR rows — keeps the chart in
-   sync with the month / cross-filter selection. */
+/* Aging buckets recomputed from the (filtered) AR rows — keeps the chart in sync
+   with the month / cross-filter selection. Each row carries its exact per-bucket
+   FIFO breakdown, so summing them reconciles precisely to the outstanding total. */
 function bucketsFromRows(rows) {
   const b = { current:0, d1_30:0, d31_60:0, d61_90:0, d91_120:0, d120p:0 };
-  for (const r of rows) { b.current += r.current||0; if (r.overdue>0) b[r.bucket] += r.overdue||0; }
+  for (const r of rows) {
+    if (r.buckets) { for (const k in b) b[k] += r.buckets[k]||0; }
+    else { b.current += r.current||0; if (r.overdue>0) b[r.bucket] += r.overdue||0; }
+  }
   return b;
 }
 const round2 = x => Math.round((x||0)*100)/100;

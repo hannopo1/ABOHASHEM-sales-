@@ -27,7 +27,8 @@ from datetime import date
 import polars as pl
 
 from src import (config as C, load, data_quality, kpis as kpi_mod, customers as cust_mod,
-                 products as prod_mod, receivables as recv_mod, insights as ins_mod)
+                 products as prod_mod, insights as ins_mod, debt as debt_mod,
+                 overdue as overdue_mod)
 
 
 def _jsonable(obj):
@@ -65,22 +66,35 @@ def _export_frames(lines, invoices, rep_map):
     return lx, ix
 
 
-def _customer_ar(dim_customers):
-    """Month-independent AR / bonus attributes per customer (from the 2026-07-04
-    snapshot). Monthly sales are recomputed client-side; these stay fixed."""
+def _customer_ar(dim_customers, final_balances, invoices_full):
+    """Month-independent AR / bonus attributes per customer, from the FINAL
+    2026-07-16 balances. Collection rate = (total billed − final balance) / total
+    billed over the full parsed invoice history; bonus follows the ladder. Monthly
+    sales are recomputed client-side; these attributes stay fixed."""
+    billed_map = {
+        str(r["customer_code"]): float(r["billed"] or 0.0)
+        for r in invoices_full.with_columns(pl.col("customer_code").cast(pl.Utf8))
+        .group_by("customer_code").agg(pl.col("reported_total").sum().alias("billed"))
+        .iter_rows(named=True)
+    }
+    dc = {str(r["customer_code"]): r for r in
+          dim_customers.with_columns(pl.col("customer_code").cast(pl.Utf8)).iter_rows(named=True)}
+
     out = {}
-    for r in dim_customers.with_columns(pl.col("customer_code").cast(pl.Utf8)).iter_rows(named=True):
-        billed = float(r["total_revenue"] or 0.0)
-        has_ar = str(r.get("has_ar_snapshot")).lower() in ("true", "1")
-        outstanding = float(r["ar_net_balance"] or 0.0) if has_ar else None
-        rate = (max(0.0, min(1.0, (billed - (outstanding or 0.0)) / billed))
+    for code in set(billed_map) | set(final_balances) | set(dc):
+        billed = billed_map.get(code, float((dc.get(code) or {}).get("total_revenue") or 0.0))
+        has_ar = code in final_balances
+        outstanding = float(final_balances[code]["balance"]) if has_ar else None
+        rate = (max(0.0, min(1.0, (billed - outstanding) / billed))
                 if (has_ar and billed > 0) else None)
-        out[r["customer_code"]] = {
+        d = dc.get(code, {})
+        out[code] = {
             "total_billed": round(billed, 2),
             "outstanding": round(outstanding, 2) if outstanding is not None else None,
             "collection_rate": round(rate, 4) if rate is not None else None,
             "bonus_pct": C.bonus_pct(rate) if rate is not None else 0.0,
-            "rep": r["rep"] or "غير محدد", "city": r["city"] or "", "has_ar": has_ar,
+            "rep": (d.get("rep") or (final_balances.get(code) or {}).get("rep") or "غير محدد"),
+            "city": d.get("city") or "", "has_ar": has_ar,
         }
     return out
 
@@ -92,14 +106,34 @@ def _month_subset(lines_all, invoices_all, month):
             invoices_all.filter(pl.col("month") == month))
 
 
-def _receivables_for(dims, receivables_full, invoices_sub, month):
-    """Receivables snapshot restricted to the customers active in the month
-    (the AR balance itself is a fixed snapshot; only the cohort narrows)."""
+def _receivables_for(receivables_full, invoices_sub, month):
+    """FIFO overdue snapshot restricted to the customers active in the month
+    (the balance itself is a fixed 2026-07-16 snapshot; only the cohort narrows).
+    Bucket / rep / totals are re-aggregated from the narrowed rows so everything
+    still reconciles exactly to that cohort's outstanding."""
     if month == "all":
         return receivables_full
-    active = invoices_sub["customer_code"].cast(pl.Utf8).unique().to_list()
-    dd = dims["debt_detail"].with_columns(pl.col("customer_code").cast(pl.Utf8))
-    return recv_mod.compute(dd.filter(pl.col("customer_code").is_in(active)))
+    active = set(invoices_sub["customer_code"].cast(pl.Utf8).unique().to_list())
+    rows = [r for r in receivables_full["rows"] if r["customer_code"] in active]
+    buckets = {k: 0.0 for k in receivables_full["buckets"]}
+    by_rep: dict = {}
+    cur = ov = 0.0
+    for r in rows:
+        for k, v in r["buckets"].items():
+            buckets[k] += v
+        cur += r["current"]
+        ov += r["overdue"]
+        s = by_rep.setdefault(r["rep"], {"current": 0.0, "overdue": 0.0, "customers": 0})
+        s["current"] += r["current"]
+        s["overdue"] += r["overdue"]
+        s["customers"] += 1
+    rep_rows = sorted(({"rep": k, "current": round(v["current"], 2), "overdue": round(v["overdue"], 2),
+                        "outstanding": round(v["current"] + v["overdue"], 2), "customers": v["customers"]}
+                       for k, v in by_rep.items()), key=lambda x: x["outstanding"], reverse=True)
+    return {**receivables_full,
+            "total_outstanding": round(cur + ov, 2), "total_current": round(cur, 2),
+            "total_overdue": round(ov, 2), "buckets": {k: round(v, 2) for k, v in buckets.items()},
+            "by_rep": rep_rows, "rows": rows}
 
 
 def _bundle(lines_all, invoices_all, dims, receivables_full, monthly, month):
@@ -108,7 +142,7 @@ def _bundle(lines_all, invoices_all, dims, receivables_full, monthly, month):
     sl, si = _month_subset(lines_all, invoices_all, month)
     products = prod_mod.compute(sl)
     customers = cust_mod.compute(sl, si, dims["dim_customers"])
-    recv = _receivables_for(dims, receivables_full, si, month)
+    recv = _receivables_for(receivables_full, si, month)
     dq_m = data_quality.run(sl, si)
     kpis = kpi_mod.compute(sl, si, customers, recv)
     focus = None if month == "all" else month
@@ -117,17 +151,23 @@ def _bundle(lines_all, invoices_all, dims, receivables_full, monthly, month):
 
 
 def main() -> int:
-    print("● Loading + parsing all 2026 sources …")
-    lines_raw, invoices_all = load.parse_all(year=C.PERIOD_YEAR)
+    print("● Loading + parsing all sources (full history) …")
     dims = load.load_dimensions()
-    lines_all = load.enrich_lines(lines_raw, dims["dim_items"])
+    lines_raw_full, invoices_full = load.parse_all()          # 2025-01 .. 2026-07 (all years)
+    lines_full = load.enrich_lines(lines_raw_full, dims["dim_items"])
+    # dashboard operates on the 2026 subset; full history feeds FIFO overdue only
+    lines_all = lines_full.filter(pl.col("invoice_date").dt.year() == C.PERIOD_YEAR)
+    invoices_all = invoices_full.filter(pl.col("invoice_date").dt.year() == C.PERIOD_YEAR)
     monthly = load.load_history_monthly().to_dicts()
 
     print("● Data-quality scan (all 2026) …")
     dq = data_quality.run(lines_all, invoices_all)
 
-    print("● Receivables & aging (snapshot) …")
-    receivables = recv_mod.compute(dims["debt_detail"])
+    print("● Final balances (2026-07-16) + FIFO overdue analysis …")
+    final_balances = debt_mod.load_final_balances()
+    receivables = overdue_mod.compute(invoices_full, final_balances, dims["dim_customers"],
+                                      net_terms=C.NET_TERMS_DAYS, as_of_str=C.AS_OF_DATE,
+                                      cutoff_str=C.OVERDUE_CUTOFF)
 
     months = sorted(invoices_all["month"].unique().to_list())
     print(f"● Months found: {', '.join(months)}")
@@ -162,7 +202,7 @@ def main() -> int:
         },
         "lines": lines_x,
         "invoices": invoices_x,
-        "customer_ar": _customer_ar(dims["dim_customers"]),
+        "customer_ar": _customer_ar(dims["dim_customers"], final_balances, invoices_full),
         "receivables": receivables,
         "monthly": monthly,
         "zero_invoices": dq["zero_invoices"],
@@ -246,10 +286,22 @@ def validate(lines_all, invoices_all, jl, ji, june, receivables, dq, months) -> 
     # 7. ASP recompute for top product
     check("top product ASP = value/qty", bool(products) and products[0]["asp"] > 0)
 
-    # 8. aging buckets sum == outstanding (full snapshot)
+    # 8. aging buckets sum == outstanding (FIFO overdue, 2026-07-16)
     bsum = sum(receivables["buckets"].values())
     check("aging buckets == outstanding", abs(bsum - receivables["total_outstanding"]) < 1.0,
           f"({bsum:,.0f})")
+
+    # 8b. per-customer FIFO reconciliation: current+overdue == final balance
+    recon_bad = sum(1 for r in receivables["rows"]
+                    if abs((r["current"] + r["overdue"]) - r["outstanding"]) > 0.5)
+    check("every customer current+overdue == final balance", recon_bad == 0,
+          f"({recon_bad} mismatches)")
+
+    # 8c. current bucket holds ONLY July (not-yet-due); overdue = ≤June + opening
+    check("current = not-overdue, overdue reconciles",
+          abs(receivables["total_current"] + receivables["total_overdue"]
+              - receivables["total_outstanding"]) < 1.0,
+          f"(overdue {receivables['total_overdue']:,.0f})")
 
     # 9. bonus ladder boundaries
     from src.config import bonus_pct

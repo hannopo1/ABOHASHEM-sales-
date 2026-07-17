@@ -50,8 +50,11 @@ PERIOD_YEAR = 2026
 PERIOD_MONTH = 6
 PERIOD_LABEL_AR = "يونيو ٢٠٢٦"
 DEFAULT_MONTH = "2026-06"          # month the dashboard opens on
-# AR debt snapshot date the arrears files were extracted at.
-AS_OF_DATE = "2026-07-04"
+# AR snapshot date used for the receivable/overdue analysis. Updated to the
+# FINAL post-July customer balances (مديونية …-16_7_2026.pdf).
+AS_OF_DATE = "2026-07-16"
+# Invoices dated on/before this are classified OVERDUE when still unpaid.
+OVERDUE_CUTOFF = "2026-06-30"
 
 # Arabic month names (used to label the month selector).
 MONTHS_AR = {

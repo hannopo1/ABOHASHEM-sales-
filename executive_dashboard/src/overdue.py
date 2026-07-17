@@ -50,8 +50,10 @@ def compute(invoices_full: pl.DataFrame, final_balances: dict,
             net_terms: int = C.NET_TERMS_DAYS,
             as_of_str: str = "2026-07-16",
             cutoff_str: str = "2026-06-30",
-            name_map: dict | None = None) -> dict:
+            name_map: dict | None = None,
+            rep_map: dict | None = None) -> dict:
     name_map = name_map or {}
+    ext_rep = rep_map or {}
     as_of = date.fromisoformat(as_of_str)
     cutoff = date.fromisoformat(cutoff_str)
 
@@ -65,9 +67,9 @@ def compute(invoices_full: pl.DataFrame, final_balances: dict,
     for v in hist.values():
         v.sort(key=lambda t: t[0])
 
-    rep_map = {str(r["customer_code"]): (r["rep"] or "غير محدد")
-               for r in dim_customers.with_columns(pl.col("customer_code").cast(pl.Utf8))
-               .iter_rows(named=True)}
+    rep_map_dim = {str(r["customer_code"]): (r["rep"] or "غير محدد")
+                   for r in dim_customers.with_columns(pl.col("customer_code").cast(pl.Utf8))
+                   .iter_rows(named=True)}
 
     buckets = {k: 0.0 for k in _BUCKET_KEYS}
     by_rep: dict[str, dict] = {}
@@ -106,7 +108,9 @@ def compute(invoices_full: pl.DataFrame, final_balances: dict,
             cust_b["d120p"] += opening
             cust_overdue += opening
 
-        rep = rep_map.get(code) or meta.get("rep") or "غير محدد"
+        # corrected master mapping wins, then dim fallback, then debt-report rep
+        rep = ext_rep.get(code) or rep_map_dim.get(code) or meta.get("rep_official") \
+            or meta.get("rep") or "غير محدد"
         last_dt = max((d for d, _a in invs), default=None)
         old_age = (as_of - oldest[0]).days if oldest else None
         # Always display a real customer name — resolve from the authoritative

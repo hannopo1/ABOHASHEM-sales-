@@ -54,15 +54,25 @@ def _parse_pdf(path) -> list[tuple]:
     return rows_out
 
 
+def _rep_from_filename(path: str) -> str:
+    """Each report is filed under one representative — the file name IS the
+    official customer→rep assignment (cleaner than the in-page rep column)."""
+    base = path.split("/")[-1].replace("مديونية ", "")
+    return re.sub(r"[-_ ]*16_7_2026\.pdf$", "", base).strip()
+
+
 def load_final_balances() -> dict:
-    """Return {customer_code: {'balance', 'name', 'rep'}} as of 2026-07-16.
+    """Return {customer_code: {'balance', 'name', 'rep', 'rep_official'}} as of
+    2026-07-16. ``rep_official`` is the file-based (authoritative) representative.
 
     Empty dict if the snapshot PDFs are absent (build never hard-fails).
     """
     files = sorted(glob.glob(str(C.REPO_ROOT / "مديونية*16_7_2026.pdf")))
     out: dict[str, dict] = {}
     for f in files:
+        rep_official = _rep_from_filename(f)
         for code, bal, name, rep in _parse_pdf(f):
             # one row per customer; last wins (files are per-rep, codes unique)
-            out[code] = {"balance": round(bal, 2), "name": name, "rep": rep}
+            out[code] = {"balance": round(bal, 2), "name": name,
+                         "rep": rep, "rep_official": rep_official}
     return out

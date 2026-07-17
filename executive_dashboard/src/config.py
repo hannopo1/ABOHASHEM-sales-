@@ -39,6 +39,7 @@ OUT_INDEX = APP_DIR / "index.html"
 OUT_PROCESSED_CSV = APP_DIR / "processed_data.csv"
 OUT_INSIGHTS = APP_DIR / "insights.json"
 OUT_PDF = APP_DIR / "executive_summary.pdf"
+OUT_REP_EXCEPTIONS = APP_DIR / "rep_exceptions.json"
 
 FONT_REGULAR = APP_DIR / "vendor" / "fonts" / "Amiri-Regular.ttf"
 FONT_BOLD = APP_DIR / "vendor" / "fonts" / "Amiri-Bold.ttf"

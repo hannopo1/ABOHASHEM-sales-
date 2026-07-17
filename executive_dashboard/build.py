@@ -43,6 +43,49 @@ def _rep_map(dim_customers):
             .iter_rows(named=True)}
 
 
+def _corrected_rep_map(final_balances, dim_customers, debt_detail):
+    """Customer → representative, corrected against OFFICIAL master data.
+
+    Single source of truth = the customer-account reports filed by rep
+    (2026-07-16, file-based). Where a customer is absent there, fall back to the
+    cleaned dim_customers.rep, then the 2026-07-04 debt detail. Never guesses —
+    a customer with no rep in any source stays 'غير محدد' and is reported as an
+    exception. Touches ONLY the rep relationship, no financial value.
+    """
+    rep = {}
+    # 3rd priority: 2026-07-04 debt detail
+    for r in debt_detail.with_columns(pl.col("customer_code").cast(pl.Utf8)).iter_rows(named=True):
+        v = (r.get("rep") or "").strip()
+        if v:
+            rep[str(r["customer_code"])] = v
+    # 2nd priority: cleaned customer master (dim_customers)
+    for r in dim_customers.with_columns(pl.col("customer_code").cast(pl.Utf8)).iter_rows(named=True):
+        v = (r["rep"] or "").strip()
+        if v:
+            rep[str(r["customer_code"])] = v
+    # 1st priority (authoritative): the 2026-07-16 by-rep account reports
+    for code, meta in final_balances.items():
+        v = (meta.get("rep_official") or meta.get("rep") or "").strip()
+        if v:
+            rep[str(code)] = v
+    return rep
+
+
+def rep_exceptions(rep_map, invoices_all):
+    """2026 sales customers with NO representative in any official source."""
+    out = []
+    seen = set()
+    for r in invoices_all.with_columns(pl.col("customer_code").cast(pl.Utf8)).iter_rows(named=True):
+        code = r["customer_code"]
+        if code in seen or rep_map.get(code):
+            seen.add(code)
+            continue
+        seen.add(code)
+        out.append({"customer_code": code, "customer_name": r["customer_name"],
+                    "reason": "لا يوجد مندوب لهذا العميل في أي مصدر رسمي (تقارير المديونية / بيانات العملاء)"})
+    return sorted(out, key=lambda x: x["customer_code"])
+
+
 def _valid_name(nm) -> bool:
     return bool(nm) and not str(nm).strip().replace(" ", "").isdigit()
 
@@ -88,11 +131,12 @@ def _export_frames(lines, invoices, rep_map):
     return lx, ix
 
 
-def _customer_ar(dim_customers, final_balances, invoices_full):
+def _customer_ar(dim_customers, final_balances, invoices_full, rep_map):
     """Month-independent AR / bonus attributes per customer, from the FINAL
     2026-07-16 balances. Collection rate = (total billed − final balance) / total
-    billed over the full parsed invoice history; bonus follows the ladder. Monthly
-    sales are recomputed client-side; these attributes stay fixed."""
+    billed over the full parsed invoice history; bonus follows the ladder. Rep is
+    taken from the corrected master map. Monthly sales are recomputed client-side;
+    these attributes stay fixed."""
     billed_map = {
         str(r["customer_code"]): float(r["billed"] or 0.0)
         for r in invoices_full.with_columns(pl.col("customer_code").cast(pl.Utf8))
@@ -115,7 +159,7 @@ def _customer_ar(dim_customers, final_balances, invoices_full):
             "outstanding": round(outstanding, 2) if outstanding is not None else None,
             "collection_rate": round(rate, 4) if rate is not None else None,
             "bonus_pct": C.bonus_pct(rate) if rate is not None else 0.0,
-            "rep": (d.get("rep") or (final_balances.get(code) or {}).get("rep") or "غير محدد"),
+            "rep": rep_map.get(code) or "غير محدد",     # corrected master mapping
             "city": d.get("city") or "", "has_ar": has_ar,
         }
     return out
@@ -188,9 +232,13 @@ def main() -> int:
     print("● Final balances (2026-07-16) + FIFO overdue analysis …")
     final_balances = debt_mod.load_final_balances()
     name_map = _name_map(dims["dim_customers"], invoices_full, dims["debt_detail"])
+    # Customer→rep corrected against official master (see _corrected_rep_map).
+    rep_map = _corrected_rep_map(final_balances, dims["dim_customers"], dims["debt_detail"])
+    rep_exc = rep_exceptions(rep_map, invoices_all)
+    print(f"● Customer→rep: {len(rep_map)} mapped · {len(rep_exc)} sales customers with no rep (exceptions)")
     receivables = overdue_mod.compute(invoices_full, final_balances, dims["dim_customers"],
                                       net_terms=C.NET_TERMS_DAYS, as_of_str=C.AS_OF_DATE,
-                                      cutoff_str=C.OVERDUE_CUTOFF, name_map=name_map)
+                                      cutoff_str=C.OVERDUE_CUTOFF, name_map=name_map, rep_map=rep_map)
 
     months = sorted(invoices_all["month"].unique().to_list())
     print(f"● Months found: {', '.join(months)}")
@@ -205,7 +253,6 @@ def main() -> int:
     # Default-month (June) bundle — drives the PDF and the validation report.
     june = _bundle(lines_all, invoices_all, dims, receivables, monthly, C.DEFAULT_MONTH)
 
-    rep_map = _rep_map(dims["dim_customers"])
     lines_x, invoices_x = _export_frames(lines_all, invoices_all, rep_map)
 
     payload = {
@@ -225,12 +272,13 @@ def main() -> int:
         },
         "lines": lines_x,
         "invoices": invoices_x,
-        "customer_ar": _customer_ar(dims["dim_customers"], final_balances, invoices_full),
+        "customer_ar": _customer_ar(dims["dim_customers"], final_balances, invoices_full, rep_map),
         "receivables": receivables,
         "monthly": monthly,
         "zero_invoices": dq["zero_invoices"],
         "data_quality": dq["summary"],
         "insights_by_month": insights_by_month,
+        "rep_exceptions": rep_exc,
     }
 
     # --- write deliverables ----------------------------------------------
@@ -243,6 +291,11 @@ def main() -> int:
 
     C.OUT_INSIGHTS.write_text(
         json.dumps(insights_by_month, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # Customer→rep Exceptions Report — sales customers with no rep in any source.
+    C.OUT_REP_EXCEPTIONS.write_text(
+        json.dumps({"as_of": C.AS_OF_DATE, "count": len(rep_exc), "exceptions": rep_exc},
+                   ensure_ascii=False, indent=2), encoding="utf-8")
 
     # PDF (best-effort; never blocks the data build) — default-month headline
     try:

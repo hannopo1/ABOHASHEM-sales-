@@ -28,6 +28,11 @@ from . import config as C
 _BUCKET_KEYS = [k for k, *_ in C.AGING_BUCKETS]
 
 
+def _valid(nm) -> bool:
+    """A usable display name: non-empty and not just digits/spaces."""
+    return bool(nm) and not str(nm).strip().replace(" ", "").isdigit()
+
+
 def _bucket_for_age(age_days: int) -> str:
     if age_days <= 30:
         return "d1_30"
@@ -44,7 +49,9 @@ def compute(invoices_full: pl.DataFrame, final_balances: dict,
             dim_customers: pl.DataFrame,
             net_terms: int = C.NET_TERMS_DAYS,
             as_of_str: str = "2026-07-16",
-            cutoff_str: str = "2026-06-30") -> dict:
+            cutoff_str: str = "2026-06-30",
+            name_map: dict | None = None) -> dict:
+    name_map = name_map or {}
     as_of = date.fromisoformat(as_of_str)
     cutoff = date.fromisoformat(cutoff_str)
 
@@ -102,10 +109,17 @@ def compute(invoices_full: pl.DataFrame, final_balances: dict,
         rep = rep_map.get(code) or meta.get("rep") or "غير محدد"
         last_dt = max((d for d, _a in invs), default=None)
         old_age = (as_of - oldest[0]).days if oldest else None
+        # Always display a real customer name — resolve from the authoritative
+        # name map (dim_customers → debt detail → invoice history), then the
+        # debt-report name. For the rare account that has NO name in any source
+        # file, show an honest labelled placeholder ("عميل <code>") — never a
+        # bare number, and never a fabricated name.
+        cust_name = name_map.get(code) or (meta.get("name") if _valid(meta.get("name")) else None) \
+            or f"عميل {code}"
         rows.append({
             "rep": rep,
             "customer_code": code,
-            "customer_name": meta.get("name") or code,
+            "customer_name": cust_name,
             "last_invoice_date": last_dt.isoformat() if last_dt else "",
             "outstanding": round(B, 2),
             "current": round(cust_current, 2),

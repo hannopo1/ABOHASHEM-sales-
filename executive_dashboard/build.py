@@ -43,6 +43,28 @@ def _rep_map(dim_customers):
             .iter_rows(named=True)}
 
 
+def _valid_name(nm) -> bool:
+    return bool(nm) and not str(nm).strip().replace(" ", "").isdigit()
+
+
+def _name_map(dim_customers, invoices_full, debt_detail):
+    """Authoritative customer-code → name map so no view ever shows a bare code.
+    Merged from every name-bearing source; dim_customers (cleaned reference) wins,
+    then the 2026-07-04 debt detail, then the invoice history."""
+    m = {}
+    for r in invoices_full.with_columns(pl.col("customer_code").cast(pl.Utf8)).iter_rows(named=True):
+        code, nm = r["customer_code"], r["customer_name"]
+        if code not in m and _valid_name(nm):
+            m[code] = nm
+    for r in debt_detail.with_columns(pl.col("customer_code").cast(pl.Utf8)).iter_rows(named=True):
+        if _valid_name(r.get("customer_name")):
+            m[str(r["customer_code"])] = r["customer_name"]
+    for r in dim_customers.with_columns(pl.col("customer_code").cast(pl.Utf8)).iter_rows(named=True):
+        if _valid_name(r["customer_name"]):
+            m[str(r["customer_code"])] = r["customer_name"]     # reference name wins
+    return m
+
+
 def _export_frames(lines, invoices, rep_map):
     """Line-level + invoice-level records (with salesperson, status and month)
     for client-side cross-filtering. Small enough to ship inline."""
@@ -165,9 +187,10 @@ def main() -> int:
 
     print("● Final balances (2026-07-16) + FIFO overdue analysis …")
     final_balances = debt_mod.load_final_balances()
+    name_map = _name_map(dims["dim_customers"], invoices_full, dims["debt_detail"])
     receivables = overdue_mod.compute(invoices_full, final_balances, dims["dim_customers"],
                                       net_terms=C.NET_TERMS_DAYS, as_of_str=C.AS_OF_DATE,
-                                      cutoff_str=C.OVERDUE_CUTOFF)
+                                      cutoff_str=C.OVERDUE_CUTOFF, name_map=name_map)
 
     months = sorted(invoices_all["month"].unique().to_list())
     print(f"● Months found: {', '.join(months)}")
@@ -308,6 +331,17 @@ def validate(lines_all, invoices_all, jl, ji, june, receivables, dq, months) -> 
           abs(receivables["total_current"] + receivables["total_overdue"]
               - receivables["total_outstanding"]) < 1.0,
           f"(overdue {receivables['total_overdue']:,.0f})")
+
+    # 8d. every receivable row shows a customer NAME (or an honest "عميل <code>"
+    #     label), never a bare numeric code.
+    import re as _re
+    code_named = [r["customer_code"] for r in receivables["rows"]
+                  if _re.fullmatch(r"[\d\s]*", r["customer_name"] or "")]
+    check("no receivable shows a bare code as name", not code_named,
+          f"({len(code_named)} bare codes)")
+    labelled = sum(1 for r in receivables["rows"] if str(r["customer_name"]).startswith("عميل "))
+    if labelled:
+        print(f"  [INFO] {labelled} customers have no name in any source → shown as 'عميل <code>'")
 
     # 9. bonus ladder boundaries
     from src.config import bonus_pct

@@ -17,7 +17,7 @@ from . import config as C
 # x-bands in the debt report (RTL). Balance ~161, code ~521, name ~450, rep ~310.
 _BAL = (148, 216)
 _CODE = (505, 535)
-_NAME = (395, 500)
+_NAME = (342, 505)          # widened; the customer-type word «عميل» (~376) is excluded below
 _REP = (285, 342)
 
 
@@ -44,8 +44,10 @@ def _parse_pdf(path) -> list[tuple]:
             bal = next((_num(wd) for x, wd in ws if _BAL[0] <= x <= _BAL[1] and _num(wd) is not None), None)
             if bal is None:
                 continue
-            name = " ".join(wd for x, wd in sorted((p for p in ws if _NAME[0] <= p[0] <= _NAME[1]),
-                                                   key=lambda t: -t[0]))
+            name = " ".join(
+                wd for x, wd in sorted((p for p in ws if _NAME[0] <= p[0] <= _NAME[1]),
+                                       key=lambda t: -t[0])
+                if wd != "عميل" and not re.fullmatch(r"[\d.,]+", wd))
             rep = " ".join(wd for x, wd in sorted((p for p in ws if _REP[0] <= p[0] <= _REP[1]),
                                                   key=lambda t: -t[0]))
             rows_out.append((code, bal, name.strip(), rep.strip()))

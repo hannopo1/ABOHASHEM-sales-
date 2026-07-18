@@ -222,6 +222,14 @@ def parse_all(year: int | None = None) -> tuple[pl.DataFrame, pl.DataFrame]:
     frames_i = [im, ij] + ([i7] if i7.height else [])
     lines = pl.concat(frames_l, how="vertical_relaxed")
     invoices = pl.concat(frames_i, how="vertical_relaxed")
+    # Canonicalise customer codes (strip thousands-comma + apply the +1000 alias)
+    # so codes ≥1000 join consistently with the debt snapshot and dimensions.
+    lines = lines.with_columns(
+        pl.col("customer_code").cast(pl.Utf8)
+        .map_elements(C.canonical_code, return_dtype=pl.Utf8).alias("customer_code"))
+    invoices = invoices.with_columns(
+        pl.col("customer_code").cast(pl.Utf8)
+        .map_elements(C.canonical_code, return_dtype=pl.Utf8).alias("customer_code"))
     lines = lines.with_columns(pl.col("invoice_date").dt.strftime("%Y-%m").alias("month"))
     invoices = invoices.with_columns(pl.col("invoice_date").dt.strftime("%Y-%m").alias("month"))
     if year is not None:
@@ -243,6 +251,14 @@ def load_dimensions() -> dict[str, pl.DataFrame]:
     debt_detail = pl.read_csv(C.F_DEBT_DETAIL, infer_schema_length=2000)
     rep_summary = pl.read_csv(C.F_REP_SUMMARY, infer_schema_length=2000)
     ar_balances = pl.read_csv(C.F_AR_BALANCES, infer_schema_length=2000)
+
+    # Canonicalise customer codes so the ≥1000 comma-formatted codes join.
+    dim_customers = dim_customers.with_columns(
+        pl.col("customer_code").cast(pl.Utf8)
+        .map_elements(C.canonical_code, return_dtype=pl.Utf8).alias("customer_code"))
+    debt_detail = debt_detail.with_columns(
+        pl.col("customer_code").cast(pl.Utf8)
+        .map_elements(C.canonical_code, return_dtype=pl.Utf8).alias("customer_code"))
 
     return dict(
         dim_items=dim_items,

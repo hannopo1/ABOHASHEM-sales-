@@ -174,6 +174,20 @@ DEBT_CODE_ALIASES: dict[str, str] = {
 }
 
 
+def canonical_code(code) -> str:
+    """Single source of truth for customer-code identity.
+
+    Codes ≥1000 are written comma-formatted in the sales-invoice source («1,003»)
+    but plain in the debt reports («1003»), so they never joined — leaving real
+    unpaid June invoices mis-aged as orphan «120+» debt. This strips the
+    thousands-comma, then applies the verified +1000 duplicate-code alias, so
+    every source resolves each customer to one code. Touches only identity — no
+    financial value is altered.
+    """
+    c = str(code).replace(",", "").strip()
+    return DEBT_CODE_ALIASES.get(c, c)
+
+
 def bonus_pct(collection_rate: float) -> float:
     """Return the bonus fraction (e.g. 0.05 == 5%) for a collection rate.
 

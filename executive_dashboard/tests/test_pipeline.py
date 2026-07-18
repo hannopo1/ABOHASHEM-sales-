@@ -19,7 +19,7 @@ sys.path.insert(0, str(APP_DIR))
 from src.config import (bonus_pct, BONUS_RULES,  # noqa: E402
                         COLLECTIONS_PRINTED_TOTAL, RETURNS_PRINTED_TOTAL,
                         PAYMENT_METHOD_KEYWORDS, PAYMENT_METHOD_DEFAULT,
-                        DEBT_CODE_ALIASES)
+                        DEBT_CODE_ALIASES, canonical_code)
 
 
 def test_bonus_ladder_boundaries():
@@ -64,6 +64,17 @@ def test_printed_totals_are_positive():
 def test_payment_method_keywords_shape():
     assert PAYMENT_METHOD_DEFAULT
     assert all(len(t) == 2 and t[0] and t[1] for t in PAYMENT_METHOD_KEYWORDS)
+
+
+def test_canonical_code_strips_comma_and_aliases():
+    """Codes ≥1000 are comma-formatted in invoices but plain in the debt report;
+    canonical_code unifies them (and applies the +1000 alias)."""
+    assert canonical_code("1,003") == "1003"      # comma stripped -> joins debt 1003
+    assert canonical_code("1003") == "1003"
+    assert canonical_code("1,007") == "007"        # comma stripped + aliased to 007
+    assert canonical_code("1007") == "007"
+    assert canonical_code("438") == "438"          # ordinary code untouched
+    assert canonical_code("007") == "007"
 
 
 def test_debt_code_aliases_are_plus_1000_offsets():

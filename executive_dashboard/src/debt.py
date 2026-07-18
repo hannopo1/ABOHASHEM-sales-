@@ -75,4 +75,16 @@ def load_final_balances() -> dict:
             # one row per customer; last wins (files are per-rep, codes unique)
             out[code] = {"balance": round(bal, 2), "name": name,
                          "rep": rep, "rep_official": rep_official}
+    # Data-quality correction: re-key +1000-offset duplicate codes onto their
+    # invoice code so the balance ages against the real invoices and keeps its
+    # rep (see config.DEBT_CODE_ALIASES). No balance value is changed; on the
+    # rare collision the balances are summed.
+    for dcode, icode in C.DEBT_CODE_ALIASES.items():
+        if dcode not in out:
+            continue
+        meta = out.pop(dcode)
+        if icode in out:
+            out[icode]["balance"] = round(out[icode]["balance"] + meta["balance"], 2)
+        else:
+            out[icode] = meta
     return out

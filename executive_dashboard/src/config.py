@@ -145,6 +145,35 @@ BRAND_OVERRIDES: dict[str, str] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Debt-snapshot customer-code aliases (data-quality correction)
+# ---------------------------------------------------------------------------
+# The 2026-07-16 debt reports code a subset of customers with a +1000 offset
+# relative to the sales-invoice system (an ERP re-coding). They are the SAME
+# customers — verified name-identical against the invoice history (e.g. debt
+# code 1019 «مصطفى عز السماعيلية» carries the exact unpaid balance of invoice
+# code 019). Left unmerged, their balance is mis-aged as orphan «120+ opening»
+# debt and their sales appear rep-less. This map re-keys the debt balance onto
+# the invoice code so it ages correctly against the real invoices and inherits
+# the representative from its debt file. It touches ONLY the code linkage — no
+# balance, invoice, collection or sales value is altered. {debt_code: inv_code}.
+DEBT_CODE_ALIASES: dict[str, str] = {
+    "1000": "000",   # عادل دشيشة المنصورية      (محمد خليل)
+    "1001": "001",   # منفذ امان السيدة زينب     (محمد خليل)
+    "1007": "007",   # مطعم لهاليبو باب الشعرية  (محمد خليل)
+    "1008": "008",   # اولاد الشيخ الوراق        (محمد خليل)
+    "1011": "011",   # ثلجة حليم الوراق          (محمد خليل)
+    "1012": "012",   # بيت العيلة الدويقة        (ايمن فارس)
+    "1014": "014",   # بيتزا ابورئال الخانكة     (محمد خليل)
+    "1015": "015",   # بيت العيلة السيدة زينب    (ايمن فارس)
+    "1016": "016",   # بيت العيلة مصر والسودان   (ايمن فارس)
+    "1018": "018",   # مصيلحى صقر قريش           (محمد خليل)
+    "1019": "019",   # مصطفى عز السماعيلية       (حسام حسن)
+    "1020": "020",   # الليبى م خليل             (محمد خليل)
+    "1021": "021",   # ماركت الخوة م خليل        (محمد خليل)
+}
+
+
 def bonus_pct(collection_rate: float) -> float:
     """Return the bonus fraction (e.g. 0.05 == 5%) for a collection rate.
 

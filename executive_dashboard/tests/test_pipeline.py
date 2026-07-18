@@ -18,7 +18,8 @@ sys.path.insert(0, str(APP_DIR))
 
 from src.config import (bonus_pct, BONUS_RULES,  # noqa: E402
                         COLLECTIONS_PRINTED_TOTAL, RETURNS_PRINTED_TOTAL,
-                        PAYMENT_METHOD_KEYWORDS, PAYMENT_METHOD_DEFAULT)
+                        PAYMENT_METHOD_KEYWORDS, PAYMENT_METHOD_DEFAULT,
+                        DEBT_CODE_ALIASES)
 
 
 def test_bonus_ladder_boundaries():
@@ -63,6 +64,34 @@ def test_printed_totals_are_positive():
 def test_payment_method_keywords_shape():
     assert PAYMENT_METHOD_DEFAULT
     assert all(len(t) == 2 and t[0] and t[1] for t in PAYMENT_METHOD_KEYWORDS)
+
+
+def test_debt_code_aliases_are_plus_1000_offsets():
+    """Every alias re-keys a +1000 debt code onto its base invoice code."""
+    assert DEBT_CODE_ALIASES
+    for dcode, icode in DEBT_CODE_ALIASES.items():
+        assert dcode.isdigit() and icode.isdigit()
+        assert int(dcode) - int(icode) == 1000
+        assert dcode != icode
+
+
+def test_debt_aliases_reage_onto_invoice_codes():
+    """After the alias correction, the re-keyed balances land on codes that
+    actually carry invoices (so they age correctly instead of as orphans)."""
+    coll, C = _collections_module()  # reuses the polars/pymupdf/PDF guard
+    from src import debt, load
+    import polars as pl
+    fb = debt.load_final_balances()
+    if not fb:
+        pytest.skip("debt snapshot PDFs not present")
+    _l, invoices_full = load.parse_all()
+    inv_codes = set(invoices_full.with_columns(
+        pl.col("customer_code").cast(pl.Utf8))["customer_code"].unique().to_list())
+    # No +1000 alias source code should survive in the balances…
+    for dcode, icode in C.DEBT_CODE_ALIASES.items():
+        assert dcode not in fb
+        # …and its target invoice code exists in the invoice history.
+        assert icode in inv_codes
 
 
 # --- collections / returns parsing (needs polars + pymupdf + source PDFs) -----

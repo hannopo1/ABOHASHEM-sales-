@@ -413,6 +413,17 @@ def validate(lines_all, invoices_all, jl, ji, june, receivables, dq, months) -> 
     check("no invalid / out-of-year dates", invalid_dates == 0, f"({invalid_dates})")
     neg_qty = lines_all.filter(pl.col("qty") < 0).height
     check("no negative quantities", neg_qty == 0, f"({neg_qty})")
+
+    # 10b. July invoice dates must all fall inside July 2026 (never the report
+    #      period-header date or any out-of-month value).
+    jul = invoices_all.filter(pl.col("month") == "2026-07")
+    if jul.height:
+        bad_jul = jul.filter(~((pl.col("invoice_date").dt.year() == 2026)
+                               & (pl.col("invoice_date").dt.month() == 7))).height
+        jmin = jul["invoice_date"].min()
+        jmax = jul["invoice_date"].max()
+        check("all July invoice dates inside July 2026", bad_jul == 0,
+              f"({bad_jul} out-of-month · span {jmin}..{jmax})")
     bal = invoices_all.filter(
         ((pl.col("paid").fill_null(0) + pl.col("remaining").fill_null(0)
           - pl.col("reported_total").fill_null(0)).abs() > 1.0)).height

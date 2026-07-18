@@ -49,7 +49,7 @@ FONT_BOLD = APP_DIR / "vendor" / "fonts" / "Amiri-Bold.ttf"
 # ---------------------------------------------------------------------------
 PERIOD_YEAR = 2026
 PERIOD_MONTH = 7
-PERIOD_LABEL_AR = "يوليو ٢٠٢٦"
+PERIOD_LABEL_AR = "يوليو 2026"
 DEFAULT_MONTH = "2026-07"          # month the dashboard opens on
 # AR snapshot date used for the receivable/overdue analysis. Updated to the
 # FINAL post-July customer balances (مديونية …-16_7_2026.pdf).
@@ -69,7 +69,10 @@ ALL_MONTHS = [f"{PERIOD_YEAR}-{m:02d}" for m in range(1, 13)]
 
 
 def month_label_ar(ym: str) -> str:
-    """'2026-06' -> 'يونيو 2026' (matches the requested selector labels exactly)."""
+    """'2026-06' -> 'يونيو 2026' (matches the requested selector labels exactly).
+    The special key 'all' maps to the all-months label."""
+    if ym == "all":
+        return ALL_MONTHS_LABEL
     y, m = ym.split("-")
     return f"{MONTHS_AR[int(m)]} {y}"
 

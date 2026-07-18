@@ -50,7 +50,11 @@ def _header_footer(text: str) -> dict:
         return m.group(1) if m else None
     return dict(
         invoice_no=(g(r"([Bb]\d+)\s*فاتورة مبيعات رقم") or "").upper() or None,
-        invoice_date=g(r"(\d{4}/\d{1,2}/\d{1,2})"),
+        # Invoice ISSUE date — anchored to the customer «الكود» field, where the
+        # date is printed ("/ الكود2026/7/1"). This avoids ever picking up the
+        # report-period header dates that appear on the first page. Falls back to
+        # the first date on the page only if the anchor is missing.
+        invoice_date=g(r"الكود\s*(\d{4}/\d{1,2}/\d{1,2})") or g(r"(\d{4}/\d{1,2}/\d{1,2})"),
         customer_code=g(r"(\d+)\s*\n\s*/?\s*الكود") or "",
         customer_name=(g(r"([^\n]+)\n\s*اسم العميل") or "").strip(),
         phone=g(r"(01\d{9,10})") or "",

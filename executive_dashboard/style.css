@@ -49,6 +49,9 @@ a{color:var(--blue);text-decoration:none}
 .brand{display:flex;align-items:center;gap:12px;min-width:0}
 .brand-mark{width:44px;height:44px;border-radius:12px;background:var(--grad);
   display:grid;place-items:center;font-weight:800;color:#fff;box-shadow:var(--shadow);flex:none}
+/* Two brand logos in the header (Abu Hashem + Special) */
+.brand-logos{display:flex;align-items:center;gap:10px;flex:none}
+.brand-logo{height:46px;width:auto;max-width:80px;object-fit:contain;display:block}
 .brand-txt{min-width:0}
 .brand-txt h1{font-size:16px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .brand-sub{font-size:12px;color:var(--muted)}

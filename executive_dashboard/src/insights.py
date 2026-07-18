@@ -24,7 +24,7 @@ def _insight(title, what, why, risk, opportunity, action, priority):
     }
 
 
-def generate(kpis, customers, products, receivables, monthly, dq) -> dict:
+def generate(kpis, customers, products, receivables, monthly, dq, focus_month=None) -> dict:
     out: dict[str, dict] = {}
 
     # --- Portfolio / KPIs --------------------------------------------------
@@ -43,13 +43,22 @@ def generate(kpis, customers, products, receivables, monthly, dq) -> dict:
     )
 
     # --- Monthly trend / variance -----------------------------------------
+    months_ar = {"01": "يناير", "02": "فبراير", "03": "مارس", "04": "أبريل",
+                 "05": "مايو", "06": "يونيو", "07": "يوليو", "08": "أغسطس",
+                 "09": "سبتمبر", "10": "أكتوبر", "11": "نوفمبر", "12": "ديسمبر"}
+    keys = [r["month"] for r in monthly]
     m = {r["month"]: r for r in monthly}
-    jun = m.get("2026-06", {}).get("net_sales", 0.0)
-    may = m.get("2026-05", {}).get("net_sales", 0.0)
-    delta = (jun - may) / may if may else 0.0
+    fm = focus_month if focus_month in m else "2026-06"
+    idx = keys.index(fm) if fm in keys else len(keys) - 1
+    pm = keys[idx - 1] if idx > 0 else fm
+    cur = m.get(fm, {}).get("net_sales", 0.0)
+    prev = m.get(pm, {}).get("net_sales", 0.0)
+    cur_name = months_ar.get(fm.split("-")[1], fm)
+    prev_name = months_ar.get(pm.split("-")[1], pm)
+    delta = (cur - prev) / prev if prev else 0.0
     out["monthly_trend"] = _insight(
         "اتجاه المبيعات الشهري",
-        f"مبيعات يونيو {_egp(jun)} مقابل {_egp(may)} في مايو "
+        f"مبيعات {cur_name} {_egp(cur)} مقابل {_egp(prev)} في {prev_name} "
         f"({'انخفاض' if delta < 0 else 'ارتفاع'} {_pct(abs(delta))}).",
         "تراجع طفيف مع اتساع قاعدة العملاء (أعلى عدد عملاء وفواتير في السلسلة) — "
         "أي متوسط قيمة الفاتورة تراجع لا عدد الصفقات.",
@@ -110,11 +119,14 @@ def generate(kpis, customers, products, receivables, monthly, dq) -> dict:
 
     # --- Aging / receivables ----------------------------------------------
     overdue_share = receivables["total_overdue"] / (receivables["total_outstanding"] or 1.0)
+    why_aging = ("معظم الرصيد «جاري» (غير مستحق) وهو مؤشر صحي." if overdue_share < 0.4
+                 else "غالبية الرصيد متأخرة السداد — يُخصَّص الرصيد النهائي على الفواتير بطريقة "
+                      "FIFO (الأقدم سدادًا أولًا)، وكل فاتورة قبل يوليو ما تزال غير مسددة تُصنَّف متأخرة.")
     out["aging"] = _insight(
-        "أعمار الديون (تقديري)",
+        "أعمار الديون (FIFO على الرصيد النهائي)",
         f"من إجمالي مديونية {_egp(receivables['total_outstanding'])}، المتأخرات "
         f"{_egp(receivables['total_overdue'])} ({_pct(overdue_share)}).",
-        "معظم الرصيد «جاري» (غير مستحق) وهو مؤشر صحي، لكن شريحة المتأخرات مركّزة لدى مناديب بعينهم.",
+        why_aging,
         "المتأخرات الأقدم (+٩٠ يوم) هي الأعلى احتمالًا للتحوّل لديون معدومة.",
         "تحصيل المتأخرات القصيرة قبل تقادمها يقلّل المخصصات مستقبلًا.",
         "خطة تحصيل مرحلية تبدأ بأقدم الشرائح وأكبر الأرصدة.",

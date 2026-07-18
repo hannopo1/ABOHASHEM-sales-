@@ -112,6 +112,124 @@ def parse_june() -> tuple[pl.DataFrame, pl.DataFrame]:
     return lines_df, invoices_df
 
 
+# --- main file (2025-01 .. 2026-05, fenced free-text blocks) ------------------
+_MAIN_SPLIT = re.compile(r"\n## فاتورة رقم ")
+_MAIN_HEADER = re.compile(r"(.+?)\s+—\s+(\d{4}/\d{1,2}/\d{1,2})")
+_MAIN_FENCE = re.compile(r"```\n(.*?)\n```", re.S)
+_MAIN_CODE = re.compile(r"الكود\s*/\s*(\S+)")
+_MAIN_NAME = re.compile(r"اسم العميل\s*/\s*(.*?)\s+التليفون")
+_MAIN_PHONE = re.compile(r"(?:التليفون|الموبايل)\s*/\s*(01\d{9})")
+_MAIN_TOTAL = re.compile(r"إجمالى الفاتورة\s*/\s*(-?[\d.,]+)")
+_MAIN_PAID = re.compile(r"المدفوع\s*/\s*(-?[\d.,]+)")
+_MAIN_REMAIN = re.compile(r"الباقي\s*/\s*(-?[\d.,]+)")
+_MAIN_QTY = re.compile(r"عدد كميات الفاتورة\s*(-?[\d.,]+)")
+_NUM_TOK = re.compile(r"^-?\d{1,3}(,\d{3})*(\.\d+)?$|^-?\d+(\.\d+)?$")
+
+
+def parse_main() -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Parse the main markdown (2025-01 .. 2026-05). Same schema as ``parse_june``.
+
+    Line columns follow the shared invoice layout (qty, unit price, tax %,
+    discount %, line total); the footer carries paid/remaining/quantity.
+    """
+    text = C.SRC_MAIN_MD.read_text(encoding="utf-8")
+    blocks = _MAIN_SPLIT.split(text)[1:]
+    lines: list[dict] = []
+    invoices: list[dict] = []
+    for block in blocks:
+        header_line, _, rest = block.partition("\n")
+        hm = _MAIN_HEADER.match(header_line)
+        if not hm:
+            continue
+        invoice_no, inv_date = hm.group(1).strip(), _to_date(hm.group(2))
+
+        fence = _MAIN_FENCE.search(rest)
+        if not fence:
+            continue
+        body = fence.group(1)
+        blines = body.split("\n")
+
+        cust_code = cust_name = phone = ""
+        for ln in blines[:5]:
+            if not cust_code and (m := _MAIN_CODE.search(ln)):
+                cust_code = m.group(1)
+            if not cust_name and (m := _MAIN_NAME.search(ln)):
+                cust_name = m.group(1).strip()
+            if not phone and (m := _MAIN_PHONE.search(ln)):
+                phone = m.group(1)
+
+        total = _num(_MAIN_TOTAL.search(body).group(1)) if _MAIN_TOTAL.search(body) else None
+        paid = _num(_MAIN_PAID.search(body).group(1)) if _MAIN_PAID.search(body) else None
+        remaining = _num(_MAIN_REMAIN.search(body).group(1)) if _MAIN_REMAIN.search(body) else None
+        qty_total = _num(_MAIN_QTY.search(body).group(1)) if _MAIN_QTY.search(body) else None
+        is_bonus = "بونص" in body
+
+        line_sum = 0.0
+        n_lines = 0
+        for ln in blines:
+            toks = ln.strip().split()
+            if len(toks) < 7 or not _NUM_TOK.match(toks[0]) or not re.match(r"^\d+$", toks[1]):
+                continue
+            if any(w in ln for w in ("إجمالى", "ضريبة", "الباقي", "المدفوع")):
+                continue
+            if not all(_NUM_TOK.match(t) for t in toks[-5:]):
+                continue
+            qty, price, tax_pct, disc_pct, ltot = (_num(x) for x in toks[-5:])
+            item_name = " ".join(toks[2:-5]).strip()
+            if not item_name:
+                continue
+            lines.append(dict(
+                invoice_no=invoice_no, invoice_date=inv_date, invoice_time="",
+                customer_code=cust_code, customer_name=cust_name, phone=phone,
+                address="", seq=_num(toks[0]), item_code=toks[1],
+                item_name=item_name, unit="", qty=qty, unit_price=price,
+                tax_pct=tax_pct, discount_pct=disc_pct, line_total=ltot, is_bonus=is_bonus,
+            ))
+            n_lines += 1
+            line_sum += ltot or 0.0
+
+        if n_lines == 0:
+            continue
+        invoices.append(dict(
+            invoice_no=invoice_no, invoice_date=inv_date, invoice_time="",
+            customer_code=cust_code, customer_name=cust_name, phone=phone,
+            address="", reported_total=total, line_total_sum=round(line_sum, 2),
+            remaining=remaining, paid=paid, qty_total=qty_total,
+            is_bonus=is_bonus, n_lines=n_lines,
+        ))
+    return pl.DataFrame(lines), pl.DataFrame(invoices)
+
+
+def parse_all(year: int | None = None) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Combine the main + June sources into one dataset, tagged with a ``month``
+    column ('YYYY-MM'). Optionally restrict to a single calendar ``year``.
+
+    June is taken exclusively from the dedicated June file (higher-fidelity table
+    extraction); the main file supplies every earlier month.
+    """
+    from . import july as july_mod
+    lm, im = parse_main()
+    lj, ij = parse_june()
+    l7, i7 = july_mod.parse_july()          # July 1–15 2026 (PDF); empty if absent
+    # main file already contains an (older-format) June? keep the dedicated June
+    # file authoritative for 2026-06 and drop any 2026-06 rows from the main set.
+    def _drop_june26(df):
+        return df.filter(~((pl.col("invoice_date").dt.year() == 2026)
+                           & (pl.col("invoice_date").dt.month() == 6)))
+    lm, im = _drop_june26(lm), _drop_june26(im)
+
+    frames_l = [lm, lj] + ([l7] if l7.height else [])
+    frames_i = [im, ij] + ([i7] if i7.height else [])
+    lines = pl.concat(frames_l, how="vertical_relaxed")
+    invoices = pl.concat(frames_i, how="vertical_relaxed")
+    lines = lines.with_columns(pl.col("invoice_date").dt.strftime("%Y-%m").alias("month"))
+    invoices = invoices.with_columns(pl.col("invoice_date").dt.strftime("%Y-%m").alias("month"))
+    if year is not None:
+        lines = lines.filter(pl.col("invoice_date").dt.year() == year)
+        invoices = invoices.filter(pl.col("invoice_date").dt.year() == year)
+    return lines, invoices
+
+
 def load_dimensions() -> dict[str, pl.DataFrame]:
     """Load reused processed dimension / AR files as Polars frames."""
     dim_items = pl.read_csv(C.F_DIM_ITEMS, infer_schema_length=2000)
@@ -179,4 +297,12 @@ def enrich_lines(lines_df: pl.DataFrame, dim_items: pl.DataFrame) -> pl.DataFram
         .then(pl.col("qty") / pl.col("carton_units"))
         .otherwise(None).alias("boxes"),
     ])
+    # Display-only brand relabelling (config.BRAND_OVERRIDES) — leaves every
+    # financial value untouched, changes only the shown brand label.
+    if C.BRAND_OVERRIDES:
+        out = out.with_columns(
+            pl.col("item_code").replace(C.BRAND_OVERRIDES, default=None).alias("_brand_ovr")
+        ).with_columns(
+            pl.coalesce(["_brand_ovr", "brand"]).alias("brand")
+        ).drop("_brand_ovr")
     return out

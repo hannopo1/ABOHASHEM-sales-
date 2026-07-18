@@ -16,6 +16,10 @@ APP_DIR = PKG_DIR.parent                              # executive_dashboard
 REPO_ROOT = APP_DIR.parent                            # repository root
 
 SRC_JUNE_MD = REPO_ROOT / "فواتير_المبيعات_يونيو_2026-1.md"
+SRC_MAIN_MD = REPO_ROOT / "فواتير المبيعات من 112025 الى 3152026.md"
+# July 1–15 2026 sales invoices (Pioneers-template PDF with an extractable text
+# layer). Parsed geometrically at 100% invoice reconciliation.
+SRC_JULY_PDF = REPO_ROOT / "فواتير المبيعات من 1_7_2026الى 15_7_2026.pdf"
 PROCESSED = REPO_ROOT / "data" / "processed"
 JUNE_AGG = REPO_ROOT / "analysis" / "data_2026_06"
 
@@ -35,6 +39,7 @@ OUT_INDEX = APP_DIR / "index.html"
 OUT_PROCESSED_CSV = APP_DIR / "processed_data.csv"
 OUT_INSIGHTS = APP_DIR / "insights.json"
 OUT_PDF = APP_DIR / "executive_summary.pdf"
+OUT_REP_EXCEPTIONS = APP_DIR / "rep_exceptions.json"
 
 FONT_REGULAR = APP_DIR / "vendor" / "fonts" / "Amiri-Regular.ttf"
 FONT_BOLD = APP_DIR / "vendor" / "fonts" / "Amiri-Bold.ttf"
@@ -43,10 +48,30 @@ FONT_BOLD = APP_DIR / "vendor" / "fonts" / "Amiri-Bold.ttf"
 # Period
 # ---------------------------------------------------------------------------
 PERIOD_YEAR = 2026
-PERIOD_MONTH = 6
-PERIOD_LABEL_AR = "يونيو ٢٠٢٦"
-# AR debt snapshot date the arrears files were extracted at.
-AS_OF_DATE = "2026-07-04"
+PERIOD_MONTH = 7
+PERIOD_LABEL_AR = "يوليو ٢٠٢٦"
+DEFAULT_MONTH = "2026-07"          # month the dashboard opens on
+# AR snapshot date used for the receivable/overdue analysis. Updated to the
+# FINAL post-July customer balances (مديونية …-16_7_2026.pdf).
+AS_OF_DATE = "2026-07-16"
+# Invoices dated on/before this are classified OVERDUE when still unpaid.
+OVERDUE_CUTOFF = "2026-06-30"
+
+# Arabic month names (used to label the month selector).
+MONTHS_AR = {
+    1: "يناير", 2: "فبراير", 3: "مارس", 4: "أبريل", 5: "مايو", 6: "يونيو",
+    7: "يوليو", 8: "أغسطس", 9: "سبتمبر", 10: "أكتوبر", 11: "نوفمبر", 12: "ديسمبر",
+}
+ALL_MONTHS_LABEL = "جميع الشهور"
+# Every calendar month of the period year — the month selector lists all twelve;
+# months with no source data render an honest empty state (never fabricated).
+ALL_MONTHS = [f"{PERIOD_YEAR}-{m:02d}" for m in range(1, 13)]
+
+
+def month_label_ar(ym: str) -> str:
+    """'2026-06' -> 'يونيو 2026' (matches the requested selector labels exactly)."""
+    y, m = ym.split("-")
+    return f"{MONTHS_AR[int(m)]} {y}"
 
 # ---------------------------------------------------------------------------
 # Business rules (all configurable in one place)
@@ -84,6 +109,18 @@ AGING_BUCKETS = [
     ("d91_120", "91–120 يوم", 91, 120),
     ("d120p", "أكثر من 120 يوم", 121, 10_000),
 ]
+
+
+# Display-only brand relabelling (master/reference mapping override). Keys are
+# item codes; values are the brand label to show. Applied at enrichment time —
+# it NEVER touches any financial value (sales, qty, price), only the shown brand.
+# Requested change: the beef-paste product «العجينة البقري» (عجينة بقرى 1ك/500جم/5ك,
+# codes 433/435/436) moves from «أبو هاشم» to «اسبشيال».
+BRAND_OVERRIDES: dict[str, str] = {
+    "433": "اسبشيال",
+    "435": "اسبشيال",
+    "436": "اسبشيال",
+}
 
 
 def bonus_pct(collection_rate: float) -> float:

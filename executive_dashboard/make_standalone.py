@@ -46,6 +46,15 @@ def main():
     body = re.sub(r'\s*<link[^>]*>', "", body)
     body = re.sub(r'\s*<script src="[^"]*"></script>', "", body)
 
+    # --- inline local images (e.g. the header logos) as base64 data URIs ---
+    def _img(m):
+        path = APP / m.group(1)
+        if not path.exists():
+            return m.group(0)
+        ext = path.suffix.lstrip(".").lower().replace("jpg", "jpeg").replace("svg", "svg+xml")
+        return f'src="data:image/{ext};base64,{b64(path)}"'
+    body = re.sub(r'src="(assets/[^"]+)"', _img, body)
+
     # --- inline scripts in order ------------------------------------------
     scripts = []
     for j in JS:

@@ -49,8 +49,8 @@ FONT_BOLD = APP_DIR / "vendor" / "fonts" / "Amiri-Bold.ttf"
 # ---------------------------------------------------------------------------
 PERIOD_YEAR = 2026
 PERIOD_MONTH = 7
-PERIOD_LABEL_AR = "جميع الشهور — 2026"
-DEFAULT_MONTH = "all"              # dashboard opens on ALL months (جميع الشهور)
+PERIOD_LABEL_AR = "يوليو 2026"
+DEFAULT_MONTH = "2026-07"          # month the dashboard opens on
 # AR snapshot date used for the receivable/overdue analysis. Updated to the
 # FINAL post-July customer balances (مديونية …-16_7_2026.pdf).
 AS_OF_DATE = "2026-07-16"

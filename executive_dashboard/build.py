@@ -28,7 +28,7 @@ import polars as pl
 
 from src import (config as C, load, data_quality, kpis as kpi_mod, customers as cust_mod,
                  products as prod_mod, insights as ins_mod, debt as debt_mod,
-                 overdue as overdue_mod)
+                 overdue as overdue_mod, collections as coll_mod)
 
 
 def _jsonable(obj):
@@ -131,12 +131,21 @@ def _export_frames(lines, invoices, rep_map):
     return lx, ix
 
 
-def _customer_ar(dim_customers, final_balances, invoices_full, rep_map):
-    """Month-independent AR / bonus attributes per customer, from the FINAL
-    2026-07-16 balances. Collection rate = (total billed − final balance) / total
-    billed over the full parsed invoice history; bonus follows the ladder. Rep is
-    taken from the corrected master map. Monthly sales are recomputed client-side;
-    these attributes stay fixed."""
+def _customer_ar(dim_customers, final_balances, invoices_full, rep_map,
+                 collected_by_code=None, returns_by_code=None,
+                 billed2026_by_code=None, reliable=None):
+    """Month-independent AR / bonus attributes per customer.
+
+    Collection rate now uses ACTUAL 2026 cash receipts where the customer is
+    attributable (collected ÷ billed_2026); otherwise it falls back to the
+    unchanged billed-vs-final-balance proxy over the full parsed invoice history.
+    Bonus follows the same ladder. Rep is the corrected master map. Monthly sales
+    are recomputed client-side; these attributes stay fixed. ``rate_source`` marks
+    every customer as "actual" | "proxy" | "none" for full auditability."""
+    collected_by_code = collected_by_code or {}
+    returns_by_code = returns_by_code or {}
+    billed2026_by_code = billed2026_by_code or {}
+    reliable = reliable or set()
     billed_map = {
         str(r["customer_code"]): float(r["billed"] or 0.0)
         for r in invoices_full.with_columns(pl.col("customer_code").cast(pl.Utf8))
@@ -151,13 +160,26 @@ def _customer_ar(dim_customers, final_balances, invoices_full, rep_map):
         billed = billed_map.get(code, float((dc.get(code) or {}).get("total_revenue") or 0.0))
         has_ar = code in final_balances
         outstanding = float(final_balances[code]["balance"]) if has_ar else None
-        rate = (max(0.0, min(1.0, (billed - outstanding) / billed))
-                if (has_ar and billed > 0) else None)
+        collected_actual = collected_by_code.get(code)
+        billed_2026 = float(billed2026_by_code.get(code) or 0.0)
+        if code in reliable and billed_2026 > 0:
+            rate = max(0.0, min(1.0, collected_actual / billed_2026))
+            rate_source = "actual"
+        elif has_ar and billed > 0:
+            rate = max(0.0, min(1.0, (billed - outstanding) / billed))
+            rate_source = "proxy"
+        else:
+            rate = None
+            rate_source = "none"
         d = dc.get(code, {})
         out[code] = {
             "total_billed": round(billed, 2),
+            "billed_2026": round(billed_2026, 2),
             "outstanding": round(outstanding, 2) if outstanding is not None else None,
+            "collected_actual": round(collected_actual, 2) if collected_actual is not None else None,
+            "returns_actual": round(returns_by_code.get(code), 2) if code in returns_by_code else None,
             "collection_rate": round(rate, 4) if rate is not None else None,
+            "rate_source": rate_source,
             "bonus_pct": C.bonus_pct(rate) if rate is not None else 0.0,
             "rep": rep_map.get(code) or "غير محدد",     # corrected master mapping
             "city": d.get("city") or "", "has_ar": has_ar,
@@ -202,15 +224,18 @@ def _receivables_for(receivables_full, invoices_sub, month):
             "by_rep": rep_rows, "rows": rows}
 
 
-def _bundle(lines_all, invoices_all, dims, receivables_full, monthly, month):
+def _bundle(lines_all, invoices_all, dims, receivables_full, monthly, month, coll_ctx=None):
     """Full analytics bundle (kpis/customers/products/receivables/insights) for a
     single month, or 'all' for the whole year."""
+    coll_ctx = coll_ctx or {}
     sl, si = _month_subset(lines_all, invoices_all, month)
     products = prod_mod.compute(sl)
-    customers = cust_mod.compute(sl, si, dims["dim_customers"])
+    customers = cust_mod.compute(sl, si, dims["dim_customers"], coll_ctx)
     recv = _receivables_for(receivables_full, si, month)
     dq_m = data_quality.run(sl, si)
-    kpis = kpi_mod.compute(sl, si, customers, recv)
+    kpis = kpi_mod.compute(sl, si, customers, recv,
+                           collected_total=coll_ctx.get("collected_total"),
+                           billed_total=coll_ctx.get("billed2026_total"))
     focus = None if month == "all" else month
     insights = ins_mod.generate(kpis, customers, products, recv, monthly, dq_m, focus_month=focus)
     return dict(kpis=kpis, customers=customers, products=products, receivables=recv, insights=insights)
@@ -240,18 +265,44 @@ def main() -> int:
                                       net_terms=C.NET_TERMS_DAYS, as_of_str=C.AS_OF_DATE,
                                       cutoff_str=C.OVERDUE_CUTOFF, name_map=name_map, rep_map=rep_map)
 
+    # --- Actual 2026 collections + returns (drives the recomputed collection-
+    #     rate / bonus KPIs and the collections drill-down) --------------------
+    print("● Parsing 2026 collections + returns (actual cash) …")
+    coll_df = coll_mod.parse_collections()
+    ret_df = coll_mod.parse_returns()
+    collections_payload, collected_by_code, returns_by_code, reliable, coll_stats = \
+        coll_mod.compute(coll_df, ret_df, invoices_full, dims["dim_customers"], name_map, rep_map)
+    billed2026_by_code = {
+        str(r["customer_code"]): float(r["billed"] or 0.0)
+        for r in invoices_all.with_columns(pl.col("customer_code").cast(pl.Utf8))
+        .group_by("customer_code").agg(pl.col("reported_total").sum().alias("billed"))
+        .iter_rows(named=True)
+    }
+    billed2026_total = float(invoices_all["reported_total"].sum())
+    coll_ctx = {
+        "collected_by_code": collected_by_code,
+        "returns_by_code": returns_by_code,
+        "billed2026_by_code": billed2026_by_code,
+        "reliable": reliable,
+        "collected_total": collections_payload["grand_total_collected"],
+        "billed2026_total": billed2026_total,
+    }
+    print(f"● Collections: {collections_payload['grand_total_collected']:,.2f} collected · "
+          f"{coll_stats['receipts_matched']}/{coll_stats['receipts_total']} receipts attributed · "
+          f"{coll_stats['receipts_unmatched']} unmatched ({coll_stats['unmatched_collected']:,.0f})")
+
     months = sorted(invoices_all["month"].unique().to_list())
     print(f"● Months found: {', '.join(months)}")
 
     # Per-month + whole-year insight sets (client picks by selected month).
     print("● Per-month analytics + insights …")
     insights_by_month = {
-        m: _bundle(lines_all, invoices_all, dims, receivables, monthly, m)["insights"]
+        m: _bundle(lines_all, invoices_all, dims, receivables, monthly, m, coll_ctx)["insights"]
         for m in months + ["all"]
     }
 
     # Default-month (June) bundle — drives the PDF and the validation report.
-    june = _bundle(lines_all, invoices_all, dims, receivables, monthly, C.DEFAULT_MONTH)
+    june = _bundle(lines_all, invoices_all, dims, receivables, monthly, C.DEFAULT_MONTH, coll_ctx)
 
     lines_x, invoices_x = _export_frames(lines_all, invoices_all, rep_map)
 
@@ -272,8 +323,12 @@ def main() -> int:
         },
         "lines": lines_x,
         "invoices": invoices_x,
-        "customer_ar": _customer_ar(dims["dim_customers"], final_balances, invoices_full, rep_map),
+        "customer_ar": _customer_ar(dims["dim_customers"], final_balances, invoices_full, rep_map,
+                                    collected_by_code, returns_by_code, billed2026_by_code, reliable),
         "receivables": receivables,
+        "collections": {**collections_payload,
+                        "billed_2026": round(billed2026_total, 2),
+                        "outstanding_1607": receivables["total_outstanding"]},
         "monthly": monthly,
         "zero_invoices": dq["zero_invoices"],
         "data_quality": dq["summary"],
@@ -310,7 +365,8 @@ def main() -> int:
 
     # --- validation report ------------------------------------------------
     jl, ji = _month_subset(lines_all, invoices_all, C.DEFAULT_MONTH)
-    ok = validate(lines_all, invoices_all, jl, ji, june, receivables, dq, months)
+    ok = validate(lines_all, invoices_all, jl, ji, june, receivables, dq, months,
+                  collections_payload, billed2026_total)
     return 0 if ok else 1
 
 
@@ -320,7 +376,8 @@ def render_index():
         C.OUT_INDEX.write_text(tpl.read_text(encoding="utf-8"), encoding="utf-8")
 
 
-def validate(lines_all, invoices_all, jl, ji, june, receivables, dq, months) -> bool:
+def validate(lines_all, invoices_all, jl, ji, june, receivables, dq, months,
+             collections=None, billed2026_total=None) -> bool:
     print("\n" + "=" * 64)
     print("VALIDATION REPORT")
     print("=" * 64)
@@ -418,6 +475,33 @@ def validate(lines_all, invoices_all, jl, ji, june, receivables, dq, months) -> 
           - pl.col("reported_total").fill_null(0)).abs() > 1.0)).height
     check("invoice balances consistent (paid+remaining=total)",
           bal <= invoices_all.height * 0.02, f"({bal} mismatches)")
+
+    # 11. collections + returns reconcile EXACTLY to their printed grand totals
+    if collections is not None:
+        cg, cp = collections["grand_total_collected"], collections["printed_total_collected"]
+        rg, rp = collections["grand_total_returns"], collections["printed_total_returns"]
+        check("Σ collections == printed grand total", abs(cg - cp) < 0.01,
+              f"({cg:,.2f} vs {cp:,.2f})")
+        check("Σ returns == printed grand total", abs(rg - rp) < 0.01,
+              f"({rg:,.2f} vs {rp:,.2f})")
+        a = collections["attribution"]
+        attr_sum = sum(c["collected"] for c in collections["by_customer"]) + a["unmatched_collected"]
+        check("collections attributed + unmatched == grand total",
+              abs(attr_sum - cg) < 0.01
+              and a["receipts_matched"] + a["receipts_unmatched"] == a["receipts_total"],
+              f"({a['receipts_matched']}/{a['receipts_total']} matched, Σ {attr_sum:,.2f})")
+        if billed2026_total:
+            exp_rate = max(0.0, min(1.0, cg / billed2026_total))
+            check("portfolio collection_rate == collected/billed_2026",
+                  abs(june["kpis"]["collection_rate"] - exp_rate) < 1e-6,
+                  f"({exp_rate*100:.1f}%)")
+        print(f"  [INFO] receipts unmatched: {a['receipts_unmatched']} "
+              f"({a['unmatched_collected']:,.0f}) · returns unmatched: {a['returns_unmatched']} "
+              f"({a['unmatched_returns']:,.0f})")
+        srcs = {}
+        for c in june["customers"]:
+            srcs[c.get("rate_source", "?")] = srcs.get(c.get("rate_source", "?"), 0) + 1
+        print(f"  [INFO] default-month bonus basis: {srcs}")
 
     passed = all(checks)
     print("=" * 64)

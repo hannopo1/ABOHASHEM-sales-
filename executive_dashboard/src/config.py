@@ -20,6 +20,11 @@ SRC_MAIN_MD = REPO_ROOT / "فواتير المبيعات من 112025 الى 3152
 # July 1–15 2026 sales invoices (Pioneers-template PDF with an extractable text
 # layer). Parsed geometrically at 100% invoice reconciliation.
 SRC_JULY_PDF = REPO_ROOT / "فواتير المبيعات من 1_7_2026الى 15_7_2026.pdf"
+# Full-year-2026 actual cash receipts (سدادات العملاء) and customer returns
+# (ارتجاعات العملاء). Geometric x-band tables; parsed by src/collections.py and
+# reconciled EXACTLY to the printed grand totals below.
+SRC_COLLECTIONS_PDF = REPO_ROOT / "تحصيلات العملاء من 1-1-2026 الى 18-7-2026.pdf"
+SRC_RETURNS_PDF = REPO_ROOT / "مرتجعات العملاء من1-1-2026 الى 16-7-2026.pdf"
 PROCESSED = REPO_ROOT / "data" / "processed"
 JUNE_AGG = REPO_ROOT / "analysis" / "data_2026_06"
 
@@ -94,6 +99,23 @@ BONUS_RULES: list[tuple[float, float]] = [
 # Reconciliation tolerance: |Σ line_total - reported invoice total|
 RECON_TOL_ABS = 1.0
 RECON_TOL_PCT = 0.01
+
+# Printed grand totals on the collections / returns source PDFs. The parsed sums
+# must equal these EXACTLY (the build aborts otherwise) — the anti-fabrication
+# anchor for the collections/reconciliation drill-down.
+COLLECTIONS_PRINTED_TOTAL = 22_177_149.68
+RETURNS_PRINTED_TOTAL = 435_830.63
+
+# Payment-method classification for a receipt, by keyword in its البيان text.
+# Checked in this order; first hit wins; no hit -> "أخرى".
+PAYMENT_METHOD_KEYWORDS: list[tuple[str, str]] = [
+    ("فودافون", "فودافون كاش"),
+    ("تحويل", "تحويل بنكي"),
+    ("تصفية", "تصفية / تسوية"),
+    ("انستا", "إنستا باي"),
+    ("نقد", "نقدي"),
+]
+PAYMENT_METHOD_DEFAULT = "أخرى"
 
 # Abnormality thresholds for the data-quality scan (unit price / quantity).
 # Flags are advisory only — nothing is dropped from the dataset.

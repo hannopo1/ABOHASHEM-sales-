@@ -39,7 +39,15 @@ def _oldest_unpaid(inv_df: pl.DataFrame) -> dict:
 
 
 def compute(lines: pl.DataFrame, invoices: pl.DataFrame,
-            dim_customers: pl.DataFrame) -> list[dict]:
+            dim_customers: pl.DataFrame, coll_ctx: dict | None = None) -> list[dict]:
+    # Actual-cash-receipt context (annual, customer-level). When a customer's
+    # receipts are attributable AND they carry 2026 billings, their collection
+    # rate is the REAL figure collected÷billed_2026; otherwise it falls back to
+    # the billed-vs-outstanding proxy (unchanged historical behaviour).
+    coll_ctx = coll_ctx or {}
+    collected_by_code = coll_ctx.get("collected_by_code") or {}
+    billed2026_by_code = coll_ctx.get("billed2026_by_code") or {}
+    reliable = coll_ctx.get("reliable") or set()
     dc = dim_customers.with_columns(pl.col("customer_code").cast(pl.Utf8)).select(
         pl.col("customer_code"),
         pl.col("total_revenue").cast(pl.Float64, strict=False).alias("total_billed"),
@@ -79,12 +87,22 @@ def compute(lines: pl.DataFrame, invoices: pl.DataFrame,
         has_ar = str(r.get("has_ar")).lower() in ("true", "1")
         outstanding = float(r["outstanding"] or 0.0) if has_ar else None
 
-        if has_ar and billed > 0:
+        collected_actual = collected_by_code.get(code)
+        billed_2026 = float(billed2026_by_code.get(code) or 0.0)
+        if code in reliable and billed_2026 > 0:
+            # Real cash collected ÷ billed in 2026 (same-period).
+            rate = max(0.0, min(1.0, collected_actual / billed_2026))
+            b_pct = C.bonus_pct(rate)
+            rate_source = "actual"
+        elif has_ar and billed > 0:
+            # Proxy fallback — unchanged historical formula.
             rate = max(0.0, min(1.0, (billed - (outstanding or 0.0)) / billed))
             b_pct = C.bonus_pct(rate)
+            rate_source = "proxy"
         else:
             rate = None
             b_pct = 0.0
+            rate_source = "none"
 
         rec = {
             "customer_code": code,
@@ -101,6 +119,8 @@ def compute(lines: pl.DataFrame, invoices: pl.DataFrame,
             "total_billed": round(billed, 2),
             "outstanding": round(outstanding, 2) if outstanding is not None else None,
             "collection_rate": round(rate, 4) if rate is not None else None,
+            "collected_actual": round(collected_actual, 2) if collected_actual is not None else None,
+            "rate_source": rate_source,
             "bonus_pct": b_pct,
             "bonus_value": round(sales * b_pct, 2),
             "has_ar": has_ar,

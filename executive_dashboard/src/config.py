@@ -171,6 +171,17 @@ DEBT_CODE_ALIASES: dict[str, str] = {
     "1019": "019",   # مصطفى عز السماعيلية       (حسام حسن)
     "1020": "020",   # الليبى م خليل             (محمد خليل)
     "1021": "021",   # ماركت الخوة م خليل        (محمد خليل)
+    # Blank-name debt codes whose customer was identified from official records;
+    # each matches the invoice code by exact name + reconciling balance.
+    "1010": "010",   # مطعم العدلية بلبيس        (حسام حسن) 7,750 = July sales
+    "1013": "013",   # الخواص جمصة               (حسام حسن) 2,000 residual
+}
+
+# Customer-name overrides for debt codes that carry NO name in the source PDF and
+# have NO matching invoice to inherit a name from. Supplied from official records
+# (never inferred). Applied at highest priority in the name map.
+CUSTOMER_NAME_OVERRIDES: dict[str, str] = {
+    "1023": "ثلاجة المناشى الوراق",   # (حسام حسن) — dormant opening debt, 838
 }
 
 

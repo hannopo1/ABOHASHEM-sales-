@@ -105,6 +105,8 @@ def _name_map(dim_customers, invoices_full, debt_detail):
     for r in dim_customers.with_columns(pl.col("customer_code").cast(pl.Utf8)).iter_rows(named=True):
         if _valid_name(r["customer_name"]):
             m[str(r["customer_code"])] = r["customer_name"]     # reference name wins
+    # Official name overrides for codes with no name in any source file — win.
+    m.update(C.CUSTOMER_NAME_OVERRIDES)
     return m
 
 

@@ -108,15 +108,28 @@ COLLECTIONS_PRINTED_TOTAL = 22_177_149.68
 RETURNS_PRINTED_TOTAL = 435_830.63
 
 # Payment-method classification for a receipt, by keyword in its البيان text.
-# Checked in this order; first hit wins; no hit -> "أخرى".
+# Checked in this order; first hit wins. Ordering is load-bearing:
+#   * انستا before تحويل   — «تحويل على انستا» is an InstaPay transfer
+#   * شيك before بنك       — «تحصيل شيك بنكى» is a cheque, not a plain transfer
+#   * بنك before نقد       — «ايداع نقدى فى حساب البنك» arrives via the bank
+# فوادفون / انيتا are real misspellings present in the source PDF.
 PAYMENT_METHOD_KEYWORDS: list[tuple[str, str]] = [
     ("فودافون", "فودافون كاش"),
-    ("تحويل", "تحويل بنكي"),
-    ("تصفية", "تصفية / تسوية"),
+    ("فوادفون", "فودافون كاش"),
     ("انستا", "إنستا باي"),
+    ("انيتا", "إنستا باي"),
+    ("شيك", "شيكات"),
+    ("تحويل", "تحويل بنكي"),
+    ("بنك", "تحويل بنكي"),
+    ("تصفية", "تصفية / تسوية"),
+    ("إشعار", "تصفية / تسوية"),
+    ("اشعار", "تصفية / تسوية"),
     ("نقد", "نقدي"),
 ]
-PAYMENT_METHOD_DEFAULT = "أخرى"
+# Receipts whose البيان names no method (e.g. «اذن استلم رقم …») are Vodafone
+# Cash per the business owner — the ERP clerk only spells out the channel when
+# it is NOT the default wallet.
+PAYMENT_METHOD_DEFAULT = "فودافون كاش"
 
 # Abnormality thresholds for the data-quality scan (unit price / quantity).
 # Flags are advisory only — nothing is dropped from the dataset.

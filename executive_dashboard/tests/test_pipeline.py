@@ -145,7 +145,19 @@ def test_method_classification():
     assert coll._method("مدفوع منه فودافون كاش أ ساهر") == "فودافون كاش"
     assert coll._method("مدفوع منه نقدى") == "نقدي"
     assert coll._method("تحويل بنكي") == "تحويل بنكي"
-    assert coll._method("بيان بلا طريقة") == PAYMENT_METHOD_DEFAULT
+    # Source-PDF misspellings still classify correctly.
+    assert coll._method("مدفوع منه فوادفون كاش أ ساهر") == "فودافون كاش"
+    assert coll._method("مدفوع منه انيتا باى أ ساهر 6017") == "إنستا باي"
+    # Ordering rules: انستا beats تحويل, شيك beats بنك, بنك beats نقد.
+    assert coll._method("مدفوع منه تحويل على انستا أ / ساهر 5698") == "إنستا باي"
+    assert coll._method("مدفوع منه تحصيل شيك بنكى 5990") == "شيكات"
+    assert coll._method("مدفوع منه ايداع شيك فى حساب بنك الهلى المصرى شركة") == "شيكات"
+    assert coll._method("مدفوع منه بنك الهلي 1013 5621") == "تحويل بنكي"
+    assert coll._method("مدفوع منه ايداع نقدى فى حساب البنك الهلى شركة") == "تحويل بنكي"
+    assert coll._method("إشعار خصم خصم مرتجع ابو هاشم") == "تصفية / تسوية"
+    # No keyword at all -> Vodafone Cash (business-confirmed default).
+    assert coll._method("مدفوع منه اذن استلم رقم 744 5631") == PAYMENT_METHOD_DEFAULT
+    assert PAYMENT_METHOD_DEFAULT == "فودافون كاش"
 
 
 def test_attribution_reconciles_to_grand_total():
@@ -164,3 +176,26 @@ def test_attribution_reconciles_to_grand_total():
     assert a["receipts_matched"] + a["receipts_unmatched"] == a["receipts_total"]
     assert abs(sum(collected.values()) + a["unmatched_collected"]
                - payload["grand_total_collected"]) < 0.01
+
+
+def test_customer_name_consolidation():
+    """After _consolidate_names, every 2026 customer code shows exactly ONE
+    name across all invoices (the authoritative _name_map name), and no
+    financial value changes."""
+    _coll, C = _collections_module()  # polars / pymupdf / source guard
+    import build
+    import polars as pl
+    from src import load
+    dims = load.load_dimensions()
+    _lines, invoices_full = load.parse_all()
+    inv26 = invoices_full.filter(pl.col("invoice_date").dt.year() == C.PERIOD_YEAR)
+    name_map = build._name_map(dims["dim_customers"], invoices_full, dims["debt_detail"])
+    fixed = build._consolidate_names(inv26, name_map)
+    variants = (fixed.with_columns(pl.col("customer_code").cast(pl.Utf8))
+                .group_by("customer_code")
+                .agg(pl.col("customer_name").n_unique().alias("n"))
+                .filter(pl.col("n") > 1))
+    assert variants.height == 0, variants["customer_code"].to_list()
+    # Display-only: totals byte-identical before/after.
+    assert float(fixed["reported_total"].sum()) == float(inv26["reported_total"].sum())
+    assert fixed.height == inv26.height

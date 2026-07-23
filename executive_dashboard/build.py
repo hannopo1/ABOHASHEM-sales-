@@ -110,6 +110,14 @@ def _name_map(dim_customers, invoices_full, debt_detail):
     return m
 
 
+def _consolidate_names(df: pl.DataFrame, name_map: dict) -> pl.DataFrame:
+    """Every row of a customer code takes the code's ONE authoritative name;
+    codes absent from the map keep their original spelling. Display-only."""
+    canon = pl.col("customer_code").cast(pl.Utf8).replace_strict(name_map, default=None)
+    return df.with_columns(
+        pl.coalesce([canon, pl.col("customer_name")]).alias("customer_name"))
+
+
 def _export_frames(lines, invoices, rep_map):
     """Line-level + invoice-level records (with salesperson, status and month)
     for client-side cross-filtering. Small enough to ship inline."""
@@ -253,12 +261,21 @@ def main() -> int:
     invoices_all = invoices_full.filter(pl.col("invoice_date").dt.year() == C.PERIOD_YEAR)
     monthly = load.load_history_monthly().to_dicts()
 
+    # Consolidate customer-name spelling variants: every displayed 2026 row takes
+    # the ONE authoritative name of its code (_name_map: reference master wins,
+    # then debt detail, then invoice history) — same cleanup already applied to
+    # item names. invoices_full is left raw ON PURPOSE: the collections/returns
+    # name-matcher needs every spelling variant to attribute receipts. Purely
+    # cosmetic — codes and every financial value are untouched.
+    name_map = _name_map(dims["dim_customers"], invoices_full, dims["debt_detail"])
+    lines_all = _consolidate_names(lines_all, name_map)
+    invoices_all = _consolidate_names(invoices_all, name_map)
+
     print("● Data-quality scan (all 2026) …")
     dq = data_quality.run(lines_all, invoices_all)
 
     print("● Final balances (2026-07-16) + FIFO overdue analysis …")
     final_balances = debt_mod.load_final_balances()
-    name_map = _name_map(dims["dim_customers"], invoices_full, dims["debt_detail"])
     # Customer→rep corrected against official master (see _corrected_rep_map).
     rep_map = _corrected_rep_map(final_balances, dims["dim_customers"], dims["debt_detail"])
     rep_exc = rep_exceptions(rep_map, invoices_all)

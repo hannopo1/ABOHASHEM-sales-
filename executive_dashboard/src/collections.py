@@ -236,7 +236,11 @@ def compute(collections_df: pl.DataFrame, returns_df: pl.DataFrame,
             unmatched_coll_amt += r["amount"]
         receipts_rows.append({
             "date": r["date"].isoformat(), "month": r["month"],
-            "customer_name": r["customer_name"],
+            # Attributed rows show the code's ONE authoritative name (name_map)
+            # so the receipt table matches every other view; unmatched rows keep
+            # the raw PDF spelling (their only name).
+            "customer_name": (name_map.get(code) or r["customer_name"]) if code
+                             else r["customer_name"],
             "customer_code": code or "", "rep": rep or UNMATCHED,
             "method": r["method"], "doc_ref": r["doc_ref"],
             "receipt_no": r["receipt_no"], "amount": round(r["amount"], 2),
@@ -253,7 +257,9 @@ def compute(collections_df: pl.DataFrame, returns_df: pl.DataFrame,
             unmatched_ret_amt += r["value"]
         returns_rows.append({
             "date": r["date"].isoformat(), "month": r["month"],
-            "customer_name": r["customer_name"], "customer_code": code or "",
+            "customer_name": (name_map.get(code) or r["customer_name"]) if code
+                             else r["customer_name"],
+            "customer_code": code or "",
             "rep": rep or UNMATCHED, "invoice_ref": r["invoice_ref"],
             "value": round(r["value"], 2),
         })

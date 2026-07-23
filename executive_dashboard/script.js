@@ -106,8 +106,12 @@ function aggCustomers(lines, invoices) {
       n_invoices: nInv, n_items: l.items.size, units: round2(l.units), boxes: round2(l.boxes),
       avg_invoice_value: nInv ? round2(o.sales/nInv) : 0,
       total_billed: ar.total_billed != null ? ar.total_billed : round2(o.sales),
+      billed_2026: ar.billed_2026 != null ? ar.billed_2026 : null,
       outstanding: ar.outstanding != null ? ar.outstanding : null,
+      collected_actual: ar.collected_actual != null ? ar.collected_actual : null,
+      returns_actual: ar.returns_actual != null ? ar.returns_actual : null,
       collection_rate: ar.collection_rate != null ? ar.collection_rate : null,
+      rate_source: ar.rate_source || "none",
       bonus_pct: ar.bonus_pct || 0, has_ar: !!ar.has_ar,
     };
     rec.bonus_value = round2(o.sales * rec.bonus_pct);
@@ -148,10 +152,20 @@ function aggKpis(lines, invoices, recv, customers) {
   const outstanding = sum(recv,"outstanding"), overdue = sum(recv,"overdue");
   const billed = customers.reduce((a,c)=>a+(c.total_billed||0),0);
   const cust_out = customers.reduce((a,c)=>a+(c.outstanding||0),0);
-  const collection_rate = billed ? Math.max(0,Math.min(1,(billed-cust_out)/billed)) : 0;
+  // Collection rate — from ACTUAL 2026 cash receipts when available (real cash
+  // collected ÷ billed in 2026 for the filtered cohort); otherwise the billed-
+  // vs-outstanding proxy. Kept consistent with the recomputed backend KPI.
+  const collected_actual = customers.reduce((a,c)=>a+(c.collected_actual||0),0);
+  const billed_2026 = customers.reduce((a,c)=>a+(c.billed_2026||0),0);
+  const returns_actual = customers.reduce((a,c)=>a+(c.returns_actual||0),0);
+  const collection_rate = D.collections && billed_2026
+    ? Math.max(0,Math.min(1,collected_actual/billed_2026))
+    : (billed ? Math.max(0,Math.min(1,(billed-cust_out)/billed)) : 0);
   const nInv = new Set(invoices.map(v=>v.invoice_no)).size;
   return {
     total_sales, net_sales, qty, boxes, asp, outstanding, overdue, collection_rate,
+    collected_actual, billed_2026, returns_actual,
+    collection_rate_basis: (D.collections && billed_2026) ? "actual" : "proxy",
     collections_at_issue: sum(invoices,"paid"),
     n_invoices: nInv,
     n_customers: new Set(invoices.map(v=>v.customer_code)).size,
@@ -663,37 +677,82 @@ const SECTIONS = {
         {title:"الفئة",data:"bucket",render:b=>`<span class="${ageCls(b)}">${D.receivables.bucket_labels[b]}</span>`}],
         X.recv,{order:[[3,"desc"]]}); }},
 
-  collections:{ label:"التحصيل",
-    dom:()=>`<div class="section-head"><div><h2>التحصيل</h2><p>معدل التحصيل والفواتير غير المحصّلة</p></div></div>
+  collections:{ label:"التحصيل والتسويات",
+    dom:()=>`<div class="section-head"><div><h2>التحصيل والتسويات</h2><p>التحصيل النقدي الفعلي والمرتجعات وتسوية الأرصدة — من مستندَي السدادات والارتجاعات ٢٠٢٦</p></div></div>
       <div class="grid g-2">
-        ${card({id:"co_gauge",title:"معدل التحصيل التراكمي",short:true})}
-        ${card({id:"co_donut",title:"محصّل مقابل قائم"})}
-        ${card({id:"co_daily",title:"التحصيل عند الإصدار (يومي)"})}
-        ${card({id:"co_bottom",title:"أدنى ١٥ عميلًا في معدل التحصيل"})}
+        ${card({id:"co_gauge",title:"معدل التحصيل الفعلي (تراكمي ٢٠٢٦)",sub:"تحصيل نقدي ÷ مُفوتر ٢٠٢٦",short:true})}
+        <div class="card"><div class="card-head"><h3>التسوية — جسر التحصيل</h3></div><div id="co_recon_host" class="note"></div></div>
+        ${card({id:"co_monthly",title:"المبيعات مقابل التحصيل والمرتجعات (شهري ٢٠٢٦)",sub:"جسر تدفق نقدي شهري",cls:"span-2",tall:true})}
+        ${card({id:"co_method",title:"التحصيل حسب طريقة الدفع"})}
+        ${card({id:"co_rep",title:"التحصيل والمرتجعات حسب المندوب"})}
+        ${card({id:"co_bottom",title:"أدنى ١٥ عميلًا في معدل التحصيل الفعلي",cls:"span-2"})}
       </div>
-      ${tableCard({id:"t_coll",title:"سجل الفواتير والتحصيل",sub:"المدفوع · الباقي · الحالة"})}`,
-    update:(X)=>{ chGauge("co_gauge",X.kpis.collection_rate);
-      const billed=X.customers.reduce((a,c)=>a+(c.total_billed||0),0);
-      const out=X.customers.reduce((a,c)=>a+(c.outstanding||0),0);
-      chDonut("co_donut",[["محصّل",Math.max(0,billed-out)],["قائم",out]]);
-      const b=ecBase();const m=groupSum(X.invoices,"invoice_date","paid");const days=[...m.keys()].sort();
-      ec("co_daily",{...b,tooltip:{...b.tooltip,trigger:"axis",valueFormatter:egp},
-        xAxis:axis(b,{type:"category",data:days.map(d=>d.slice(5))}),
+      ${tableCard({id:"t_receipts",title:"سجل السدادات (التحصيل النقدي الفعلي)",sub:"التاريخ · طريقة الدفع · المبلغ",approx:false})}
+      ${tableCard({id:"t_returns",title:"سجل المرتجعات",sub:"قيمة المرتجع لكل عميل"})}`,
+    update:(X)=>{
+      // Gauge + reconciliation are the ANNUAL (cumulative-2026) headline, constant
+      // across months and tied EXACTLY to the source documents. The charts and
+      // tables below stay month/cross-filter responsive.
+      const C0=D.collections||{}, host=document.getElementById("co_recon_host");
+      const annualRate=C0.billed_2026?Math.max(0,Math.min(1,C0.grand_total_collected/C0.billed_2026)):0;
+      chGauge("co_gauge",annualRate);
+      const A=C0.attribution||{};
+      if(host){
+        const rr=[["إجمالي المُفوتر ٢٠٢٦",egp(C0.billed_2026)],["التحصيل النقدي الفعلي",egp(C0.grand_total_collected)],
+          ["المرتجعات",egp(C0.grand_total_returns)],["المديونية القائمة (١٦/٧)",egp(C0.outstanding_1607)],
+          ["معدل التحصيل الفعلي",pct(annualRate)]];
+        host.innerHTML=rr.map(r=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border2)"><span>${r[0]}</span><b>${r[1]}</b></div>`).join("")
+          +`<div class="note" style="margin-top:8px">جسر تقريبي (لا يتضمن رصيد أول المدة)؛ الإجماليان النقديان مطابقان لمستندَي المصدر بالضبط.`
+          +(A.receipts_unmatched?` سدادات غير مُطابَقة بالاسم: ${A.receipts_unmatched} (${egp(A.unmatched_collected)}).`:``)+`</div>`;
+      }
+      const f=state.filters, mAll=!f.month||f.month==="all";
+      const flt=r=>(mAll||r.month===f.month)&&(!f.rep||r.rep===f.rep)&&(!f.customer||r.customer_code===f.customer);
+      const recs=((D.collections&&D.collections.receipts)||[]).filter(flt);
+      const rets=((D.collections&&D.collections.returns_rows)||[]).filter(flt);
+      const b=ecBase(), cm=(!mAll)?f.month:null;
+      // monthly bridge (full 2026 series; selected month marked)
+      const bmonth=groupSum(D.invoices.filter(v=>v.month>="2026-01"),"month","reported_total");
+      const cmonth=new Map(), rmonth=new Map();
+      ((D.collections&&D.collections.monthly)||[]).forEach(m=>{cmonth.set(m.month,m.collected);rmonth.set(m.month,m.returns);});
+      const months=[...new Set([...bmonth.keys(),...cmonth.keys(),...rmonth.keys()])].sort();
+      ec("co_monthly",{...b,tooltip:{...b.tooltip,trigger:"axis",valueFormatter:egp},
+        legend:{...b.legend,data:["المبيعات","التحصيل","المرتجعات"]},
+        xAxis:axis(b,{type:"category",data:months}),
         yAxis:axis(b,{type:"value",axisLabel:{color:b._muted,formatter:egpK}}),
-        series:[{type:"bar",data:days.map(d=>Math.round(m.get(d)||0)),itemStyle:{color:PAL[5],borderRadius:[5,5,0,0]}}]});
+        series:[
+          {name:"المبيعات",type:"bar",itemStyle:{color:PAL[0],borderRadius:[4,4,0,0]},data:months.map(m=>Math.round(bmonth.get(m)||0))},
+          {name:"التحصيل",type:"bar",itemStyle:{color:PAL[2],borderRadius:[4,4,0,0]},data:months.map(m=>Math.round(cmonth.get(m)||0))},
+          {name:"المرتجعات",type:"line",smooth:true,itemStyle:{color:PAL[4]},lineStyle:{width:2.5,color:PAL[4]},
+            data:months.map(m=>Math.round(rmonth.get(m)||0)),
+            markLine:cm?{symbol:"none",data:[{xAxis:cm}],lineStyle:{color:PAL[3],type:"dashed"},label:{show:true,formatter:"المحدد",color:b._muted}}:undefined}]});
+      // by payment method
+      const methods=groupSum(recs,"method","amount");
+      chDonut("co_method",[...methods.entries()].filter(e=>e[1]>0).sort((a,c)=>c[1]-a[1]));
+      // by rep (collected + returns)
+      const repC=groupSum(recs,"rep","amount"), repR=groupSum(rets,"rep","value");
+      const reps=[...new Set([...repC.keys(),...repR.keys()])].sort((a,c)=>(repC.get(c)||0)-(repC.get(a)||0)).slice(0,12).reverse();
+      ec("co_rep",{...b,tooltip:{...b.tooltip,trigger:"axis",valueFormatter:egp},
+        legend:{...b.legend,data:["التحصيل","المرتجعات"]},grid:{...b.grid,left:8},
+        xAxis:axis(b,{type:"value",axisLabel:{color:b._muted,formatter:egpK}}),
+        yAxis:axis(b,{type:"category",data:reps}),
+        series:[
+          {name:"التحصيل",type:"bar",itemStyle:{color:PAL[2],borderRadius:[0,6,6,0]},data:reps.map(r=>Math.round(repC.get(r)||0))},
+          {name:"المرتجعات",type:"bar",itemStyle:{color:PAL[4],borderRadius:[0,6,6,0]},data:reps.map(r=>Math.round(repR.get(r)||0))}]});
+      // bottom-15 by actual collection rate
       const bottom=X.customers.filter(c=>c.collection_rate!=null).sort((a,c)=>a.collection_rate-c.collection_rate).slice(0,15).reverse();
       ec("co_bottom",{...b,tooltip:{...b.tooltip,valueFormatter:x=>pct(x)},
         xAxis:axis(b,{type:"value",max:1,axisLabel:{color:b._muted,formatter:x=>pct(x,0)}}),
         yAxis:axis(b,{type:"category",data:bottom.map(c=>c.customer_name)}),
         series:[{type:"bar",data:bottom.map(c=>c.collection_rate),
           itemStyle:{color:p=>p.value>=.9?PAL[2]:p.value>=.7?PAL[3]:PAL[4],borderRadius:[0,6,6,0]}}]});
-      dt("t_coll",[
-        {title:"الفاتورة",data:"invoice_no"},{title:"التاريخ",data:"invoice_date"},
-        {title:"العميل",data:"customer_name"},{title:"المندوب",data:"rep"},
-        {title:"الإجمالي",data:"reported_total",render:num},{title:"المدفوع",data:"paid",render:num},
-        {title:"الباقي",data:"remaining",render:num},
-        {title:"الحالة",data:"status",render:s=>({paid:'<span class="pos">محصّلة</span>',unpaid:'<span class="age-d31_60">غير محصّلة</span>',zero:'<span class="neg">صفرية</span>'}[s]||s)}],
-        X.invoices,{order:[[4,"desc"]]}); }},
+      dt("t_receipts",[
+        {title:"التاريخ",data:"date"},{title:"العميل",data:"customer_name"},{title:"المندوب",data:"rep"},
+        {title:"طريقة الدفع",data:"method"},{title:"سند",data:"doc_ref"},{title:"إيصال",data:"receipt_no"},
+        {title:"المبلغ",data:"amount",render:num}], recs,{order:[[0,"desc"]]});
+      dt("t_returns",[
+        {title:"التاريخ",data:"date"},{title:"العميل",data:"customer_name"},{title:"المندوب",data:"rep"},
+        {title:"مرجع الفاتورة",data:"invoice_ref"},{title:"قيمة المرتجع",data:"value",render:num}],
+        rets,{order:[[0,"desc"]]}); }},
 
   bonus:{ label:"الحوافز",
     dom:()=>`<div class="section-head"><div><h2>حوافز التحصيل</h2>
@@ -803,33 +862,94 @@ function openDrill(code){
   if(!inv.length && !lines.length) return;
   const [c]=aggCustomers(lines,inv);
   if(!c) return;
+  // Actual cash receipts + returns for this customer (full-year 2026), plus the
+  // authoritative final balance from the 2026-07-16 debt snapshot.
+  const receipts=((D.collections&&D.collections.receipts)||[]).filter(r=>r.customer_code===code)
+                  .sort((a,b)=>a.date<b.date?-1:1);
+  const returns=((D.collections&&D.collections.returns_rows)||[]).filter(r=>r.customer_code===code)
+                  .sort((a,b)=>a.date<b.date?-1:1);
+  const totalColl=receipts.reduce((s,r)=>s+(r.amount||0),0);
+  const totalRet=returns.reduce((s,r)=>s+(r.value||0),0);
+  const ar=D.customer_ar[code]||{};
+  const finalBal=ar.outstanding;                 // مديونية 16/7 (source of truth)
   const items=[...groupSum(lines,"item_name","line_total")].sort((a,b)=>b[1]-a[1]);
   const mk=(v,l)=>`<div class="mini-kpi"><div class="v num">${v}</div><div class="l">${l}</div></div>`;
-  const invRows=inv.sort((a,b)=>b.reported_total-a.reported_total).map(v=>`<tr>
+  const invRows=inv.slice().sort((a,b)=>a.invoice_date<b.invoice_date?-1:1).map(v=>`<tr>
     <td>${v.invoice_no}</td><td>${v.invoice_date}</td><td class="num">${num(v.reported_total)}</td>
     <td class="num">${num(v.paid)}</td><td class="num">${num(v.remaining)}</td>
     <td>${({paid:'<span class="pos">محصّلة</span>',unpaid:'<span class="age-d31_60">غير محصّلة</span>',zero:'<span class="neg">صفرية</span>'}[v.status])}</td></tr>`).join("");
+  const collRows=receipts.map(r=>`<tr><td>${r.date}</td><td>${r.method||"—"}</td>
+    <td>${r.doc_ref||""}${r.receipt_no?" / "+r.receipt_no:""}</td><td class="num">${num(r.amount)}</td></tr>`).join("")
+    || `<tr><td colspan="4" class="note">لا توجد تحصيلات مُطابَقة بالاسم</td></tr>`;
+  const retRows=returns.map(r=>`<tr><td>${r.date}</td><td>${r.invoice_ref||""}</td><td class="num">${num(r.value)}</td></tr>`).join("")
+    || `<tr><td colspan="3" class="note">لا توجد مرتجعات</td></tr>`;
   const itemRows=items.map(([n,v])=>`<tr><td>${n}</td><td class="num">${num(v)}</td></tr>`).join("");
-  document.getElementById("drillTitle").textContent="كشف حساب — "+c.customer_name;
+  document.getElementById("drillTitle").textContent="كشف حساب — "+c.customer_name+" · مندوب: "+(c.rep||"غير محدد");
   document.getElementById("drillBody").innerHTML=`
     <div class="mini-kpis">
-      ${mk(egpK(c.sales),"مبيعات ٢٠٢٦")}${mk(int(c.n_invoices),"الفواتير")}
-      ${mk(int(c.n_items),"الأصناف")}${mk(c.outstanding==null?"—":egpK(c.outstanding),"المديونية")}
+      ${mk(egpK(c.sales),"مبيعات ٢٠٢٦")}${mk(egpK(totalColl),"التحصيل الفعلي ٢٠٢٦")}
+      ${mk(egpK(totalRet),"المرتجعات ٢٠٢٦")}${mk(finalBal==null?"—":egpK(finalBal),"الرصيد النهائي (١٦/٧)")}
       ${mk(c.collection_rate==null?"—":pct(c.collection_rate),"معدل التحصيل")}${mk(bonusBadge(c.bonus_pct),"الحافز")}
     </div>
-    ${c.oldest_invoice_no?`<div class="note" style="margin-bottom:14px">أقدم فاتورة غير محصّلة:
-      <b>${c.oldest_invoice_no}</b> بتاريخ ${c.oldest_invoice_date} — استحقاق تقديري ${c.oldest_due_date}
-      (${c.oldest_days_overdue} يوم تأخر) بقيمة ${egp(c.oldest_amount)}</div>`:""}
+    <div class="note" style="margin-bottom:14px">
+      المُفوتر ٢٠٢٦: <b>${egp(ar.billed_2026!=null?ar.billed_2026:c.sales)}</b> ·
+      التحصيل الفعلي: <b class="pos">${egp(totalColl)}</b> ·
+      المرتجعات: <b>${egp(totalRet)}</b> ·
+      الرصيد النهائي المعتمد (مديونية ١٦/٧): <b>${finalBal==null?"—":egp(finalBal)}</b>
+      ${c.oldest_invoice_no?` · أقدم فاتورة غير محصّلة <b>${c.oldest_invoice_no}</b> (${c.oldest_invoice_date})`:""}
+    </div>
+    <div style="margin-bottom:16px"><h3 style="margin-bottom:8px">الفواتير</h3><div class="tbl-wrap"><table class="dataTable" style="width:100%">
+      <thead><tr><th>الفاتورة</th><th>التاريخ</th><th>الإجمالي</th><th>المدفوع</th><th>الباقي</th><th>الحالة</th></tr></thead>
+      <tbody>${invRows}</tbody></table></div></div>
     <div class="grid g-2">
-      <div><h3 style="margin-bottom:8px">الفواتير</h3><div class="tbl-wrap"><table class="dataTable" style="width:100%">
-        <thead><tr><th>الفاتورة</th><th>التاريخ</th><th>الإجمالي</th><th>المدفوع</th><th>الباقي</th><th>الحالة</th></tr></thead>
-        <tbody>${invRows}</tbody></table></div></div>
-      <div><h3 style="margin-bottom:8px">الأصناف المشتراة</h3><div class="tbl-wrap"><table class="dataTable" style="width:100%">
-        <thead><tr><th>الصنف</th><th>القيمة</th></tr></thead><tbody>${itemRows}</tbody></table></div></div>
-    </div>`;
+      <div><h3 style="margin-bottom:8px">التحصيلات <span class="note">(نقدي فعلي)</span></h3><div class="tbl-wrap"><table class="dataTable" style="width:100%">
+        <thead><tr><th>التاريخ</th><th>طريقة الدفع</th><th>سند / إيصال</th><th>المبلغ</th></tr></thead>
+        <tbody>${collRows}</tbody></table></div></div>
+      <div><h3 style="margin-bottom:8px">المرتجعات</h3><div class="tbl-wrap"><table class="dataTable" style="width:100%">
+        <thead><tr><th>التاريخ</th><th>مرجع الفاتورة</th><th>القيمة</th></tr></thead>
+        <tbody>${retRows}</tbody></table></div></div>
+    </div>
+    <div style="margin-top:16px"><h3 style="margin-bottom:8px">الأصناف المشتراة</h3><div class="tbl-wrap"><table class="dataTable" style="width:100%">
+      <thead><tr><th>الصنف</th><th>القيمة</th></tr></thead><tbody>${itemRows}</tbody></table></div></div>`;
   document.getElementById("drillModal").classList.add("open");
 }
 function closeDrill(){document.getElementById("drillModal").classList.remove("open");}
+
+/* Print / export the open customer statement to a standalone printable page
+   (the browser's print dialog offers "Save as PDF"). Works fully offline. */
+function printStatement(){
+  const modal=document.getElementById("drillModal");
+  if(!modal.classList.contains("open")) return;
+  const title=document.getElementById("drillTitle").textContent;
+  const body=document.getElementById("drillBody").innerHTML;
+  const today=new Date().toISOString().slice(0,10);
+  const w=window.open("","_blank");
+  if(!w){ toast("يُرجى السماح بالنوافذ المنبثقة لتصدير الكشف"); return; }
+  w.document.write('<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">'
+    +'<title>'+title+'</title><style>'
+    +"*{box-sizing:border-box;font-family:'Cairo',Tahoma,Arial,sans-serif}"
+    +"body{margin:22px;color:#0f172a;background:#fff}"
+    +".stmt-head{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #0f172a;padding-bottom:10px;margin-bottom:12px}"
+    +".stmt-head .co{font-size:18px;font-weight:700}"
+    +"h2{font-size:15px;margin:0 0 4px}"
+    +".mini-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}"
+    +".mini-kpi{border:1px solid #cbd5e1;border-radius:8px;padding:8px 10px;text-align:center}"
+    +".mini-kpi .v{font-size:15px;font-weight:700}.mini-kpi .l{font-size:11px;color:#475569}"
+    +".note{font-size:12px;color:#334155;background:#f1f5f9;padding:8px 10px;border-radius:6px;margin:10px 0;line-height:1.7}"
+    +"h3{font-size:13px;margin:14px 0 6px;border-right:3px solid #3b82f6;padding-right:6px}"
+    +"table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:8px}"
+    +"th,td{border:1px solid #e2e8f0;padding:4px 6px;text-align:right}th{background:#f1f5f9}"
+    +".num{text-align:left;font-variant-numeric:tabular-nums}.tbl-wrap{overflow:visible}"
+    +".grid.g-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}"
+    +".pos{color:#059669}.neg{color:#dc2626}.age-d31_60{color:#d97706}"
+    +"@media print{body{margin:0 10px}.mini-kpi{-webkit-print-color-adjust:exact;print-color-adjust:exact}}"
+    +'</style></head><body>'
+    +'<div class="stmt-head"><div class="co">أبو هاشم للحوم — Food Industries</div>'
+    +'<div style="font-size:12px;color:#475569">تاريخ الطباعة: '+today+'</div></div>'
+    +'<h2>'+title+'</h2>'+body+'</body></html>');
+  w.document.close(); w.focus();
+  setTimeout(()=>{ try{ w.print(); }catch(e){} }, 350);
+}
 
 /* ========================================================================== */
 /*  Filters                                                                     */
@@ -921,6 +1041,7 @@ function boot(){
   document.getElementById("btnReset").onclick=resetFilters;
   document.getElementById("navToggle").onclick=()=>document.getElementById("sidebar").classList.toggle("open");
   document.getElementById("drillClose").onclick=closeDrill;
+  document.getElementById("drillPrint").onclick=printStatement;
   document.getElementById("drillModal").addEventListener("click",e=>{if(e.target.id==="drillModal")closeDrill();});
   document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDrill();});
   showSection("overview");

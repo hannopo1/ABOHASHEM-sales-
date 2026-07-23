@@ -6,6 +6,7 @@ numbers stay traceable to a single, reviewable place.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -20,6 +21,11 @@ SRC_MAIN_MD = REPO_ROOT / "فواتير المبيعات من 112025 الى 3152
 # July 1–15 2026 sales invoices (Pioneers-template PDF with an extractable text
 # layer). Parsed geometrically at 100% invoice reconciliation.
 SRC_JULY_PDF = REPO_ROOT / "فواتير المبيعات من 1_7_2026الى 15_7_2026.pdf"
+# Full-year-2026 actual cash receipts (سدادات العملاء) and customer returns
+# (ارتجاعات العملاء). Geometric x-band tables; parsed by src/collections.py and
+# reconciled EXACTLY to the printed grand totals below.
+SRC_COLLECTIONS_PDF = REPO_ROOT / "تحصيلات العملاء من 1-1-2026 الى 18-7-2026.pdf"
+SRC_RETURNS_PDF = REPO_ROOT / "مرتجعات العملاء من1-1-2026 الى 16-7-2026.pdf"
 PROCESSED = REPO_ROOT / "data" / "processed"
 JUNE_AGG = REPO_ROOT / "analysis" / "data_2026_06"
 
@@ -95,6 +101,23 @@ BONUS_RULES: list[tuple[float, float]] = [
 RECON_TOL_ABS = 1.0
 RECON_TOL_PCT = 0.01
 
+# Printed grand totals on the collections / returns source PDFs. The parsed sums
+# must equal these EXACTLY (the build aborts otherwise) — the anti-fabrication
+# anchor for the collections/reconciliation drill-down.
+COLLECTIONS_PRINTED_TOTAL = 22_177_149.68
+RETURNS_PRINTED_TOTAL = 435_830.63
+
+# Payment-method classification for a receipt, by keyword in its البيان text.
+# Checked in this order; first hit wins; no hit -> "أخرى".
+PAYMENT_METHOD_KEYWORDS: list[tuple[str, str]] = [
+    ("فودافون", "فودافون كاش"),
+    ("تحويل", "تحويل بنكي"),
+    ("تصفية", "تصفية / تسوية"),
+    ("انستا", "إنستا باي"),
+    ("نقد", "نقدي"),
+]
+PAYMENT_METHOD_DEFAULT = "أخرى"
+
 # Abnormality thresholds for the data-quality scan (unit price / quantity).
 # Flags are advisory only — nothing is dropped from the dataset.
 PRICE_ABNORMAL_MAX = 5000.0     # EGP per unit above this is worth a human look
@@ -121,6 +144,72 @@ BRAND_OVERRIDES: dict[str, str] = {
     "435": "اسبشيال",
     "436": "اسبشيال",
 }
+
+
+# ---------------------------------------------------------------------------
+# Debt-snapshot customer-code aliases (data-quality correction)
+# ---------------------------------------------------------------------------
+# The 2026-07-16 debt reports code a subset of customers with a +1000 offset
+# relative to the sales-invoice system (an ERP re-coding). They are the SAME
+# customers — verified name-identical against the invoice history (e.g. debt
+# code 1019 «مصطفى عز السماعيلية» carries the exact unpaid balance of invoice
+# code 019). Left unmerged, their balance is mis-aged as orphan «120+ opening»
+# debt and their sales appear rep-less. This map re-keys the debt balance onto
+# the invoice code so it ages correctly against the real invoices and inherits
+# the representative from its debt file. It touches ONLY the code linkage — no
+# balance, invoice, collection or sales value is altered. {debt_code: inv_code}.
+DEBT_CODE_ALIASES: dict[str, str] = {
+    "1000": "000",   # عادل دشيشة المنصورية      (محمد خليل)
+    "1001": "001",   # منفذ امان السيدة زينب     (محمد خليل)
+    "1007": "007",   # مطعم لهاليبو باب الشعرية  (محمد خليل)
+    "1008": "008",   # اولاد الشيخ الوراق        (محمد خليل)
+    "1011": "011",   # ثلجة حليم الوراق          (محمد خليل)
+    "1012": "012",   # بيت العيلة الدويقة        (ايمن فارس)
+    "1014": "014",   # بيتزا ابورئال الخانكة     (محمد خليل)
+    "1015": "015",   # بيت العيلة السيدة زينب    (ايمن فارس)
+    "1016": "016",   # بيت العيلة مصر والسودان   (ايمن فارس)
+    "1018": "018",   # مصيلحى صقر قريش           (محمد خليل)
+    "1019": "019",   # مصطفى عز السماعيلية       (حسام حسن)
+    "1020": "020",   # الليبى م خليل             (محمد خليل)
+    "1021": "021",   # ماركت الخوة م خليل        (محمد خليل)
+    # Blank-name debt codes whose customer was identified from official records;
+    # each matches the invoice code by exact name + reconciling balance.
+    "1010": "010",   # مطعم العدلية بلبيس        (حسام حسن) 7,750 = July sales
+    "1013": "013",   # الخواص جمصة               (حسام حسن) 2,000 residual
+}
+
+# Customer-name overrides for debt codes that carry NO name in the source PDF and
+# have NO matching invoice to inherit a name from. Supplied from official records
+# (never inferred). Applied at highest priority in the name map.
+CUSTOMER_NAME_OVERRIDES: dict[str, str] = {
+    "1023": "ثلاجة المناشى الوراق",   # (حسام حسن) — dormant opening debt, 838
+}
+
+
+def clean_item_name(name) -> str:
+    """Normalise an item name for display so spelling variants of the SAME product
+    collapse to one label: drop tatweel, unify alef-maqsura (ى→ي) and the brand
+    spelling (اسبيشيال→اسبشيال), and collapse whitespace. Purely cosmetic — the
+    item code (and every financial value) is untouched.
+    """
+    if not name:
+        return name
+    s = str(name).replace("ـ", "").replace("ى", "ي").replace("اسبيشيال", "اسبشيال")
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def canonical_code(code) -> str:
+    """Single source of truth for customer-code identity.
+
+    Codes ≥1000 are written comma-formatted in the sales-invoice source («1,003»)
+    but plain in the debt reports («1003»), so they never joined — leaving real
+    unpaid June invoices mis-aged as orphan «120+» debt. This strips the
+    thousands-comma, then applies the verified +1000 duplicate-code alias, so
+    every source resolves each customer to one code. Touches only identity — no
+    financial value is altered.
+    """
+    c = str(code).replace(",", "").strip()
+    return DEBT_CODE_ALIASES.get(c, c)
 
 
 def bonus_pct(collection_rate: float) -> float:

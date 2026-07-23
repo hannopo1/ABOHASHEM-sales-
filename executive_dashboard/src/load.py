@@ -222,6 +222,14 @@ def parse_all(year: int | None = None) -> tuple[pl.DataFrame, pl.DataFrame]:
     frames_i = [im, ij] + ([i7] if i7.height else [])
     lines = pl.concat(frames_l, how="vertical_relaxed")
     invoices = pl.concat(frames_i, how="vertical_relaxed")
+    # Canonicalise customer codes (strip thousands-comma + apply the +1000 alias)
+    # so codes ≥1000 join consistently with the debt snapshot and dimensions.
+    lines = lines.with_columns(
+        pl.col("customer_code").cast(pl.Utf8)
+        .map_elements(C.canonical_code, return_dtype=pl.Utf8).alias("customer_code"))
+    invoices = invoices.with_columns(
+        pl.col("customer_code").cast(pl.Utf8)
+        .map_elements(C.canonical_code, return_dtype=pl.Utf8).alias("customer_code"))
     lines = lines.with_columns(pl.col("invoice_date").dt.strftime("%Y-%m").alias("month"))
     invoices = invoices.with_columns(pl.col("invoice_date").dt.strftime("%Y-%m").alias("month"))
     if year is not None:
@@ -243,6 +251,14 @@ def load_dimensions() -> dict[str, pl.DataFrame]:
     debt_detail = pl.read_csv(C.F_DEBT_DETAIL, infer_schema_length=2000)
     rep_summary = pl.read_csv(C.F_REP_SUMMARY, infer_schema_length=2000)
     ar_balances = pl.read_csv(C.F_AR_BALANCES, infer_schema_length=2000)
+
+    # Canonicalise customer codes so the ≥1000 comma-formatted codes join.
+    dim_customers = dim_customers.with_columns(
+        pl.col("customer_code").cast(pl.Utf8)
+        .map_elements(C.canonical_code, return_dtype=pl.Utf8).alias("customer_code"))
+    debt_detail = debt_detail.with_columns(
+        pl.col("customer_code").cast(pl.Utf8)
+        .map_elements(C.canonical_code, return_dtype=pl.Utf8).alias("customer_code"))
 
     return dict(
         dim_items=dim_items,
@@ -297,6 +313,28 @@ def enrich_lines(lines_df: pl.DataFrame, dim_items: pl.DataFrame) -> pl.DataFram
         .then(pl.col("qty") / pl.col("carton_units"))
         .otherwise(None).alias("boxes"),
     ])
+    # Consolidate item-name spelling variants: every line of a given item code
+    # takes ONE canonical name = the SHORTEST cleaned variant (ties broken by
+    # highest sales). This collapses duplicates like «سجق شرقى/شرقي 3 ك ابو هاشم»
+    # (all code 13) into a single short label and drops the redundant packaging
+    # suffix, across every view. Only the display name changes.
+    stats = (out.group_by(["item_code", "item_name"])
+             .agg(pl.col("line_total").sum().alias("_s"))
+             .with_columns(pl.col("item_name")
+                           .map_elements(C.clean_item_name, return_dtype=pl.Utf8).alias("_clean")))
+    agg = (stats.group_by(["item_code", "_clean"]).agg(pl.col("_s").sum().alias("_s"))
+           .with_columns(pl.col("_clean").str.len_chars().alias("_len")))
+    top = (agg.sort(["_len", "_s", "_clean"], descending=[False, True, False])
+           .group_by("item_code", maintain_order=True)
+           .agg(pl.col("_clean").first().alias("_canon")))
+    code2name = dict(zip(top["item_code"].to_list(), top["_canon"].to_list()))
+    out = out.with_columns(
+        pl.col("item_code").replace_strict(code2name, default=None).alias("_canon"),
+    ).with_columns(
+        pl.coalesce(["_canon",
+                     pl.col("item_name").map_elements(C.clean_item_name, return_dtype=pl.Utf8)])
+        .alias("item_name")
+    ).drop("_canon")
     # Display-only brand relabelling (config.BRAND_OVERRIDES) — leaves every
     # financial value untouched, changes only the shown brand label.
     if C.BRAND_OVERRIDES:

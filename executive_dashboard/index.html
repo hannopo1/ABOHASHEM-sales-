@@ -50,7 +50,7 @@
     <div class="nav-item" data-section="customers"><svg viewBox="0 0 24 24" class="ic"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87"/></svg><span>العملاء</span></div>
     <div class="nav-item" data-section="products"><svg viewBox="0 0 24 24" class="ic"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.3 7L12 12l8.7-5M12 22V12"/></svg><span>المنتجات</span></div>
     <div class="nav-item" data-section="receivables"><svg viewBox="0 0 24 24" class="ic"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg><span>المديونية والأعمار</span></div>
-    <div class="nav-item" data-section="collections"><svg viewBox="0 0 24 24" class="ic"><path d="M12 22a10 10 0 100-20 10 10 0 000 20zM12 6v6l4 2"/></svg><span>التحصيل</span></div>
+    <div class="nav-item" data-section="collections"><svg viewBox="0 0 24 24" class="ic"><path d="M12 22a10 10 0 100-20 10 10 0 000 20zM12 6v6l4 2"/></svg><span>التحصيل والتسويات</span></div>
     <div class="nav-item" data-section="bonus"><svg viewBox="0 0 24 24" class="ic"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg><span>حوافز التحصيل</span></div>
     <div class="nav-item" data-section="analytics"><svg viewBox="0 0 24 24" class="ic"><path d="M4 4v16h16M8 16l3-4 3 2 4-6"/></svg><span>التحليلات المتقدمة</span></div>
     <div class="nav-item" data-section="quality"><svg viewBox="0 0 24 24" class="ic"><path d="M22 11.08V12a10 10 0 11-5.93-9.14M22 4L12 14.01l-3-3"/></svg><span>جودة البيانات</span></div>
@@ -91,9 +91,12 @@
   <div class="drill-content glass">
     <div class="drill-head">
       <h2 id="drillTitle">كشف حساب العميل</h2>
-      <button class="icon-btn" id="drillClose" aria-label="إغلاق">
-        <svg viewBox="0 0 24 24" class="ic"><path d="M18 6L6 18M6 6l12 12"/></svg>
-      </button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="mini-btn" id="drillPrint">⤓ تصدير / طباعة PDF</button>
+        <button class="icon-btn" id="drillClose" aria-label="إغلاق">
+          <svg viewBox="0 0 24 24" class="ic"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
     </div>
     <div id="drillBody"></div>
   </div>

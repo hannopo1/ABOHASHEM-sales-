@@ -72,7 +72,13 @@ def load_final_balances() -> dict:
     for f in files:
         rep_official = _rep_from_filename(f)
         for code, bal, name, rep in _parse_pdf(f):
-            # one row per customer; last wins (files are per-rep, codes unique)
-            out[code] = {"balance": round(bal, 2), "name": name,
-                         "rep": rep, "rep_official": rep_official}
+            # Canonicalise the code (strip thousands-comma + apply the +1000
+            # alias) so the balance keys onto the same identity as the invoices.
+            # One row per customer; on the rare collision the balances are summed.
+            code = C.canonical_code(code)
+            if code in out:
+                out[code]["balance"] = round(out[code]["balance"] + round(bal, 2), 2)
+            else:
+                out[code] = {"balance": round(bal, 2), "name": name,
+                             "rep": rep, "rep_official": rep_official}
     return out

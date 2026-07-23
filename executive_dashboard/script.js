@@ -1024,16 +1024,26 @@ function exportAll(){const t=tables[Object.keys(tables)[0]];
   if(btn.length){btn[0].click();}else{toast("افتح قسمًا به جدول للتصدير");}}
 
 /* ---- Print preparation (btnPrint AND Ctrl+P go through these) ----
-   Paper needs the FULL table (not the visible 10-row page) and light-ink
-   charts (canvases print their rendered pixels — CSS can't recolor them).
-   Everything is restored on afterprint. */
+   WYSIWYG dark print. A canvas can't be re-laid-out for the print box, so each
+   ECharts chart in the active section is snapshotted to a pixel-exact PNG (same
+   getDataURL the PNG-export button uses) and shown in its place; CSS hides the
+   live canvas. Tables expand to every row (not the visible 10). The theme is
+   NOT changed — paper keeps the dashboard's dark look. All restored afterwards. */
 let printPrep=null;
 window.addEventListener("beforeprint",()=>{
   if(printPrep) return;
-  printPrep={lens:{},theme:document.body.getAttribute("data-theme")};
-  // Theme FIRST: refreshActive() re-creates the section's tables, so page
-  // lengths must be expanded on the tables that will actually print.
-  if(printPrep.theme!=="light"){document.body.setAttribute("data-theme","light");refreshActive();}
+  printPrep={lens:{},imgs:[]};
+  // 1) freeze active-section charts as static images (ECharts only; Plotly is SVG)
+  document.querySelectorAll(".section.active .echart").forEach(el=>{
+    const c=charts[el.id];
+    if(!c||c._plotly||typeof c.getDataURL!=="function") return;
+    let url; try{url=c.getDataURL({type:"png",pixelRatio:2,backgroundColor:"transparent"});}catch(e){return;}
+    if(!url) return;
+    const img=document.createElement("img");
+    img.className="print-chart-img";img.src=url;
+    el.appendChild(img);el.classList.add("printed");printPrep.imgs.push(img);
+  });
+  // 2) expand active-section tables to all rows (page length saved for restore)
   Object.entries(tables).forEach(([id,t])=>{
     const el=document.getElementById(id);
     if(el&&el.closest(".section.active")){printPrep.lens[id]=t.page.len();t.page.len(-1).draw(false);}
@@ -1041,8 +1051,8 @@ window.addEventListener("beforeprint",()=>{
 });
 window.addEventListener("afterprint",()=>{
   if(!printPrep) return;
+  printPrep.imgs.forEach(img=>{const el=img.parentElement;if(el)el.classList.remove("printed");img.remove();});
   Object.entries(printPrep.lens).forEach(([id,len])=>{const t=tables[id];if(t)t.page.len(len).draw(false);});
-  if(printPrep.theme!=="light"){document.body.setAttribute("data-theme",printPrep.theme);refreshActive();}
   printPrep=null;
 });
 

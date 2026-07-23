@@ -19,7 +19,8 @@ sys.path.insert(0, str(APP_DIR))
 from src.config import (bonus_pct, BONUS_RULES,  # noqa: E402
                         COLLECTIONS_PRINTED_TOTAL, RETURNS_PRINTED_TOTAL,
                         PAYMENT_METHOD_KEYWORDS, PAYMENT_METHOD_DEFAULT,
-                        DEBT_CODE_ALIASES, canonical_code, clean_item_name)
+                        DEBT_CODE_ALIASES, canonical_code, clean_item_name,
+                        clean_customer_name)
 
 
 def test_bonus_ladder_boundaries():
@@ -64,6 +65,23 @@ def test_printed_totals_are_positive():
 def test_payment_method_keywords_shape():
     assert PAYMENT_METHOD_DEFAULT
     assert all(len(t) == 2 and t[0] and t[1] for t in PAYMENT_METHOD_KEYWORDS)
+
+
+def test_payment_default_is_vodafone_and_bank_captured():
+    """Unidentified receipts default to Vodafone cash; cheques/deposits and the
+    common misspellings are captured explicitly."""
+    assert PAYMENT_METHOD_DEFAULT == "فودافون كاش"
+    kw = dict(PAYMENT_METHOD_KEYWORDS)
+    assert kw.get("شيك") == "شيك / إيداع بنكي"
+    assert kw.get("فوادفون") == "فودافون كاش"      # misspelling → vodafone
+    assert kw.get("انيتا") == "إنستا باي"
+
+
+def test_clean_customer_name_unifies_variants():
+    # alef-maqsura → yaa, whitespace collapsed, tatweel dropped (ta-marbuta kept)
+    assert clean_customer_name("مصطفى عز السماعيلية") == "مصطفي عز السماعيلية"
+    assert clean_customer_name("ثلجة  الصفا   قويسنا") == "ثلجة الصفا قويسنا"
+    assert clean_customer_name("ابو هـاشم") == "ابو هاشم"
 
 
 def test_clean_item_name_unifies_variants():

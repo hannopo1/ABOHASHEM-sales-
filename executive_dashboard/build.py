@@ -105,22 +105,36 @@ def _name_map(dim_customers, invoices_full, debt_detail):
     for r in dim_customers.with_columns(pl.col("customer_code").cast(pl.Utf8)).iter_rows(named=True):
         if _valid_name(r["customer_name"]):
             m[str(r["customer_code"])] = r["customer_name"]     # reference name wins
-    # Official name overrides for codes with no name in any source file — win.
+    # Clean spelling variants (ى→ي, tatweel, whitespace) so each code maps to one
+    # display name, then apply official overrides (kept verbatim) at top priority.
+    m = {k: C.clean_customer_name(v) for k, v in m.items()}
     m.update(C.CUSTOMER_NAME_OVERRIDES)
     return m
 
 
-def _export_frames(lines, invoices, rep_map):
+def _export_frames(lines, invoices, rep_map, name_map=None):
     """Line-level + invoice-level records (with salesperson, status and month)
-    for client-side cross-filtering. Small enough to ship inline."""
-    lx = lines.with_columns(
+    for client-side cross-filtering. Small enough to ship inline. The displayed
+    customer name is the authoritative single name per code (name_map), so the
+    many spelling variants of one customer collapse to one label everywhere."""
+    name_map = name_map or {}
+
+    def _named(df):
+        return df.with_columns(
+            pl.col("customer_code").cast(pl.Utf8).replace_strict(name_map, default=None).alias("_cn"),
+        ).with_columns(
+            pl.coalesce(["_cn", pl.col("customer_name")
+                         .map_elements(C.clean_customer_name, return_dtype=pl.Utf8)]).alias("customer_name"),
+        ).drop("_cn")
+
+    lx = _named(lines).with_columns(
         pl.col("invoice_date").cast(pl.Utf8),
         pl.col("customer_code").cast(pl.Utf8).replace_strict(rep_map, default="غير محدد").alias("rep"),
     ).select(
         "invoice_no", "invoice_date", "month", "customer_code", "customer_name", "rep",
         "item_code", "item_name", "brand", "qty", "unit_price", "line_total", "boxes", "is_bonus",
     ).to_dicts()
-    ix = invoices.with_columns(
+    ix = _named(invoices).with_columns(
         pl.col("invoice_date").cast(pl.Utf8),
         pl.col("customer_code").cast(pl.Utf8).replace_strict(rep_map, default="غير محدد").alias("rep"),
         pl.when(pl.col("reported_total").fill_null(0) == 0).then(pl.lit("zero"))
@@ -306,7 +320,7 @@ def main() -> int:
     # Default-month (June) bundle — drives the PDF and the validation report.
     june = _bundle(lines_all, invoices_all, dims, receivables, monthly, C.DEFAULT_MONTH, coll_ctx)
 
-    lines_x, invoices_x = _export_frames(lines_all, invoices_all, rep_map)
+    lines_x, invoices_x = _export_frames(lines_all, invoices_all, rep_map, name_map)
 
     payload = {
         "meta": {

@@ -185,6 +185,7 @@ DEBT_CODE_ALIASES: dict[str, str] = {
     "1019": "019",   # مصطفى عز السماعيلية       (حسام حسن)
     "1020": "020",   # الليبى م خليل             (محمد خليل)
     "1021": "021",   # ماركت الخوة م خليل        (محمد خليل)
+    "1009": "009",   # MTOM المريوطية           (محمد خليل) — debt 1,034 vs inv B2440/B2714
     # Blank-name debt codes whose customer was identified from official records;
     # each matches the invoice code by exact name + reconciling balance.
     "1010": "010",   # مطعم العدلية بلبيس        (حسام حسن) 7,750 = July sales
@@ -196,9 +197,8 @@ DEBT_CODE_ALIASES: dict[str, str] = {
 # (never inferred). Applied at highest priority in the name map.
 CUSTOMER_NAME_OVERRIDES: dict[str, str] = {
     "1023": "ثلاجة المناشى الوراق",   # (حسام حسن) — dormant opening debt, 838
-    # Code 009 carries two July invoices (B2440, B2714) with no name in any
-    # source, so it showed as «عميل 009». Named from official records.
-    "009": "MTOM المريوطية",
+    # Note: code 009 «MTOM المريوطية» is named from its debt record via the
+    # 1009→009 alias above (not a hard override).
 }
 
 

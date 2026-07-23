@@ -225,11 +225,48 @@ table.dataTable tbody tr:hover{background:rgba(255,255,255,.03)!important;cursor
   .topbar-actions .pill-btn span{display:none}
 }
 
-/* ---- Print ---- */
+/* ---- Print ----
+   Prints ONLY the active section on A4 landscape. Multi-page tables flow
+   across pages with a repeated header; nothing screen-only (nav, filters,
+   pagination) reaches paper. script.js beforeprint/afterprint shows all
+   table rows and repaints charts in light ink, then restores the screen. */
 @media print{
-  body{background:#fff;color:#000}
-  .topbar,.sidebar,.filterbar,.card-tools,.pill-btn,.mini-btn,#navToggle{display:none!important}
-  .section{display:flex!important}.layout{padding:0}
-  .card,.kpi-card,.glass{border:1px solid #ccc;box-shadow:none;background:#fff;break-inside:avoid}
-  .echart{height:300px}
+  @page{size:A4 landscape;margin:10mm}
+  html,body{height:auto!important;min-height:0!important;background:#fff!important;color:#0f172a}
+  /* screen-only chrome */
+  .topbar,.sidebar,.filterbar,.card-tools,.pill-btn,.mini-btn,#navToggle,.toast,
+  .drill-modal,.chips,.dt-buttons,.dt-button,
+  .dataTables_wrapper .dataTables_filter,.dataTables_wrapper .dataTables_length,
+  .dataTables_wrapper .dataTables_paginate,.dataTables_wrapper .dataTables_info{display:none!important}
+  /* active section only, in plain block flow (flex/grid fragment poorly) */
+  .layout{display:block;padding:0;max-width:none}
+  .content{display:block}
+  .section{display:none!important}
+  .section.active{display:block!important}
+  .section.active>*{margin-bottom:10px}
+  /* fadeIn starts at opacity:0 and animations never run on paper */
+  .section,.card,.kpi-card{opacity:1!important;animation:none!important;transform:none!important;transition:none!important}
+  .grid{display:block}
+  .grid>.card{margin-bottom:10px;width:100%}
+  .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  /* paper-light surfaces */
+  .glass,.card,.kpi-card,.insight,.mini-kpi{background:#fff!important;backdrop-filter:none!important;
+    border:1px solid #cbd5e1!important;box-shadow:none!important;color:#0f172a}
+  .section-head h2,.card-head h3,.kpi-val,.mini-kpi .v{color:#0f172a}
+  .section-head{break-after:avoid}
+  /* chart/KPI cards stay whole; table cards must break across pages,
+     otherwise a table taller than one page forces blank gaps */
+  .card,.kpi-card,.insight{break-inside:avoid}
+  .card:has(.tbl-wrap){break-inside:auto}
+  .tbl-wrap{overflow:visible!important}
+  table.dataTable{break-inside:auto;font-size:10.5px}
+  table.dataTable thead{display:table-header-group}
+  table.dataTable tbody tr{break-inside:avoid}
+  table.dataTable thead th{background:#eef2f7!important;color:#0f172a!important;padding:6px 8px}
+  table.dataTable tbody td{padding:5px 8px;border-bottom:1px solid #e2e8f0!important;color:#0f172a}
+  /* charts render at screen width — scale them proportionally to the page */
+  .echart{height:auto;min-height:0}
+  .echart>div{width:100%!important;height:auto!important}
+  .echart canvas,.echart svg{max-width:100%!important;height:auto!important}
+  .badge-b,.prio,.insight,table.dataTable thead th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }

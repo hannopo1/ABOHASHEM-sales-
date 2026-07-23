@@ -1023,6 +1023,29 @@ function exportAll(){const t=tables[Object.keys(tables)[0]];
   const btn=$(".dt-button").filter((i,e)=>/Excel/.test(e.textContent)).first();
   if(btn.length){btn[0].click();}else{toast("افتح قسمًا به جدول للتصدير");}}
 
+/* ---- Print preparation (btnPrint AND Ctrl+P go through these) ----
+   Paper needs the FULL table (not the visible 10-row page) and light-ink
+   charts (canvases print their rendered pixels — CSS can't recolor them).
+   Everything is restored on afterprint. */
+let printPrep=null;
+window.addEventListener("beforeprint",()=>{
+  if(printPrep) return;
+  printPrep={lens:{},theme:document.body.getAttribute("data-theme")};
+  // Theme FIRST: refreshActive() re-creates the section's tables, so page
+  // lengths must be expanded on the tables that will actually print.
+  if(printPrep.theme!=="light"){document.body.setAttribute("data-theme","light");refreshActive();}
+  Object.entries(tables).forEach(([id,t])=>{
+    const el=document.getElementById(id);
+    if(el&&el.closest(".section.active")){printPrep.lens[id]=t.page.len();t.page.len(-1).draw(false);}
+  });
+});
+window.addEventListener("afterprint",()=>{
+  if(!printPrep) return;
+  Object.entries(printPrep.lens).forEach(([id,len])=>{const t=tables[id];if(t)t.page.len(len).draw(false);});
+  if(printPrep.theme!=="light"){document.body.setAttribute("data-theme",printPrep.theme);refreshActive();}
+  printPrep=null;
+});
+
 /* ========================================================================== */
 /*  Boot                                                                        */
 /* ========================================================================== */

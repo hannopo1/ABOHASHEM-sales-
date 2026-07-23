@@ -313,6 +313,28 @@ def enrich_lines(lines_df: pl.DataFrame, dim_items: pl.DataFrame) -> pl.DataFram
         .then(pl.col("qty") / pl.col("carton_units"))
         .otherwise(None).alias("boxes"),
     ])
+    # Consolidate item-name spelling variants: every line of a given item code
+    # takes ONE canonical name = the SHORTEST cleaned variant (ties broken by
+    # highest sales). This collapses duplicates like «سجق شرقى/شرقي 3 ك ابو هاشم»
+    # (all code 13) into a single short label and drops the redundant packaging
+    # suffix, across every view. Only the display name changes.
+    stats = (out.group_by(["item_code", "item_name"])
+             .agg(pl.col("line_total").sum().alias("_s"))
+             .with_columns(pl.col("item_name")
+                           .map_elements(C.clean_item_name, return_dtype=pl.Utf8).alias("_clean")))
+    agg = (stats.group_by(["item_code", "_clean"]).agg(pl.col("_s").sum().alias("_s"))
+           .with_columns(pl.col("_clean").str.len_chars().alias("_len")))
+    top = (agg.sort(["_len", "_s", "_clean"], descending=[False, True, False])
+           .group_by("item_code", maintain_order=True)
+           .agg(pl.col("_clean").first().alias("_canon")))
+    code2name = dict(zip(top["item_code"].to_list(), top["_canon"].to_list()))
+    out = out.with_columns(
+        pl.col("item_code").replace_strict(code2name, default=None).alias("_canon"),
+    ).with_columns(
+        pl.coalesce(["_canon",
+                     pl.col("item_name").map_elements(C.clean_item_name, return_dtype=pl.Utf8)])
+        .alias("item_name")
+    ).drop("_canon")
     # Display-only brand relabelling (config.BRAND_OVERRIDES) — leaves every
     # financial value untouched, changes only the shown brand label.
     if C.BRAND_OVERRIDES:

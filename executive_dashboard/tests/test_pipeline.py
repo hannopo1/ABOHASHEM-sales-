@@ -19,7 +19,7 @@ sys.path.insert(0, str(APP_DIR))
 from src.config import (bonus_pct, BONUS_RULES,  # noqa: E402
                         COLLECTIONS_PRINTED_TOTAL, RETURNS_PRINTED_TOTAL,
                         PAYMENT_METHOD_KEYWORDS, PAYMENT_METHOD_DEFAULT,
-                        DEBT_CODE_ALIASES, canonical_code)
+                        DEBT_CODE_ALIASES, canonical_code, clean_item_name)
 
 
 def test_bonus_ladder_boundaries():
@@ -64,6 +64,16 @@ def test_printed_totals_are_positive():
 def test_payment_method_keywords_shape():
     assert PAYMENT_METHOD_DEFAULT
     assert all(len(t) == 2 and t[0] and t[1] for t in PAYMENT_METHOD_KEYWORDS)
+
+
+def test_clean_item_name_unifies_variants():
+    """Spelling variants of the same product normalise to one label."""
+    variants = ["سجق شرقى 3 ك ابو هاشم", "سجق شرقي 3 ك ابو هاشم",
+                "سجق شرقى 3 كـ ابو هاشم"]
+    assert len({clean_item_name(v) for v in variants}) == 1
+    assert clean_item_name("سجق شرقى 3 ك ابو هاشم") == "سجق شرقي 3 ك ابو هاشم"
+    assert clean_item_name("كفته اسبيشيال عائلى") == "كفته اسبشيال عائلي"
+    assert clean_item_name("مفروم  صافى   400") == "مفروم صافي 400"
 
 
 def test_canonical_code_strips_comma_and_aliases():

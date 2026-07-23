@@ -6,6 +6,7 @@ numbers stay traceable to a single, reviewable place.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -183,6 +184,18 @@ DEBT_CODE_ALIASES: dict[str, str] = {
 CUSTOMER_NAME_OVERRIDES: dict[str, str] = {
     "1023": "ثلاجة المناشى الوراق",   # (حسام حسن) — dormant opening debt, 838
 }
+
+
+def clean_item_name(name) -> str:
+    """Normalise an item name for display so spelling variants of the SAME product
+    collapse to one label: drop tatweel, unify alef-maqsura (ى→ي) and the brand
+    spelling (اسبيشيال→اسبشيال), and collapse whitespace. Purely cosmetic — the
+    item code (and every financial value) is untouched.
+    """
+    if not name:
+        return name
+    s = str(name).replace("ـ", "").replace("ى", "ي").replace("اسبيشيال", "اسبشيال")
+    return re.sub(r"\s+", " ", s).strip()
 
 
 def canonical_code(code) -> str:

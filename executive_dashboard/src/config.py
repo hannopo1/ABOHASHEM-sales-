@@ -196,6 +196,9 @@ DEBT_CODE_ALIASES: dict[str, str] = {
 # (never inferred). Applied at highest priority in the name map.
 CUSTOMER_NAME_OVERRIDES: dict[str, str] = {
     "1023": "ثلاجة المناشى الوراق",   # (حسام حسن) — dormant opening debt, 838
+    # Code 009 carries two July invoices (B2440, B2714) with no name in any
+    # source, so it showed as «عميل 009». Named from official records.
+    "009": "MTOM المريوطية",
 }
 
 

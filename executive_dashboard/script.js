@@ -862,30 +862,55 @@ function openDrill(code){
   if(!inv.length && !lines.length) return;
   const [c]=aggCustomers(lines,inv);
   if(!c) return;
+  // Actual cash receipts + returns for this customer (full-year 2026), plus the
+  // authoritative final balance from the 2026-07-16 debt snapshot.
+  const receipts=((D.collections&&D.collections.receipts)||[]).filter(r=>r.customer_code===code)
+                  .sort((a,b)=>a.date<b.date?-1:1);
+  const returns=((D.collections&&D.collections.returns_rows)||[]).filter(r=>r.customer_code===code)
+                  .sort((a,b)=>a.date<b.date?-1:1);
+  const totalColl=receipts.reduce((s,r)=>s+(r.amount||0),0);
+  const totalRet=returns.reduce((s,r)=>s+(r.value||0),0);
+  const ar=D.customer_ar[code]||{};
+  const finalBal=ar.outstanding;                 // مديونية 16/7 (source of truth)
   const items=[...groupSum(lines,"item_name","line_total")].sort((a,b)=>b[1]-a[1]);
   const mk=(v,l)=>`<div class="mini-kpi"><div class="v num">${v}</div><div class="l">${l}</div></div>`;
-  const invRows=inv.sort((a,b)=>b.reported_total-a.reported_total).map(v=>`<tr>
+  const invRows=inv.slice().sort((a,b)=>a.invoice_date<b.invoice_date?-1:1).map(v=>`<tr>
     <td>${v.invoice_no}</td><td>${v.invoice_date}</td><td class="num">${num(v.reported_total)}</td>
     <td class="num">${num(v.paid)}</td><td class="num">${num(v.remaining)}</td>
     <td>${({paid:'<span class="pos">محصّلة</span>',unpaid:'<span class="age-d31_60">غير محصّلة</span>',zero:'<span class="neg">صفرية</span>'}[v.status])}</td></tr>`).join("");
+  const collRows=receipts.map(r=>`<tr><td>${r.date}</td><td>${r.method||"—"}</td>
+    <td>${r.doc_ref||""}${r.receipt_no?" / "+r.receipt_no:""}</td><td class="num">${num(r.amount)}</td></tr>`).join("")
+    || `<tr><td colspan="4" class="note">لا توجد تحصيلات مُطابَقة بالاسم</td></tr>`;
+  const retRows=returns.map(r=>`<tr><td>${r.date}</td><td>${r.invoice_ref||""}</td><td class="num">${num(r.value)}</td></tr>`).join("")
+    || `<tr><td colspan="3" class="note">لا توجد مرتجعات</td></tr>`;
   const itemRows=items.map(([n,v])=>`<tr><td>${n}</td><td class="num">${num(v)}</td></tr>`).join("");
-  document.getElementById("drillTitle").textContent="كشف حساب — "+c.customer_name;
+  document.getElementById("drillTitle").textContent="كشف حساب — "+c.customer_name+" · مندوب: "+(c.rep||"غير محدد");
   document.getElementById("drillBody").innerHTML=`
     <div class="mini-kpis">
-      ${mk(egpK(c.sales),"مبيعات ٢٠٢٦")}${mk(int(c.n_invoices),"الفواتير")}
-      ${mk(int(c.n_items),"الأصناف")}${mk(c.outstanding==null?"—":egpK(c.outstanding),"المديونية")}
+      ${mk(egpK(c.sales),"مبيعات ٢٠٢٦")}${mk(egpK(totalColl),"التحصيل الفعلي ٢٠٢٦")}
+      ${mk(egpK(totalRet),"المرتجعات ٢٠٢٦")}${mk(finalBal==null?"—":egpK(finalBal),"الرصيد النهائي (١٦/٧)")}
       ${mk(c.collection_rate==null?"—":pct(c.collection_rate),"معدل التحصيل")}${mk(bonusBadge(c.bonus_pct),"الحافز")}
     </div>
-    ${c.oldest_invoice_no?`<div class="note" style="margin-bottom:14px">أقدم فاتورة غير محصّلة:
-      <b>${c.oldest_invoice_no}</b> بتاريخ ${c.oldest_invoice_date} — استحقاق تقديري ${c.oldest_due_date}
-      (${c.oldest_days_overdue} يوم تأخر) بقيمة ${egp(c.oldest_amount)}</div>`:""}
+    <div class="note" style="margin-bottom:14px">
+      المُفوتر ٢٠٢٦: <b>${egp(ar.billed_2026!=null?ar.billed_2026:c.sales)}</b> ·
+      التحصيل الفعلي: <b class="pos">${egp(totalColl)}</b> ·
+      المرتجعات: <b>${egp(totalRet)}</b> ·
+      الرصيد النهائي المعتمد (مديونية ١٦/٧): <b>${finalBal==null?"—":egp(finalBal)}</b>
+      ${c.oldest_invoice_no?` · أقدم فاتورة غير محصّلة <b>${c.oldest_invoice_no}</b> (${c.oldest_invoice_date})`:""}
+    </div>
+    <div style="margin-bottom:16px"><h3 style="margin-bottom:8px">الفواتير</h3><div class="tbl-wrap"><table class="dataTable" style="width:100%">
+      <thead><tr><th>الفاتورة</th><th>التاريخ</th><th>الإجمالي</th><th>المدفوع</th><th>الباقي</th><th>الحالة</th></tr></thead>
+      <tbody>${invRows}</tbody></table></div></div>
     <div class="grid g-2">
-      <div><h3 style="margin-bottom:8px">الفواتير</h3><div class="tbl-wrap"><table class="dataTable" style="width:100%">
-        <thead><tr><th>الفاتورة</th><th>التاريخ</th><th>الإجمالي</th><th>المدفوع</th><th>الباقي</th><th>الحالة</th></tr></thead>
-        <tbody>${invRows}</tbody></table></div></div>
-      <div><h3 style="margin-bottom:8px">الأصناف المشتراة</h3><div class="tbl-wrap"><table class="dataTable" style="width:100%">
-        <thead><tr><th>الصنف</th><th>القيمة</th></tr></thead><tbody>${itemRows}</tbody></table></div></div>
-    </div>`;
+      <div><h3 style="margin-bottom:8px">التحصيلات <span class="note">(نقدي فعلي)</span></h3><div class="tbl-wrap"><table class="dataTable" style="width:100%">
+        <thead><tr><th>التاريخ</th><th>طريقة الدفع</th><th>سند / إيصال</th><th>المبلغ</th></tr></thead>
+        <tbody>${collRows}</tbody></table></div></div>
+      <div><h3 style="margin-bottom:8px">المرتجعات</h3><div class="tbl-wrap"><table class="dataTable" style="width:100%">
+        <thead><tr><th>التاريخ</th><th>مرجع الفاتورة</th><th>القيمة</th></tr></thead>
+        <tbody>${retRows}</tbody></table></div></div>
+    </div>
+    <div style="margin-top:16px"><h3 style="margin-bottom:8px">الأصناف المشتراة</h3><div class="tbl-wrap"><table class="dataTable" style="width:100%">
+      <thead><tr><th>الصنف</th><th>القيمة</th></tr></thead><tbody>${itemRows}</tbody></table></div></div>`;
   document.getElementById("drillModal").classList.add("open");
 }
 function closeDrill(){document.getElementById("drillModal").classList.remove("open");}

@@ -7,6 +7,7 @@ important business rule in the dashboard, at every tier boundary. Heavier,
 data-driven checks (reconciliation, totals, aging) run inside ``build.py``'s
 validation report against Polars, which is out of scope for the CI image.
 """
+import re
 import sys
 from pathlib import Path
 
@@ -19,7 +20,7 @@ sys.path.insert(0, str(APP_DIR))
 from src.config import (bonus_pct, BONUS_RULES,  # noqa: E402
                         COLLECTIONS_PRINTED_TOTAL, RETURNS_PRINTED_TOTAL,
                         PAYMENT_METHOD_KEYWORDS, PAYMENT_METHOD_DEFAULT,
-                        DEBT_CODE_ALIASES, canonical_code, clean_item_name)
+                        canonical_code, clean_item_name)
 
 
 def test_bonus_ladder_boundaries():
@@ -76,43 +77,35 @@ def test_clean_item_name_unifies_variants():
     assert clean_item_name("مفروم  صافى   400") == "مفروم صافي 400"
 
 
-def test_canonical_code_strips_comma_and_aliases():
-    """Codes ≥1000 are comma-formatted in invoices but plain in the debt report;
-    canonical_code unifies them (and applies the +1000 alias)."""
-    assert canonical_code("1,003") == "1003"      # comma stripped -> joins debt 1003
+def test_canonical_code_restores_dropped_1000():
+    """The ERP dropped the leading 1000 from real codes 1000-1099, leaving a
+    zero-padded 0XX in the invoices; canonical_code restores the true code, while
+    codes that kept the 1000 only lose their thousands-comma and natural codes are
+    untouched."""
+    assert canonical_code("009") == "1009"        # corrupted -> restored
+    assert canonical_code("019") == "1019"
+    assert canonical_code("000") == "1000"
+    assert canonical_code("006") == "1006"        # merges with the kept-1000 twin
+    assert canonical_code("1006") == "1006"
+    assert canonical_code("1,003") == "1003"      # comma stripped, already correct
     assert canonical_code("1003") == "1003"
-    assert canonical_code("1,007") == "007"        # comma stripped + aliased to 007
-    assert canonical_code("1007") == "007"
-    assert canonical_code("438") == "438"          # ordinary code untouched
-    assert canonical_code("007") == "007"
+    assert canonical_code("6") == "6"             # natural un-padded code untouched
+    assert canonical_code("438") == "438"
 
 
-def test_debt_code_aliases_are_plus_1000_offsets():
-    """Every alias re-keys a +1000 debt code onto its base invoice code."""
-    assert DEBT_CODE_ALIASES
-    for dcode, icode in DEBT_CODE_ALIASES.items():
-        assert dcode.isdigit() and icode.isdigit()
-        assert int(dcode) - int(icode) == 1000
-        assert dcode != icode
-
-
-def test_debt_aliases_reage_onto_invoice_codes():
-    """After the alias correction, the re-keyed balances land on codes that
-    actually carry invoices (so they age correctly instead of as orphans)."""
+def test_corrupted_codes_reage_onto_true_code():
+    """Each zero-padded invoice code restores to a 1000+ code that carries the
+    customer's real invoices (so debt ages against them instead of as orphans)."""
     coll, C = _collections_module()  # reuses the polars/pymupdf/PDF guard
-    from src import debt, load
+    from src import load
     import polars as pl
-    fb = debt.load_final_balances()
-    if not fb:
-        pytest.skip("debt snapshot PDFs not present")
-    _l, invoices_full = load.parse_all()
+    _l, invoices_full = load.parse_all()   # codes already canonicalised
     inv_codes = set(invoices_full.with_columns(
         pl.col("customer_code").cast(pl.Utf8))["customer_code"].unique().to_list())
-    # No +1000 alias source code should survive in the balances…
-    for dcode, icode in C.DEBT_CODE_ALIASES.items():
-        assert dcode not in fb
-        # …and its target invoice code exists in the invoice history.
-        assert icode in inv_codes
+    # No zero-padded 0XX code survives after canonicalisation…
+    assert not [c for c in inv_codes if re.fullmatch(r"0\d\d", str(c))]
+    # …and known restorations land on real 1000+ codes present in the history.
+    assert canonical_code("009") == "1009" and "1009" in inv_codes
 
 
 # --- collections / returns parsing (needs polars + pymupdf + source PDFs) -----

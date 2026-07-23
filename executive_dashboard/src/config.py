@@ -159,46 +159,12 @@ BRAND_OVERRIDES: dict[str, str] = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Debt-snapshot customer-code aliases (data-quality correction)
-# ---------------------------------------------------------------------------
-# The 2026-07-16 debt reports code a subset of customers with a +1000 offset
-# relative to the sales-invoice system (an ERP re-coding). They are the SAME
-# customers — verified name-identical against the invoice history (e.g. debt
-# code 1019 «مصطفى عز السماعيلية» carries the exact unpaid balance of invoice
-# code 019). Left unmerged, their balance is mis-aged as orphan «120+ opening»
-# debt and their sales appear rep-less. This map re-keys the debt balance onto
-# the invoice code so it ages correctly against the real invoices and inherits
-# the representative from its debt file. It touches ONLY the code linkage — no
-# balance, invoice, collection or sales value is altered. {debt_code: inv_code}.
-DEBT_CODE_ALIASES: dict[str, str] = {
-    "1000": "000",   # عادل دشيشة المنصورية      (محمد خليل)
-    "1001": "001",   # منفذ امان السيدة زينب     (محمد خليل)
-    "1007": "007",   # مطعم لهاليبو باب الشعرية  (محمد خليل)
-    "1008": "008",   # اولاد الشيخ الوراق        (محمد خليل)
-    "1011": "011",   # ثلجة حليم الوراق          (محمد خليل)
-    "1012": "012",   # بيت العيلة الدويقة        (ايمن فارس)
-    "1014": "014",   # بيتزا ابورئال الخانكة     (محمد خليل)
-    "1015": "015",   # بيت العيلة السيدة زينب    (ايمن فارس)
-    "1016": "016",   # بيت العيلة مصر والسودان   (ايمن فارس)
-    "1018": "018",   # مصيلحى صقر قريش           (محمد خليل)
-    "1019": "019",   # مصطفى عز السماعيلية       (حسام حسن)
-    "1020": "020",   # الليبى م خليل             (محمد خليل)
-    "1021": "021",   # ماركت الخوة م خليل        (محمد خليل)
-    "1009": "009",   # MTOM المريوطية           (محمد خليل) — debt 1,034 vs inv B2440/B2714
-    # Blank-name debt codes whose customer was identified from official records;
-    # each matches the invoice code by exact name + reconciling balance.
-    "1010": "010",   # مطعم العدلية بلبيس        (حسام حسن) 7,750 = July sales
-    "1013": "013",   # الخواص جمصة               (حسام حسن) 2,000 residual
-}
-
-# Customer-name overrides for debt codes that carry NO name in the source PDF and
-# have NO matching invoice to inherit a name from. Supplied from official records
-# (never inferred). Applied at highest priority in the name map.
+# Customer-name overrides for codes that carry NO name in any source (invoices,
+# debt, master) and cannot inherit one. Supplied from official records (never
+# inferred). Applied at highest priority in the name map. Keys are the TRUE
+# (restored) customer codes — see canonical_code below.
 CUSTOMER_NAME_OVERRIDES: dict[str, str] = {
     "1023": "ثلاجة المناشى الوراق",   # (حسام حسن) — dormant opening debt, 838
-    # Note: code 009 «MTOM المريوطية» is named from its debt record via the
-    # 1009→009 alias above (not a hard override).
 }
 
 
@@ -217,15 +183,19 @@ def clean_item_name(name) -> str:
 def canonical_code(code) -> str:
     """Single source of truth for customer-code identity.
 
-    Codes ≥1000 are written comma-formatted in the sales-invoice source («1,003»)
-    but plain in the debt reports («1003»), so they never joined — leaving real
-    unpaid June invoices mis-aged as orphan «120+» debt. This strips the
-    thousands-comma, then applies the verified +1000 duplicate-code alias, so
-    every source resolves each customer to one code. Touches only identity — no
-    financial value is altered.
+    Real customer codes are natural numbers. For the 1000–1099 range the sales
+    ERP dropped the leading «1000», leaving a zero-padded 3-digit form in the
+    invoices (1009→«009», 1019→«019», 1000→«000») while the debt reports keep the
+    true code. This restores it: a zero-padded «0XX» → str(1000+XX). It also
+    strips the thousands-comma from codes that DID keep the 1000 («1,003»→«1003»),
+    so invoices, dimensions and the debt snapshot all resolve each customer to one
+    true code. Natural codes (1, 6, 10, 50…) are stored un-padded and untouched.
+    Touches only identity — no financial value is altered.
     """
     c = str(code).replace(",", "").strip()
-    return DEBT_CODE_ALIASES.get(c, c)
+    if re.fullmatch(r"0\d\d", c):      # ERP-corrupted code — restore the dropped 1000
+        return str(1000 + int(c))
+    return c
 
 
 def bonus_pct(collection_rate: float) -> float:

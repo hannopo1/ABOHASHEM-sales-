@@ -915,6 +915,42 @@ function openDrill(code){
 }
 function closeDrill(){document.getElementById("drillModal").classList.remove("open");}
 
+/* Print / export the open customer statement to a standalone printable page
+   (the browser's print dialog offers "Save as PDF"). Works fully offline. */
+function printStatement(){
+  const modal=document.getElementById("drillModal");
+  if(!modal.classList.contains("open")) return;
+  const title=document.getElementById("drillTitle").textContent;
+  const body=document.getElementById("drillBody").innerHTML;
+  const today=new Date().toISOString().slice(0,10);
+  const w=window.open("","_blank");
+  if(!w){ toast("يُرجى السماح بالنوافذ المنبثقة لتصدير الكشف"); return; }
+  w.document.write('<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">'
+    +'<title>'+title+'</title><style>'
+    +"*{box-sizing:border-box;font-family:'Cairo',Tahoma,Arial,sans-serif}"
+    +"body{margin:22px;color:#0f172a;background:#fff}"
+    +".stmt-head{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #0f172a;padding-bottom:10px;margin-bottom:12px}"
+    +".stmt-head .co{font-size:18px;font-weight:700}"
+    +"h2{font-size:15px;margin:0 0 4px}"
+    +".mini-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}"
+    +".mini-kpi{border:1px solid #cbd5e1;border-radius:8px;padding:8px 10px;text-align:center}"
+    +".mini-kpi .v{font-size:15px;font-weight:700}.mini-kpi .l{font-size:11px;color:#475569}"
+    +".note{font-size:12px;color:#334155;background:#f1f5f9;padding:8px 10px;border-radius:6px;margin:10px 0;line-height:1.7}"
+    +"h3{font-size:13px;margin:14px 0 6px;border-right:3px solid #3b82f6;padding-right:6px}"
+    +"table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:8px}"
+    +"th,td{border:1px solid #e2e8f0;padding:4px 6px;text-align:right}th{background:#f1f5f9}"
+    +".num{text-align:left;font-variant-numeric:tabular-nums}.tbl-wrap{overflow:visible}"
+    +".grid.g-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}"
+    +".pos{color:#059669}.neg{color:#dc2626}.age-d31_60{color:#d97706}"
+    +"@media print{body{margin:0 10px}.mini-kpi{-webkit-print-color-adjust:exact;print-color-adjust:exact}}"
+    +'</style></head><body>'
+    +'<div class="stmt-head"><div class="co">أبو هاشم للحوم — Food Industries</div>'
+    +'<div style="font-size:12px;color:#475569">تاريخ الطباعة: '+today+'</div></div>'
+    +'<h2>'+title+'</h2>'+body+'</body></html>');
+  w.document.close(); w.focus();
+  setTimeout(()=>{ try{ w.print(); }catch(e){} }, 350);
+}
+
 /* ========================================================================== */
 /*  Filters                                                                     */
 /* ========================================================================== */
@@ -1005,6 +1041,7 @@ function boot(){
   document.getElementById("btnReset").onclick=resetFilters;
   document.getElementById("navToggle").onclick=()=>document.getElementById("sidebar").classList.toggle("open");
   document.getElementById("drillClose").onclick=closeDrill;
+  document.getElementById("drillPrint").onclick=printStatement;
   document.getElementById("drillModal").addEventListener("click",e=>{if(e.target.id==="drillModal")closeDrill();});
   document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDrill();});
   showSection("overview");

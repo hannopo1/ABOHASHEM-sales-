@@ -91,9 +91,12 @@
   <div class="drill-content glass">
     <div class="drill-head">
       <h2 id="drillTitle">كشف حساب العميل</h2>
-      <button class="icon-btn" id="drillClose" aria-label="إغلاق">
-        <svg viewBox="0 0 24 24" class="ic"><path d="M18 6L6 18M6 6l12 12"/></svg>
-      </button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="mini-btn" id="drillPrint">⤓ تصدير / طباعة PDF</button>
+        <button class="icon-btn" id="drillClose" aria-label="إغلاق">
+          <svg viewBox="0 0 24 24" class="ic"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
     </div>
     <div id="drillBody"></div>
   </div>

@@ -184,16 +184,17 @@ def canonical_code(code) -> str:
     """Single source of truth for customer-code identity.
 
     Real customer codes are natural numbers. For the 1000–1099 range the sales
-    ERP dropped the leading «1000», leaving a zero-padded 3-digit form in the
+    ERP dropped the leading «1000», leaving a **leading-zero** form in the
     invoices (1009→«009», 1019→«019», 1000→«000») while the debt reports keep the
-    true code. This restores it: a zero-padded «0XX» → str(1000+XX). It also
-    strips the thousands-comma from codes that DID keep the 1000 («1,003»→«1003»),
-    so invoices, dimensions and the debt snapshot all resolve each customer to one
+    true code. Rule: ANY code that starts with a zero is corrupted — restore it as
+    str(1000 + int(code)) («009»→1009, «019»→1019, «022»→1022). It also strips the
+    thousands-comma from codes that DID keep the 1000 («1,003»→«1003»), so
+    invoices, dimensions and the debt snapshot all resolve each customer to one
     true code. Natural codes (1, 6, 10, 50…) are stored un-padded and untouched.
     Touches only identity — no financial value is altered.
     """
     c = str(code).replace(",", "").strip()
-    if re.fullmatch(r"0\d\d", c):      # ERP-corrupted code — restore the dropped 1000
+    if re.fullmatch(r"0\d+", c):       # leading zero → ERP dropped the 1000; restore it
         return str(1000 + int(c))
     return c
 

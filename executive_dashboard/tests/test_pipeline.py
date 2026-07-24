@@ -91,6 +91,9 @@ def test_canonical_code_restores_dropped_1000():
     assert canonical_code("1003") == "1003"
     assert canonical_code("6") == "6"             # natural un-padded code untouched
     assert canonical_code("438") == "438"
+    # rule is "any leading zero", not only 3-digit
+    assert canonical_code("05") == "1005"
+    assert canonical_code("0022") == "1022"
 
 
 def test_corrupted_codes_reage_onto_true_code():
@@ -102,8 +105,8 @@ def test_corrupted_codes_reage_onto_true_code():
     _l, invoices_full = load.parse_all()   # codes already canonicalised
     inv_codes = set(invoices_full.with_columns(
         pl.col("customer_code").cast(pl.Utf8))["customer_code"].unique().to_list())
-    # No zero-padded 0XX code survives after canonicalisation…
-    assert not [c for c in inv_codes if re.fullmatch(r"0\d\d", str(c))]
+    # No leading-zero code survives after canonicalisation…
+    assert not [c for c in inv_codes if re.fullmatch(r"0\d+", str(c))]
     # …and known restorations land on real 1000+ codes present in the history.
     assert canonical_code("009") == "1009" and "1009" in inv_codes
 

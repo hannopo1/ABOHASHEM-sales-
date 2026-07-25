@@ -112,13 +112,13 @@ def _method(bayan: str) -> str:
     return C.PAYMENT_METHOD_DEFAULT
 
 
-def parse_collections() -> pl.DataFrame:
-    """1,423 receipt rows. Empty (typed) frame if the source PDF is absent."""
-    if not C.SRC_COLLECTIONS_PDF.exists():
+def _parse_collections_file(path) -> pl.DataFrame:
+    """Parse ONE collections PDF (geometric x-band layout)."""
+    if not path.exists():
         return pl.DataFrame(schema=_COLL_SCHEMA)
     import fitz
 
-    doc = fitz.open(str(C.SRC_COLLECTIONS_PDF))
+    doc = fitz.open(str(path))
     out: list[dict] = []
     for pi in range(doc.page_count):
         for row in _cluster_rows(doc[pi]):
@@ -153,13 +153,22 @@ def parse_collections() -> pl.DataFrame:
     return pl.DataFrame(out, schema=_COLL_SCHEMA)
 
 
-def parse_returns() -> pl.DataFrame:
-    """156 credit-note rows. Empty (typed) frame if the source PDF is absent."""
-    if not C.SRC_RETURNS_PDF.exists():
+def parse_collections() -> pl.DataFrame:
+    """Full-year receipts to 2026-07-23: the original file supplies Jan–Jun rows,
+    the new July file supplies all of July (no overlap, no gap)."""
+    old = _parse_collections_file(C.SRC_COLLECTIONS_PDF).filter(
+        pl.col("date") < date(C.PERIOD_YEAR, C.PERIOD_MONTH, 1))
+    july = _parse_collections_file(C.SRC_COLLECTIONS_JULY_PDF)
+    return pl.concat([old, july], how="vertical_relaxed")
+
+
+def _parse_returns_file(path) -> pl.DataFrame:
+    """Parse ONE returns PDF (geometric x-band layout)."""
+    if not path.exists():
         return pl.DataFrame(schema=_RET_SCHEMA)
     import fitz
 
-    doc = fitz.open(str(C.SRC_RETURNS_PDF))
+    doc = fitz.open(str(path))
     out: list[dict] = []
     for pi in range(doc.page_count):
         for row in _cluster_rows(doc[pi]):
@@ -186,6 +195,15 @@ def parse_returns() -> pl.DataFrame:
                 "value": value,
             })
     return pl.DataFrame(out, schema=_RET_SCHEMA)
+
+
+def parse_returns() -> pl.DataFrame:
+    """Full-year returns to 2026-07-23: original file for Jan–Jun, new July file
+    for all of July."""
+    old = _parse_returns_file(C.SRC_RETURNS_PDF).filter(
+        pl.col("date") < date(C.PERIOD_YEAR, C.PERIOD_MONTH, 1))
+    july = _parse_returns_file(C.SRC_RETURNS_JULY_PDF)
+    return pl.concat([old, july], how="vertical_relaxed")
 
 
 def _name_index(invoices_full: pl.DataFrame, dim_customers: pl.DataFrame) -> dict:
@@ -324,7 +342,7 @@ def compute(collections_df: pl.DataFrame, returns_df: pl.DataFrame,
         "grand_total_returns": total_returns,
         "printed_total_collected": C.COLLECTIONS_PRINTED_TOTAL,
         "printed_total_returns": C.RETURNS_PRINTED_TOTAL,
-        "period": {"collections": "2026-01-01 … 2026-07-18", "returns": "2026-01-01 … 2026-07-16"},
+        "period": {"collections": "2026-01-01 … 2026-07-23", "returns": "2026-01-01 … 2026-07-23"},
         "monthly": monthly,
         "by_rep": by_rep,
         "by_method": by_method,

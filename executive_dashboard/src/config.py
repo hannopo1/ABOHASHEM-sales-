@@ -18,14 +18,19 @@ REPO_ROOT = APP_DIR.parent                            # repository root
 
 SRC_JUNE_MD = REPO_ROOT / "فواتير_المبيعات_يونيو_2026-1.md"
 SRC_MAIN_MD = REPO_ROOT / "فواتير المبيعات من 112025 الى 3152026.md"
-# July 1–15 2026 sales invoices (Pioneers-template PDF with an extractable text
+# July 1–23 2026 sales invoices (Pioneers-template PDF with an extractable text
 # layer). Parsed geometrically at 100% invoice reconciliation.
-SRC_JULY_PDF = REPO_ROOT / "فواتير المبيعات من 1_7_2026الى 15_7_2026.pdf"
-# Full-year-2026 actual cash receipts (سدادات العملاء) and customer returns
-# (ارتجاعات العملاء). Geometric x-band tables; parsed by src/collections.py and
-# reconciled EXACTLY to the printed grand totals below.
+SRC_JULY_PDF = REPO_ROOT / "فواتير المبيعات من 1-7-2026  الى 23-7-2026.pdf"
+# 2026 actual cash receipts (سدادات العملاء) and customer returns (ارتجاعات).
+# Coverage now runs to 2026-07-23 by composing TWO geometric x-band files: the
+# original full-year file supplies Jan–Jun, the new July file supplies all of
+# July (its printed July total supersedes the older file's partial July). Both
+# share the same layout; src/collections.py concatenates (old <July) + (new July)
+# and the parsed sums reconcile EXACTLY to the printed grand totals below.
 SRC_COLLECTIONS_PDF = REPO_ROOT / "تحصيلات العملاء من 1-1-2026 الى 18-7-2026.pdf"
 SRC_RETURNS_PDF = REPO_ROOT / "مرتجعات العملاء من1-1-2026 الى 16-7-2026.pdf"
+SRC_COLLECTIONS_JULY_PDF = REPO_ROOT / "تحصيلات العملاء من 1-7-2026 الى 23-7-2026.pdf"
+SRC_RETURNS_JULY_PDF = REPO_ROOT / "مرتجعات العملاء من 1-7-2026 الى 23-7-2026.pdf"
 PROCESSED = REPO_ROOT / "data" / "processed"
 JUNE_AGG = REPO_ROOT / "analysis" / "data_2026_06"
 
@@ -58,8 +63,8 @@ PERIOD_MONTH = 7
 PERIOD_LABEL_AR = "يوليو ٢٠٢٦"
 DEFAULT_MONTH = "2026-07"          # month the dashboard opens on
 # AR snapshot date used for the receivable/overdue analysis. Updated to the
-# FINAL post-July customer balances (مديونية …-16_7_2026.pdf).
-AS_OF_DATE = "2026-07-16"
+# FINAL customer balances (رصيد … 23-7-2026.pdf).
+AS_OF_DATE = "2026-07-23"
 # Invoices dated on/before this are classified OVERDUE when still unpaid.
 OVERDUE_CUTOFF = "2026-06-30"
 
@@ -101,11 +106,14 @@ BONUS_RULES: list[tuple[float, float]] = [
 RECON_TOL_ABS = 1.0
 RECON_TOL_PCT = 0.01
 
-# Printed grand totals on the collections / returns source PDFs. The parsed sums
+# Printed grand totals for the composed (to 2026-07-23) collections / returns.
+# = (old file, Jan–Jun rows) + (new July file printed total). The parsed sums
 # must equal these EXACTLY (the build aborts otherwise) — the anti-fabrication
 # anchor for the collections/reconciliation drill-down.
-COLLECTIONS_PRINTED_TOTAL = 22_177_149.68
-RETURNS_PRINTED_TOTAL = 435_830.63
+#   collections: 20,250,189.68 (old ≤Jun) + 3,013,161.00 (new July) = 23,263,350.68
+#   returns:        375,179.11 (old ≤Jun) +    83,373.35 (new July) =    458,552.46
+COLLECTIONS_PRINTED_TOTAL = 23_263_350.68
+RETURNS_PRINTED_TOTAL = 458_552.46
 
 # Payment-method classification for a receipt, by keyword in its البيان text.
 # Checked in this order; first hit wins. Ordering is load-bearing:

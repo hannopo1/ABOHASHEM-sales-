@@ -58,8 +58,8 @@ def test_printed_totals_are_positive():
     """The anti-fabrication anchors for the collections drill-down are present."""
     assert COLLECTIONS_PRINTED_TOTAL > 0
     assert RETURNS_PRINTED_TOTAL > 0
-    assert COLLECTIONS_PRINTED_TOTAL == 22_177_149.68
-    assert RETURNS_PRINTED_TOTAL == 435_830.63
+    assert COLLECTIONS_PRINTED_TOTAL == 23_263_350.68
+    assert RETURNS_PRINTED_TOTAL == 458_552.46
 
 
 def test_payment_method_keywords_shape():
@@ -117,22 +117,23 @@ def _collections_module():
     pytest.importorskip("fitz")
     from src import collections as coll
     from src import config as C
-    if not (C.SRC_COLLECTIONS_PDF.exists() and C.SRC_RETURNS_PDF.exists()):
+    if not (C.SRC_COLLECTIONS_PDF.exists() and C.SRC_RETURNS_PDF.exists()
+            and C.SRC_COLLECTIONS_JULY_PDF.exists() and C.SRC_RETURNS_JULY_PDF.exists()):
         pytest.skip("source collections/returns PDFs not present")
     return coll, C
 
 
 def test_collections_reconcile_to_printed_total():
     coll, C = _collections_module()
-    df = coll.parse_collections()
-    assert df.height == 1423
+    df = coll.parse_collections()          # composed: old ≤Jun (1274) + new July (207)
+    assert df.height == 1481
     assert abs(float(df["amount"].sum()) - C.COLLECTIONS_PRINTED_TOTAL) < 0.01
 
 
 def test_returns_reconcile_to_printed_total():
     coll, C = _collections_module()
-    df = coll.parse_returns()
-    assert df.height == 156
+    df = coll.parse_returns()              # composed: old ≤Jun (137) + new July (27)
+    assert df.height == 164
     assert abs(float(df["value"].sum()) - C.RETURNS_PRINTED_TOTAL) < 0.01
 
 

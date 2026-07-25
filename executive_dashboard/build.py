@@ -274,7 +274,7 @@ def main() -> int:
     print("● Data-quality scan (all 2026) …")
     dq = data_quality.run(lines_all, invoices_all)
 
-    print("● Final balances (2026-07-16) + FIFO overdue analysis …")
+    print("● Final balances (2026-07-23) + FIFO overdue analysis …")
     final_balances = debt_mod.load_final_balances()
     # Customer→rep corrected against official master (see _corrected_rep_map).
     rep_map = _corrected_rep_map(final_balances, dims["dim_customers"], dims["debt_detail"])

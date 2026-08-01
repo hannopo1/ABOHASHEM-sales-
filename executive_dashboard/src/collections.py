@@ -154,7 +154,7 @@ def _parse_collections_file(path) -> pl.DataFrame:
 
 
 def parse_collections() -> pl.DataFrame:
-    """Full-year receipts to 2026-07-23: the original file supplies Jan–Jun rows,
+    """Full-year receipts to 2026-07-30: the original file supplies Jan–Jun rows,
     the new July file supplies all of July (no overlap, no gap)."""
     old = _parse_collections_file(C.SRC_COLLECTIONS_PDF).filter(
         pl.col("date") < date(C.PERIOD_YEAR, C.PERIOD_MONTH, 1))
@@ -198,7 +198,7 @@ def _parse_returns_file(path) -> pl.DataFrame:
 
 
 def parse_returns() -> pl.DataFrame:
-    """Full-year returns to 2026-07-23: original file for Jan–Jun, new July file
+    """Full-year returns to 2026-07-30: original file for Jan–Jun, new July file
     for all of July."""
     old = _parse_returns_file(C.SRC_RETURNS_PDF).filter(
         pl.col("date") < date(C.PERIOD_YEAR, C.PERIOD_MONTH, 1))

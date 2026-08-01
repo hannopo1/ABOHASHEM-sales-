@@ -207,7 +207,7 @@ def _month_subset(lines_all, invoices_all, month):
 
 def _receivables_for(receivables_full, invoices_sub, month):
     """FIFO overdue snapshot restricted to the customers active in the month
-    (the balance itself is a fixed 2026-07-16 snapshot; only the cohort narrows).
+    (the balance itself is a fixed AS_OF_DATE snapshot; only the cohort narrows).
     Bucket / rep / totals are re-aggregated from the narrowed rows so everything
     still reconciles exactly to that cohort's outstanding."""
     if month == "all":
@@ -348,7 +348,7 @@ def main() -> int:
         "receivables": receivables,
         "collections": {**collections_payload,
                         "billed_2026": round(billed2026_total, 2),
-                        "outstanding_1607": receivables["total_outstanding"]},
+                        "outstanding_as_of": receivables["total_outstanding"]},
         "monthly": monthly,
         "zero_invoices": dq["zero_invoices"],
         "data_quality": dq["summary"],
@@ -445,7 +445,7 @@ def validate(lines_all, invoices_all, jl, ji, june, receivables, dq, months,
     # 7. ASP recompute for top product
     check("top product ASP = value/qty", bool(products) and products[0]["asp"] > 0)
 
-    # 8. aging buckets sum == outstanding (FIFO overdue, 2026-07-16)
+    # 8. aging buckets sum == outstanding (FIFO overdue, AS_OF_DATE)
     bsum = sum(receivables["buckets"].values())
     check("aging buckets == outstanding", abs(bsum - receivables["total_outstanding"]) < 1.0,
           f"({bsum:,.0f})")

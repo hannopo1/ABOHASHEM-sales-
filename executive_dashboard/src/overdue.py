@@ -1,16 +1,16 @@
 """
 Overdue-receivable analysis via FIFO allocation against the FINAL customer
-balance (2026-07-16 snapshot).
+balance (the ``config.AS_OF_DATE`` snapshot).
 
 Method (standard AR FIFO — oldest paid first):
-  * For each customer we take their full invoice history (2025-01 .. 2026-07-15)
-    and their final outstanding balance B from the 16-07 snapshot.
+  * For each customer we take their full invoice history and their final
+    outstanding balance B from the AS_OF_DATE snapshot.
   * Implied collections = total_billed - B are applied to the OLDEST invoices
     first; the unpaid residual therefore lands on the most recent invoices, and
     Σ unpaid reconciles EXACTLY to B.
   * Any unpaid (or partially unpaid) invoice dated 2026-06-30 or earlier is
     classified OVERDUE; unpaid July invoices are CURRENT (not yet due).
-  * Overdue amounts are aged into buckets by invoice age vs the 2026-07-16
+  * Overdue amounts are aged into buckets by invoice age vs the AS_OF_DATE
     snapshot. Balance in excess of the parsed history (pre-2025 opening balance)
     is placed in the oldest bucket, keeping the reconciliation exact.
 
@@ -48,8 +48,8 @@ def _bucket_for_age(age_days: int) -> str:
 def compute(invoices_full: pl.DataFrame, final_balances: dict,
             dim_customers: pl.DataFrame,
             net_terms: int = C.NET_TERMS_DAYS,
-            as_of_str: str = "2026-07-16",
-            cutoff_str: str = "2026-06-30",
+            as_of_str: str = C.AS_OF_DATE,
+            cutoff_str: str = C.OVERDUE_CUTOFF,
             name_map: dict | None = None,
             rep_map: dict | None = None) -> dict:
     name_map = name_map or {}

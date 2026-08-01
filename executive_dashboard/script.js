@@ -699,7 +699,8 @@ const SECTIONS = {
       const A=C0.attribution||{};
       if(host){
         const rr=[["إجمالي المُفوتر ٢٠٢٦",egp(C0.billed_2026)],["التحصيل النقدي الفعلي",egp(C0.grand_total_collected)],
-          ["المرتجعات",egp(C0.grand_total_returns)],["المديونية القائمة (١٦/٧)",egp(C0.outstanding_1607)],
+          ["المرتجعات",egp(C0.grand_total_returns)],
+          [`المديونية القائمة (${D.meta.as_of})`,egp(C0.outstanding_as_of)],
           ["معدل التحصيل الفعلي",pct(annualRate)]];
         host.innerHTML=rr.map(r=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border2)"><span>${r[0]}</span><b>${r[1]}</b></div>`).join("")
           +`<div class="note" style="margin-top:8px">جسر تقريبي (لا يتضمن رصيد أول المدة)؛ الإجماليان النقديان مطابقان لمستندَي المصدر بالضبط.`
@@ -863,7 +864,7 @@ function openDrill(code){
   const [c]=aggCustomers(lines,inv);
   if(!c) return;
   // Actual cash receipts + returns for this customer (full-year 2026), plus the
-  // authoritative final balance from the 2026-07-16 debt snapshot.
+  // authoritative final balance from the debt snapshot (D.meta.as_of).
   const receipts=((D.collections&&D.collections.receipts)||[]).filter(r=>r.customer_code===code)
                   .sort((a,b)=>a.date<b.date?-1:1);
   const returns=((D.collections&&D.collections.returns_rows)||[]).filter(r=>r.customer_code===code)
@@ -888,14 +889,14 @@ function openDrill(code){
   document.getElementById("drillBody").innerHTML=`
     <div class="mini-kpis">
       ${mk(egpK(c.sales),"مبيعات ٢٠٢٦")}${mk(egpK(totalColl),"التحصيل الفعلي ٢٠٢٦")}
-      ${mk(egpK(totalRet),"المرتجعات ٢٠٢٦")}${mk(finalBal==null?"—":egpK(finalBal),"الرصيد النهائي (١٦/٧)")}
+      ${mk(egpK(totalRet),"المرتجعات ٢٠٢٦")}${mk(finalBal==null?"—":egpK(finalBal),`الرصيد النهائي (${D.meta.as_of})`)}
       ${mk(c.collection_rate==null?"—":pct(c.collection_rate),"معدل التحصيل")}${mk(bonusBadge(c.bonus_pct),"الحافز")}
     </div>
     <div class="note" style="margin-bottom:14px">
       المُفوتر ٢٠٢٦: <b>${egp(ar.billed_2026!=null?ar.billed_2026:c.sales)}</b> ·
       التحصيل الفعلي: <b class="pos">${egp(totalColl)}</b> ·
       المرتجعات: <b>${egp(totalRet)}</b> ·
-      الرصيد النهائي المعتمد (مديونية ١٦/٧): <b>${finalBal==null?"—":egp(finalBal)}</b>
+      الرصيد النهائي المعتمد (مديونية ${D.meta.as_of}): <b>${finalBal==null?"—":egp(finalBal)}</b>
       ${c.oldest_invoice_no?` · أقدم فاتورة غير محصّلة <b>${c.oldest_invoice_no}</b> (${c.oldest_invoice_date})`:""}
     </div>
     <div style="margin-bottom:16px"><h3 style="margin-bottom:8px">الفواتير</h3><div class="tbl-wrap"><table class="dataTable" style="width:100%">

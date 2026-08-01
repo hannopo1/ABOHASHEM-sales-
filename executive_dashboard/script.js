@@ -960,11 +960,12 @@ function fillFilters(){
   const opt=(el,vals)=>{vals.forEach(v=>{const o=document.createElement("option");
     o.value=typeof v==="object"?v.v:v;o.textContent=typeof v==="object"?v.l:v;el.appendChild(o);});};
 
-  // Month selector — the one new feature. Populated with the 2026 months present
-  // in the data plus an "All months" option; defaults to June.
+  // Month selector — populated ONLY with the months that carry source data
+  // (D.meta.data_months) plus an "All months" option; defaults to July.
   const fm=document.getElementById("f_month");
   fm.innerHTML="";
-  opt(fm,[{v:"all",l:ALL_LABEL}, ...D.meta.available_months]);
+  opt(fm,[{v:"all",l:ALL_LABEL},
+          ...D.meta.available_months.filter(m=>DATA_MONTHS.has(m.v))]);
   fm.value=state.filters.month;
 
   opt(document.getElementById("f_customer"),pairs(CUST_NAME));

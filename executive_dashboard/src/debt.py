@@ -1,6 +1,7 @@
 """
-Parser for the customer account-balance PDFs dated 2026-07-23
-(``رصيد [مديونية] عملاء <rep> … 23-7-2026.pdf``) — the FINAL customer balances.
+Parser for the customer account-balance PDFs dated 2026-07-30
+(``مديونية [عملاء] <rep> حتى تاريخ 30-7-2026.pdf``) — the FINAL customer balances
+and the OFFICIAL customer→representative assignment at that date.
 
 These are "تقرير عن حسابات العملاء" reports (one row per customer): the balance
 (الرصيد) column is the outstanding amount; the code column is the customer code.
@@ -58,22 +59,25 @@ def _parse_pdf(path) -> list[tuple]:
 def _rep_from_filename(path: str) -> str:
     """Each report is filed under one representative — the file name IS the
     official customer→rep assignment (cleaner than the in-page rep column).
-    New files: «رصيد [مديونية] [عملاء] <rep> الى [تاريخ] 23-7-2026.pdf»."""
+    Files: «مديونية [عملاء] <rep> حتى تاريخ 30-7-2026.pdf» (some carry a stray
+    double space). The extracted name passes through config.REP_NAME_OVERRIDES
+    so a spacing variant does not split one representative into two."""
     base = re.sub(r"\.pdf$", "", path.split("/")[-1])
     base = re.sub(r"^رصيد\s*", "", base)
     base = re.sub(r"^مي?ديونية\s*", "", base)     # مديونية / ميديونية (source typo)
     base = re.sub(r"^عملاء\s*", "", base)
-    base = re.sub(r"\s*الى\s*(?:تاريخ\s*)?23-7-2026$", "", base)
-    return base.strip()
+    base = re.sub(r"\s*(?:حتى|الى)\s*(?:تاريخ\s*)?30-7-2026$", "", base)
+    base = re.sub(r"\s+", " ", base).strip()
+    return C.REP_NAME_OVERRIDES.get(base, base)
 
 
 def load_final_balances() -> dict:
     """Return {customer_code: {'balance', 'name', 'rep', 'rep_official'}} as of
-    2026-07-23. ``rep_official`` is the file-based (authoritative) representative.
+    2026-07-30. ``rep_official`` is the file-based (authoritative) representative.
 
     Empty dict if the snapshot PDFs are absent (build never hard-fails).
     """
-    files = sorted(glob.glob(str(C.REPO_ROOT / "رصيد*23-7-2026.pdf")))
+    files = sorted(glob.glob(str(C.REPO_ROOT / "مديونية*30-7-2026.pdf")))
     out: dict[str, dict] = {}
     for f in files:
         rep_official = _rep_from_filename(f)

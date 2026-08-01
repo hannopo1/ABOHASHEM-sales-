@@ -18,19 +18,22 @@ REPO_ROOT = APP_DIR.parent                            # repository root
 
 SRC_JUNE_MD = REPO_ROOT / "فواتير_المبيعات_يونيو_2026-1.md"
 SRC_MAIN_MD = REPO_ROOT / "فواتير المبيعات من 112025 الى 3152026.md"
-# July 1–23 2026 sales invoices (Pioneers-template PDF with an extractable text
-# layer). Parsed geometrically at 100% invoice reconciliation.
-SRC_JULY_PDF = REPO_ROOT / "فواتير المبيعات من 1-7-2026  الى 23-7-2026.pdf"
+# Full-month July 2026 sales invoices (Pioneers-template PDF with an extractable
+# text layer). Parsed geometrically at 100% invoice reconciliation
+# (344 invoices / 932 lines, 2026-07-01 … 2026-07-30, Σ 4,901,901.50).
+SRC_JULY_PDF = REPO_ROOT / "فواتير المبيعات خلال شهر 7.pdf"
 # 2026 actual cash receipts (سدادات العملاء) and customer returns (ارتجاعات).
-# Coverage now runs to 2026-07-23 by composing TWO geometric x-band files: the
+# Coverage now runs to 2026-07-30 by composing TWO geometric x-band files: the
 # original full-year file supplies Jan–Jun, the new July file supplies all of
 # July (its printed July total supersedes the older file's partial July). Both
 # share the same layout; src/collections.py concatenates (old <July) + (new July)
 # and the parsed sums reconcile EXACTLY to the printed grand totals below.
+# NOTE: «مرتجعات شهر 7.pdf» is a DIFFERENT report (other layout, no printed
+# «إجمالي المرتجع») — it is NOT a value summary and must not be used here.
 SRC_COLLECTIONS_PDF = REPO_ROOT / "تحصيلات العملاء من 1-1-2026 الى 18-7-2026.pdf"
 SRC_RETURNS_PDF = REPO_ROOT / "مرتجعات العملاء من1-1-2026 الى 16-7-2026.pdf"
-SRC_COLLECTIONS_JULY_PDF = REPO_ROOT / "تحصيلات العملاء من 1-7-2026 الى 23-7-2026.pdf"
-SRC_RETURNS_JULY_PDF = REPO_ROOT / "مرتجعات العملاء من 1-7-2026 الى 23-7-2026.pdf"
+SRC_COLLECTIONS_JULY_PDF = REPO_ROOT / "تحصيلات العملاء حتى تاريخ 30-7-2026.pdf"
+SRC_RETURNS_JULY_PDF = REPO_ROOT / "مرتجعات العملاء خلال شهر 7.pdf"
 PROCESSED = REPO_ROOT / "data" / "processed"
 JUNE_AGG = REPO_ROOT / "analysis" / "data_2026_06"
 
@@ -63,8 +66,8 @@ PERIOD_MONTH = 7
 PERIOD_LABEL_AR = "يوليو ٢٠٢٦"
 DEFAULT_MONTH = "2026-07"          # month the dashboard opens on
 # AR snapshot date used for the receivable/overdue analysis. Updated to the
-# FINAL customer balances (رصيد … 23-7-2026.pdf).
-AS_OF_DATE = "2026-07-23"
+# FINAL customer balances (مديونية … حتى تاريخ 30-7-2026.pdf).
+AS_OF_DATE = "2026-07-30"
 # Invoices dated on/before this are classified OVERDUE when still unpaid.
 OVERDUE_CUTOFF = "2026-06-30"
 
@@ -106,14 +109,14 @@ BONUS_RULES: list[tuple[float, float]] = [
 RECON_TOL_ABS = 1.0
 RECON_TOL_PCT = 0.01
 
-# Printed grand totals for the composed (to 2026-07-23) collections / returns.
+# Printed grand totals for the composed (to 2026-07-30) collections / returns.
 # = (old file, Jan–Jun rows) + (new July file printed total). The parsed sums
 # must equal these EXACTLY (the build aborts otherwise) — the anti-fabrication
 # anchor for the collections/reconciliation drill-down.
-#   collections: 20,250,189.68 (old ≤Jun) + 3,013,161.00 (new July) = 23,263,350.68
-#   returns:        375,179.11 (old ≤Jun) +    83,373.35 (new July) =    458,552.46
-COLLECTIONS_PRINTED_TOTAL = 23_263_350.68
-RETURNS_PRINTED_TOTAL = 458_552.46
+#   collections: 20,250,189.68 (old ≤Jun) + 4,031,541.00 (new July) = 24,281,730.68
+#   returns:        375,179.11 (old ≤Jun) +   128,129.55 (new July) =    503,308.66
+COLLECTIONS_PRINTED_TOTAL = 24_281_730.68
+RETURNS_PRINTED_TOTAL = 503_308.66
 
 # Payment-method classification for a receipt, by keyword in its البيان text.
 # Checked in this order; first hit wins. Ordering is load-bearing:
@@ -173,6 +176,16 @@ BRAND_OVERRIDES: dict[str, str] = {
 # (restored) customer codes — see canonical_code below.
 CUSTOMER_NAME_OVERRIDES: dict[str, str] = {
     "1023": "ثلاجة المناشى الوراق",   # (حسام حسن) — dormant opening debt, 838
+}
+
+# Representative-name normalisation for the balance-report FILE NAMES. The
+# 2026-07-30 report drops the space in «محمدامام الصعيد»; it is the SAME
+# representative as «محمد امام الصعيد» — evidenced by an identical customer set
+# (all 17 codes carried over unchanged from the 2026-07-23 report). Without this
+# the rep would split into two identities and every by-rep view would be wrong.
+# Touches ONLY the displayed representative name — no financial value.
+REP_NAME_OVERRIDES: dict[str, str] = {
+    "محمدامام الصعيد": "محمد امام الصعيد",
 }
 
 

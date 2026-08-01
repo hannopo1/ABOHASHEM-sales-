@@ -58,8 +58,8 @@ def test_printed_totals_are_positive():
     """The anti-fabrication anchors for the collections drill-down are present."""
     assert COLLECTIONS_PRINTED_TOTAL > 0
     assert RETURNS_PRINTED_TOTAL > 0
-    assert COLLECTIONS_PRINTED_TOTAL == 23_263_350.68
-    assert RETURNS_PRINTED_TOTAL == 458_552.46
+    assert COLLECTIONS_PRINTED_TOTAL == 24_281_730.68
+    assert RETURNS_PRINTED_TOTAL == 503_308.66
 
 
 def test_payment_method_keywords_shape():
@@ -125,15 +125,15 @@ def _collections_module():
 
 def test_collections_reconcile_to_printed_total():
     coll, C = _collections_module()
-    df = coll.parse_collections()          # composed: old ≤Jun (1274) + new July (207)
-    assert df.height == 1481
+    df = coll.parse_collections()          # composed: old ≤Jun (1274) + new July (280)
+    assert df.height == 1554
     assert abs(float(df["amount"].sum()) - C.COLLECTIONS_PRINTED_TOTAL) < 0.01
 
 
 def test_returns_reconcile_to_printed_total():
     coll, C = _collections_module()
-    df = coll.parse_returns()              # composed: old ≤Jun (137) + new July (27)
-    assert df.height == 164
+    df = coll.parse_returns()              # composed: old ≤Jun (137) + new July (39)
+    assert df.height == 176
     assert abs(float(df["value"].sum()) - C.RETURNS_PRINTED_TOTAL) < 0.01
 
 

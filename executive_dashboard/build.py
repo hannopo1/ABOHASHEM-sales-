@@ -47,7 +47,7 @@ def _corrected_rep_map(final_balances, dim_customers, debt_detail):
     """Customer → representative, corrected against OFFICIAL master data.
 
     Single source of truth = the customer-account reports filed by rep
-    (2026-07-23, file-based). Where a customer is absent there, fall back to the
+    (2026-07-30, file-based). Where a customer is absent there, fall back to the
     cleaned dim_customers.rep, then the 2026-07-04 debt detail. Never guesses —
     a customer with no rep in any source stays 'غير محدد' and is reported as an
     exception. Touches ONLY the rep relationship, no financial value.
@@ -63,7 +63,7 @@ def _corrected_rep_map(final_balances, dim_customers, debt_detail):
         v = (r["rep"] or "").strip()
         if v:
             rep[str(r["customer_code"])] = v
-    # 1st priority (authoritative): the 2026-07-23 by-rep account reports
+    # 1st priority (authoritative): the 2026-07-30 by-rep account reports
     for code, meta in final_balances.items():
         v = (meta.get("rep_official") or meta.get("rep") or "").strip()
         if v:
@@ -275,7 +275,7 @@ def main() -> int:
     print("● Data-quality scan (all 2026) …")
     dq = data_quality.run(lines_all, invoices_all)
 
-    print("● Final balances (2026-07-23) + FIFO overdue analysis …")
+    print("● Final balances (2026-07-30) + FIFO overdue analysis …")
     final_balances = debt_mod.load_final_balances()
     # Customer→rep corrected against official master (see _corrected_rep_map).
     rep_map = _corrected_rep_map(final_balances, dims["dim_customers"], dims["debt_detail"])

@@ -47,7 +47,7 @@ def _corrected_rep_map(final_balances, dim_customers, debt_detail):
     """Customer → representative, corrected against OFFICIAL master data.
 
     Single source of truth = the customer-account reports filed by rep
-    (2026-07-16, file-based). Where a customer is absent there, fall back to the
+    (2026-07-23, file-based). Where a customer is absent there, fall back to the
     cleaned dim_customers.rep, then the 2026-07-04 debt detail. Never guesses —
     a customer with no rep in any source stays 'غير محدد' and is reported as an
     exception. Touches ONLY the rep relationship, no financial value.
@@ -63,7 +63,7 @@ def _corrected_rep_map(final_balances, dim_customers, debt_detail):
         v = (r["rep"] or "").strip()
         if v:
             rep[str(r["customer_code"])] = v
-    # 1st priority (authoritative): the 2026-07-16 by-rep account reports
+    # 1st priority (authoritative): the 2026-07-23 by-rep account reports
     for code, meta in final_balances.items():
         v = (meta.get("rep_official") or meta.get("rep") or "").strip()
         if v:
@@ -82,6 +82,7 @@ def rep_exceptions(rep_map, invoices_all):
             continue
         seen.add(code)
         out.append({"customer_code": code, "customer_name": r["customer_name"],
+                    "rep": "Not Available",
                     "reason": "لا يوجد مندوب لهذا العميل في أي مصدر رسمي (تقارير المديونية / بيانات العملاء)"})
     return sorted(out, key=lambda x: x["customer_code"])
 

@@ -108,15 +108,29 @@ COLLECTIONS_PRINTED_TOTAL = 22_177_149.68
 RETURNS_PRINTED_TOTAL = 435_830.63
 
 # Payment-method classification for a receipt, by keyword in its البيان text.
-# Checked in this order; first hit wins; no hit -> "أخرى".
+# Checked in this order; first hit wins. Includes common misspellings found in
+# the source (فوادفون=فودافون, انيتا=انستا, نقى=نقد). A receipt whose statement
+# carries NO recognisable method is treated as فودافون كاش (per business guidance
+# that the residual is overwhelmingly wallet transfers) — the review showed the
+# genuinely-identifiable «other» rows are almost all bank cheques/deposits, which
+# are captured explicitly below rather than dumped into the default.
 PAYMENT_METHOD_KEYWORDS: list[tuple[str, str]] = [
     ("فودافون", "فودافون كاش"),
-    ("تحويل", "تحويل بنكي"),
-    ("تصفية", "تصفية / تسوية"),
+    ("فوادفون", "فودافون كاش"),        # misspelling
     ("انستا", "إنستا باي"),
+    ("انيتا", "إنستا باي"),            # misspelling
+    ("شيك", "شيك / إيداع بنكي"),
+    ("ايداع", "شيك / إيداع بنكي"),
+    ("تحويل", "تحويل بنكي"),
+    ("بنك", "شيك / إيداع بنكي"),
+    ("تصفية", "تصفية / تسوية"),
+    ("اشعار خصم", "إشعار خصم"),
+    ("إشعار خصم", "إشعار خصم"),
     ("نقد", "نقدي"),
+    ("نقى", "نقدي"),                   # misspelling
+    ("نقي", "نقدي"),
 ]
-PAYMENT_METHOD_DEFAULT = "أخرى"
+PAYMENT_METHOD_DEFAULT = "فودافون كاش"
 
 # Abnormality thresholds for the data-quality scan (unit price / quantity).
 # Flags are advisory only — nothing is dropped from the dataset.
@@ -186,16 +200,28 @@ CUSTOMER_NAME_OVERRIDES: dict[str, str] = {
 }
 
 
+def _clean_ar(s) -> str:
+    """Shared Arabic display cleanup: drop tatweel, unify alef-maqsura (ى→ي), and
+    collapse whitespace."""
+    return re.sub(r"\s+", " ", str(s).replace("ـ", "").replace("ى", "ي")).strip()
+
+
 def clean_item_name(name) -> str:
     """Normalise an item name for display so spelling variants of the SAME product
-    collapse to one label: drop tatweel, unify alef-maqsura (ى→ي) and the brand
-    spelling (اسبيشيال→اسبشيال), and collapse whitespace. Purely cosmetic — the
-    item code (and every financial value) is untouched.
+    collapse to one label (also unifies the brand spelling اسبيشيال→اسبشيال).
+    Purely cosmetic — the item code and every financial value are untouched.
     """
     if not name:
         return name
-    s = str(name).replace("ـ", "").replace("ى", "ي").replace("اسبيشيال", "اسبشيال")
-    return re.sub(r"\s+", " ", s).strip()
+    return _clean_ar(str(name).replace("اسبيشيال", "اسبشيال"))
+
+
+def clean_customer_name(name) -> str:
+    """Normalise a customer name for display (same cleanup, no brand rule) so the
+    many spelling variants of one customer code collapse to a single label."""
+    if not name:
+        return name
+    return _clean_ar(name)
 
 
 def canonical_code(code) -> str:

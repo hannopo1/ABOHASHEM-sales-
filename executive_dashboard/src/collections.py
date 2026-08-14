@@ -315,7 +315,8 @@ def compute(collections_df: pl.DataFrame, returns_df: pl.DataFrame,
         rep_agg[UNMATCHED]["returns"] += unmatched_ret_amt
     by_rep = sorted(({"rep": k, "collected": round(v["collected"], 2),
                       "returns": round(v["returns"], 2), "customers": len(v["customers"])}
-                     for k, v in rep_agg.items()), key=lambda x: x["collected"], reverse=True)
+                     for k, v in rep_agg.items()),
+                    key=lambda x: (-x["collected"], x["rep"]))   # rep tie-break = deterministic
 
     # --- by payment method ---------------------------------------------------
     if collections_df.height:
@@ -327,13 +328,19 @@ def compute(collections_df: pl.DataFrame, returns_df: pl.DataFrame,
         by_method = []
 
     # --- by customer (attributed) --------------------------------------------
+    # ``codes`` is a set, so its iteration order varies between processes (string
+    # hash randomisation). Sorting on ``collected`` alone is stable, which means
+    # customers TIED on that value would swap places from build to build and make
+    # data.js non-reproducible. The customer_code tie-break makes the order
+    # deterministic. Display order only — no value changes.
     codes = set(collected_by_code) | set(returns_by_code)
     by_customer = sorted(({"customer_code": c,
                            "customer_name": name_map.get(c) or f"عميل {c}",
                            "rep": rep_map.get(c) or "غير محدد",
                            "collected": round(collected_by_code.get(c, 0.0), 2),
                            "returns": round(returns_by_code.get(c, 0.0), 2)}
-                          for c in codes), key=lambda x: x["collected"], reverse=True)
+                          for c in codes),
+                         key=lambda x: (-x["collected"], x["customer_code"]))
 
     reliable_codes = set(collected_by_code)      # codes with a unique-name receipt
 

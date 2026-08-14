@@ -176,6 +176,10 @@ BRAND_OVERRIDES: dict[str, str] = {
 # (restored) customer codes — see canonical_code below.
 CUSTOMER_NAME_OVERRIDES: dict[str, str] = {
     "1023": "ثلاجة المناشى الوراق",   # (حسام حسن) — dormant opening debt, 838
+    # The master record for 978 is garbled — «هابير/مكافيصل» transposes هايبر and
+    # runs مكة/فيصل together. Its receipts spell it correctly; corrected here from
+    # official records so the shown name is readable AND its receipt resolves.
+    "978": "هايبر مكة فيصل",
 }
 
 # Representative-name normalisation for the balance-report FILE NAMES. The

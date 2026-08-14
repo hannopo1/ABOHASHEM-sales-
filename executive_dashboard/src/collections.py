@@ -72,13 +72,15 @@ def _to_date(s: str) -> date:
 
 def _norm(s) -> str:
     """Normalise an Arabic customer name for matching: unify alef/ya/ta-marbuta,
-    strip tatweel + diacritics, collapse whitespace."""
+    strip tatweel + diacritics, unify the ثلجه/ثلاجه spelling (both spellings of
+    "fridge" are used interchangeably across the sources), collapse whitespace."""
     if not s:
         return ""
     s = str(s)
     for a, b in (("أ", "ا"), ("إ", "ا"), ("آ", "ا"), ("ى", "ي"), ("ة", "ه"), ("ـ", "")):
         s = s.replace(a, b)
     s = re.sub(r"[ً-ْ]", "", s)          # harakat
+    s = re.sub(r"\bثلجه\b", "ثلاجه", s)
     return re.sub(r"\s+", " ", s).strip()
 
 
@@ -206,9 +208,15 @@ def parse_returns() -> pl.DataFrame:
     return pl.concat([old, july], how="vertical_relaxed")
 
 
-def _name_index(invoices_full: pl.DataFrame, dim_customers: pl.DataFrame) -> dict:
+def _name_index(invoices_full: pl.DataFrame, dim_customers: pl.DataFrame,
+                name_map: dict | None = None) -> dict:
     """normalised customer-name → code, keeping ONLY names that map to a single
-    code (ambiguous names are excluded so attribution never guesses)."""
+    code (ambiguous names are excluded so attribution never guesses).
+
+    ``name_map`` (the authoritative code→name map: reference master → debt report
+    → invoice history) is folded in as well, so a customer whose ONLY name lives
+    in the debt snapshot — e.g. 1009 «MTOM المريوطية», whose invoices carry no
+    name — is still resolvable from a receipt."""
     name2codes: dict[str, set] = defaultdict(set)
     for df, ncol, ccol in ((invoices_full, "customer_name", "customer_code"),
                            (dim_customers, "customer_name", "customer_code")):
@@ -218,7 +226,54 @@ def _name_index(invoices_full: pl.DataFrame, dim_customers: pl.DataFrame) -> dic
             nm = _norm(r[ncol])
             if nm and not nm.replace(" ", "").isdigit():
                 name2codes[nm].add(str(r[ccol]))
+    for code, nm in (name_map or {}).items():
+        nm = _norm(nm)
+        if nm and not nm.replace(" ", "").isdigit():
+            name2codes[nm].add(str(code))
     return {nm: next(iter(codes)) for nm, codes in name2codes.items() if len(codes) == 1}
+
+
+# A receipt name must be at least this specific before the loose fallbacks below
+# are allowed to fire — guards against a short generic name swallowing a customer.
+_MIN_FALLBACK_CHARS = 8
+_MIN_FALLBACK_TOKENS = 2
+
+
+def _resolver(idx: dict):
+    """Return ``resolve(raw_name) -> code | None``.
+
+    The receipts/returns PDFs render the customer column in a fixed width, so long
+    names arrive **truncated** («مصطفى ابو الدهب بنى» for «… بنى سويف») and word
+    spacing differs («هايبر ابوعمار» vs «هايبر ابو عمار»). Exact matching alone
+    therefore stranded real money in the «غير مُطابَق» bucket. Resolution order:
+      1. exact normalised name;
+      2. space-insensitive;
+      3. truncation — the receipt name is a prefix of a master name, or contains
+         one (the report may append a rep suffix).
+    Every fallback demands a name specific enough (≥2 tokens, ≥8 chars) AND a
+    UNIQUE surviving candidate; anything ambiguous stays unmatched. Never guesses.
+    """
+    nospace: dict[str, set] = defaultdict(set)
+    for nm, code in idx.items():
+        nospace[nm.replace(" ", "")].add(code)
+    nospace = {k: next(iter(v)) for k, v in nospace.items() if len(v) == 1}
+
+    def resolve(raw):
+        n = _norm(raw)
+        if not n:
+            return None
+        if n in idx:
+            return idx[n]
+        k = n.replace(" ", "")
+        if k in nospace:
+            return nospace[k]
+        if len(k) < _MIN_FALLBACK_CHARS or len(n.split()) < _MIN_FALLBACK_TOKENS:
+            return None
+        cands = {c for m, c in idx.items()
+                 if m.replace(" ", "").startswith(k) or k.startswith(m.replace(" ", ""))}
+        return next(iter(cands)) if len(cands) == 1 else None
+
+    return resolve
 
 
 def compute(collections_df: pl.DataFrame, returns_df: pl.DataFrame,
@@ -231,11 +286,9 @@ def compute(collections_df: pl.DataFrame, returns_df: pl.DataFrame,
     """
     name_map = name_map or {}
     rep_map = rep_map or {}
-    idx = _name_index(invoices_full, dim_customers)
+    idx = _name_index(invoices_full, dim_customers, name_map)
+    code_for = _resolver(idx)
     UNMATCHED = "غير مُطابَق"
-
-    def code_for(name):
-        return idx.get(_norm(name))
 
     # --- attribute rows ------------------------------------------------------
     collected_by_code: dict[str, float] = defaultdict(float)

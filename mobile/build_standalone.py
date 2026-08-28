@@ -37,6 +37,7 @@ DASH_DATA_JS = ROOT / "dashboards" / "data.js"
 # and nothing here should perturb it. Absent -> the app hides the section.
 MARGIN_JSON = ROOT / "data" / "processed" / "margin_dashboard.json"
 FONT_DIR = ROOT / "executive_dashboard" / "vendor" / "fonts"
+ASSETS = APP / "assets"
 
 # Cairo carries the Arabic text and is embedded as a data URI. The shipped build
 # pulled it from fonts.googleapis.com, which broke its own "opens with no
@@ -52,6 +53,50 @@ MODULES = ["dash-tokens.js", "dash-agg.js", "repo-adapter.js", "dash-aging.js",
            "dash-margin.js", "dash-charts.js", "dash-export.js", "dash-app.js"]
 
 TITLE = "أبو هاشم للحوم — لوحة الأداء"
+THEME = "#0a0e1a"
+
+
+def data_uri(name: str) -> str:
+    return "data:image/png;base64," + b64(ASSETS / name)
+
+
+def head_meta() -> str:
+    """Icons, theme colour and an inline manifest, so the app can be installed
+    to a phone's home screen and open chrome-free.
+
+    No service worker, deliberately. The bundle issues no network requests at
+    all — React, ECharts, the fonts, the dataset and the snapshots are inlined —
+    so there is nothing for one to cache, and a worker cannot be registered from
+    a blob URL anyway. Offline already works; the manifest only adds the install
+    and the standalone window, and a browser will only honour it when the file
+    is served over http(s), not opened from file://.
+    """
+    manifest = json.dumps({
+        "name": "أبو هاشم للحوم — لوحة الأداء",
+        "short_name": "أبو هاشم",
+        "lang": "ar", "dir": "rtl",
+        "start_url": ".", "scope": ".",
+        "display": "standalone", "orientation": "portrait",
+        "background_color": THEME, "theme_color": THEME,
+        "icons": [
+            {"src": data_uri("icon-192.png"), "sizes": "192x192",
+             "type": "image/png", "purpose": "any maskable"},
+            {"src": data_uri("icon-512.png"), "sizes": "512x512",
+             "type": "image/png", "purpose": "any maskable"},
+        ],
+    }, ensure_ascii=False)
+    import base64 as _b64
+    man_uri = ("data:application/manifest+json;base64,"
+               + _b64.b64encode(manifest.encode("utf-8")).decode())
+    return (
+        f'<meta name="theme-color" content="{THEME}">\n'
+        '<meta name="mobile-web-app-capable" content="yes">\n'
+        '<meta name="apple-mobile-web-app-capable" content="yes">\n'
+        '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n'
+        '<meta name="apple-mobile-web-app-title" content="أبو هاشم">\n'
+        f'<link rel="apple-touch-icon" href="{data_uri("apple-touch-icon.png")}">\n'
+        f'<link rel="icon" type="image/png" href="{data_uri("icon-192.png")}">\n'
+        f'<link rel="manifest" href="{man_uri}">\n')
 
 
 def b64(path: Path) -> str:
@@ -98,6 +143,12 @@ def build() -> Path:
     # --- precomputed aggregate dataset (window.DASH_DATA) ------------------
     parts.append(f"<script>{safe_js(read(DASH_DATA_JS))}</script>")
 
+    # --- brand marks, so the header carries the real logo, not initials ----
+    parts.append("<script>window.DASH_BRAND="
+                 + json.dumps({"logo": data_uri("logo-header.png"),
+                               "special": data_uri("special-logo.png")},
+                              ensure_ascii=False) + ";</script>")
+
     # --- profitability payload (window.DASH_MARGIN) ------------------------
     if MARGIN_JSON.exists():
         parts.append("<script>window.DASH_MARGIN="
@@ -124,7 +175,8 @@ def build() -> Path:
         '<meta name="viewport" content="width=device-width, initial-scale=1, '
         'maximum-scale=1, viewport-fit=cover">\n'
         f"<title>{TITLE}</title>\n"
-        f"<style>\n{font_css()}\n{read_css(SRC / 'app.css')}</style>\n</head>\n"
+        + head_meta()
+        + f"<style>\n{font_css()}\n{read_css(SRC / 'app.css')}</style>\n</head>\n"
     )
     out = head + '<body>\n<div id="root"></div>\n' + "\n".join(parts) + "\n</body>\n</html>\n"
 

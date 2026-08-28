@@ -1642,7 +1642,13 @@ class App extends React.Component {
     return React.createElement("div",{dir:"rtl","data-print":"app",style:{height:"100dvh",width:"100%",maxWidth:480,margin:"0 auto",background:"#0a0e1a",color:"#e2e8f0",fontFamily:"'Cairo',system-ui,'Segoe UI',Tahoma,sans-serif",position:"relative",display:"flex",flexDirection:"column",overflow:"hidden"}},
       React.createElement("div",{"data-print":"backdrop",style:{position:"absolute",inset:0,background:"radial-gradient(600px 300px at 100% -10%,rgba(59,130,246,.10),transparent 60%),radial-gradient(500px 250px at -10% 8%,rgba(139,92,246,.10),transparent 55%)",pointerEvents:"none"}}),
       React.createElement("div",{style:{flex:"none",position:"relative",display:"flex",alignItems:"center",gap:11,padding:"12px 14px 12px",borderBottom:"1px solid rgba(255,255,255,.08)",background:"rgba(17,24,39,.85)"}},
-        React.createElement("span",{style:{width:40,height:40,flex:"none",borderRadius:12,background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",display:"grid",placeItems:"center",fontWeight:800,fontSize:14,color:"#fff"}},"أه"),
+        /* The real mark when the build inlined one; the initials remain the
+           fallback so a bundle built without assets still renders. */
+        (window.DASH_BRAND && window.DASH_BRAND.logo)
+          ? React.createElement("img",{src:window.DASH_BRAND.logo,alt:"أبو هاشم",
+              style:{width:40,height:40,flex:"none",borderRadius:12,objectFit:"cover",
+                     background:"#0a0e1a"}})
+          : React.createElement("span",{style:{width:40,height:40,flex:"none",borderRadius:12,background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",display:"grid",placeItems:"center",fontWeight:800,fontSize:14,color:"#fff"}},"أه"),
         React.createElement("div",{style:{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:2}},
           React.createElement("span",{style:{fontSize:13.5,fontWeight:800,color:"#e2e8f0",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},"أبو هاشم للحوم — Food Industries"),
           React.createElement("span",{style:{fontSize:11,color:"#94a3b8"}},"لوحة الأداء التنفيذي المالي")),

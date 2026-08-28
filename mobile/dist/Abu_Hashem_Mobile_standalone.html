@@ -3537,7 +3537,12 @@ function kpisMeasured(d, R){
     ["هامش مجمل — مقيس", R.fmtPct(m.gross_margin_pct), arMonth(d.meta.cost_month), OK],
     ["هامش تشغيلي — مقيس", R.fmtPct(m.op_margin_pct), "مطابق لقائمة الدخل", OK],
     ["مجمل الربح", R.fmtEGP(m.gross_profit), arMonth(d.meta.cost_month), R.C.blue],
-    ["الربح التشغيلي", R.fmtEGP(m.op_profit), "صافي الربح المُعلن", R.C.indigo],
+    /* Title and sub-line name two different accounting concepts for one number.
+       They coincide in June because the full loaded cost absorbs every expense
+       line the statement carries, so op_profit lands exactly on its net profit.
+       That is a fact about this month, not a general identity. */
+    ["الربح التشغيلي", R.fmtEGP(m.op_profit),
+     "يطابق صافي الربح في قائمة الدخل", R.C.indigo],
   ];
 }
 

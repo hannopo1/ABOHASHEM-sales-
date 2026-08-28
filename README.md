@@ -32,11 +32,22 @@ reports/         3 تقارير Markdown: جودة البيانات، التقر
 ## إعادة توليد التحليل بالكامل
 
 ```bash
+cd /path/to/repo                          # قبل pip: المسار التالي نسبي
 pip install -r analysis/requirements.txt
-cd /path/to/repo
-for f in analysis/0*.py analysis/1*.py; do python3 "$f"; done
-python3 executive_dashboard/build.py      # يُجهض عند فشل أي فحص مطابقة
-python3 mobile/build_standalone.py        # تطبيق الجوال بملف واحد
+
+# كل شيء داخل قوس فرعي واحد يحمل set -e، فيتوقف عند أول خطوة تفشل،
+# ولا يسري set -e على صدفتك. بدونه تُعيد الحلقة حالة آخر تكرار فقط:
+# يفشل نص مبكر، وتبقى مخرجاته القديمة على القرص، فتُبنى اللوحات من
+# بيانات مختلطة والأمر يبدو ناجحًا.
+#
+# ولا تضع `&&` بعد القوس: ذلك يجعله في سياق مُختبَر فيُعطَّل set -e
+# بداخله، وتستمر الحلقة رغم الفشل — وهذا مُختبَر لا مُفترَض.
+(
+  set -e
+  for f in analysis/0*.py analysis/1*.py; do python3 "$f"; done
+  python3 executive_dashboard/build.py    # يُجهض عند فشل أي فحص مطابقة
+  python3 mobile/build_standalone.py      # تطبيق الجوال بملف واحد
+)
 ```
 
 تعمل إعادة البناء آليًا أيضًا: عند رفع ملفات مصدرية جديدة إلى `main` يُشغّل

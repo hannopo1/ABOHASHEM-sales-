@@ -234,7 +234,7 @@ def _statements_block(st, h2, body):
     out.append(tbl)
 
     note = (f"تكلفة المبيعات مقيسة شهريًا من قوائم الدخل "
-            f"({st['meta']['n_observations']} قائمة). ")
+            f"({m['n_observations']} قائمة). ")
     if t.get("n_allocated_months"):
         note += (f"{t['n_allocated_months']} أشهر منها "
                  f"({'، '.join(m['quarter_months'])}) موزّعة تناسبيًا من قائمة "

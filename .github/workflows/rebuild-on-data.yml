@@ -82,12 +82,20 @@ jobs:
         run: pytest -q
 
       - name: Diff the headline figures
+        # The commit message reaches the shell through the environment, never
+        # through ${{ }} interpolation. Anyone who can push writes that string,
+        # and interpolating it inline would let a message containing $(...) or
+        # backticks execute on the runner. Only its first line is used, so a
+        # multi-line message cannot break the markdown either.
+        env:
+          HEAD_COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
           python3 analysis/tools/kpi_snapshot.py capture /tmp/kpi-after.json
+          source_line=$(printf '%s' "${HEAD_COMMIT_MSG:-تشغيل يدوي}" | head -n1 | tr -d '`')
           {
             echo "إعادة بناء آلية بعد وصول بيانات مصدرية جديدة."
             echo
-            echo "المصدر: \`${{ github.event.head_commit.message || 'تشغيل يدوي' }}\`"
+            printf 'المصدر: `%s`\n' "$source_line"
             echo
             python3 analysis/tools/kpi_snapshot.py diff /tmp/kpi-before.json /tmp/kpi-after.json
             echo

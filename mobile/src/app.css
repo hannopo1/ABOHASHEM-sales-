@@ -1,0 +1,7 @@
+html,body{margin:0;padding:0;background:#070b14;color:#e2e8f0;font-family:'Cairo',system-ui,'Segoe UI',Tahoma,sans-serif;min-height:100%}
+#root{height:100dvh}
+a{color:#3b82f6;text-decoration:none}
+a:hover{color:#8b5cf6}
+@keyframes shim{0%{background-position:200% 0}100%{background-position:-200% 0}}
+*{box-sizing:border-box}
+</style>

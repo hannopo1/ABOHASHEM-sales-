@@ -136,14 +136,22 @@ def _export_frames(lines, invoices, rep_map):
 def _customer_ar(dim_customers, final_balances, invoices_full, rep_map,
                  collected_by_code=None, returns_by_code=None,
                  billed2026_by_code=None, reliable=None):
-    """Month-independent AR / bonus attributes per customer.
-
-    Collection rate now uses ACTUAL 2026 cash receipts where the customer is
-    attributable (collected ÷ billed_2026); otherwise it falls back to the
-    unchanged billed-vs-final-balance proxy over the full parsed invoice history.
-    Bonus follows the same ladder. Rep is the corrected master map. Monthly sales
-    are recomputed client-side; these attributes stay fixed. ``rate_source`` marks
-    every customer as "actual" | "proxy" | "none" for full auditability."""
+    """
+                 Build customer-level accounts receivable, collection, return, representative, and bonus attributes.
+                 
+                 Parameters:
+                 	dim_customers: Customer dimension records used for customer metadata.
+                 	final_balances: Customer balances used to determine outstanding amounts and proxy collection rates.
+                 	invoices_full: Full invoice history used to calculate billed totals.
+                 	rep_map: Corrected customer-code-to-representative mapping.
+                 	collected_by_code: Actual 2026 collections keyed by customer code.
+                 	returns_by_code: Actual returns keyed by customer code.
+                 	billed2026_by_code: 2026 billed totals keyed by customer code.
+                 	reliable: Customer codes with reliable collection attribution.
+                 
+                 Returns:
+                 	dict: Customer codes mapped to billed, outstanding, collection, return, representative, and bonus attributes. Collection rates use attributable 2026 receipts when reliable data is available, otherwise a balance-based proxy; unavailable rates are represented as `None`.
+                 """
     collected_by_code = collected_by_code or {}
     returns_by_code = returns_by_code or {}
     billed2026_by_code = billed2026_by_code or {}

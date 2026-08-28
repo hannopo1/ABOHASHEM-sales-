@@ -39,7 +39,11 @@ MARGIN_SUMMARY = C.REPO_ROOT / "data" / "processed" / "margin_summary.json"
 
 
 def _margin():
-    """The profitability payload, or None if the join has not been run."""
+    """Load the profitability summary from the configured JSON file.
+    
+    Returns:
+    	dict: The parsed profitability data, or `None` if the file is missing, unreadable, or contains invalid JSON.
+    """
     if not MARGIN_SUMMARY.exists():
         return None
     try:
@@ -49,6 +53,13 @@ def _margin():
 
 
 def _pct(x):
+    """Format a percentage value to one decimal place, using an em dash when no value is available.
+    
+    Parameters:
+    	x: The percentage value to format.
+    
+    Returns:
+    	str: The formatted percentage or an em dash."""
     return "—" if x is None else f"{x:.1f}%"
 
 
@@ -69,17 +80,18 @@ _WRAP_MM = 172.0
 
 def _ar_block(txt: str, width_mm: float = _WRAP_MM,
               font: str = "Amiri", size: float = 10) -> str:
-    """Reshape and bidi-order a paragraph that WILL wrap.
-
-    get_display reorders a whole string for visual display. Handing reportlab a
-    multi-line RTL run and letting it wrap puts the resulting lines in reverse
-    vertical order — the last sentence prints first — because the reordering has
-    already happened across what become separate lines.
-
-    So wrap first and reorder per line: reshape once (joining is decided within
-    a word, never across a space), measure with the real font to break lines,
-    then bidi each finished line on its own and join with explicit breaks.
     """
+              Format an Arabic paragraph for right-to-left display with measured line wrapping.
+              
+              Parameters:
+                  txt (str): Arabic text to format.
+                  width_mm (float): Maximum line width in millimeters.
+                  font (str): Font used to measure the text.
+                  size (float): Font size used to measure the text.
+              
+              Returns:
+                  str: Bidi-ordered text with explicit line breaks.
+              """
     shaped = arabic_reshaper.reshape(str(txt))
     limit = width_mm * mm
     lines, cur = [], ""
@@ -96,10 +108,32 @@ def _ar_block(txt: str, width_mm: float = _WRAP_MM,
 
 
 def _egp(x: float) -> str:
+    """Format an Egyptian pound amount with comma separators and no decimal places.
+    
+    Parameters:
+    	x (float): The amount to format.
+    
+    Returns:
+    	str: The formatted amount.
+    """
     return f"{x:,.0f}"
 
 
 def build(kpis, customers, products, receivables, insights, path=C.OUT_PDF):
+    """
+    Build the executive financial report PDF.
+    
+    Parameters:
+    	kpis (dict): Key performance indicators used in the report.
+    	customers (dict): Customer data used to generate the report.
+    	products (dict): Product data used to generate the report.
+    	receivables (dict): Receivables data used to generate the report.
+    	insights (dict): Overview, aging, customer, and receivables findings and recommendations.
+    	path (str or pathlib.Path): Destination path for the generated PDF.
+    
+    Returns:
+    	str or pathlib.Path: The path of the generated PDF.
+    """
     pdfmetrics.registerFont(TTFont("Amiri", str(C.FONT_REGULAR)))
     pdfmetrics.registerFont(TTFont("Amiri-Bold", str(C.FONT_BOLD)))
 
@@ -204,8 +238,20 @@ def build(kpis, customers, products, receivables, insights, path=C.OUT_PDF):
 
 
 def _profitability(mg, title, sub, h2, body):
-    """Page 2 — profitability, with the price-drift caveat attached to the
-    figures rather than buried in a footnote."""
+    """
+    Build the profitability section of the report.
+    
+    Parameters:
+        mg (dict): Profitability data containing coverage, price-drift, measured,
+            indicative, and cost-source details.
+        title: Paragraph style for the section title.
+        sub: Paragraph style for subtitles and source references.
+        h2: Paragraph style for subsection headings.
+        body: Paragraph style for explanatory text.
+    
+    Returns:
+        list: ReportLab flowables for the profitability page.
+    """
     cov, drift = mg["coverage"], mg["price_drift"]
     meas, ind = mg["measured"], mg["indicative"]
     window = ", ".join(drift["reliable_months"])

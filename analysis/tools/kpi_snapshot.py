@@ -50,6 +50,16 @@ DASH_METRICS = {
 
 
 def dig(obj, path: str):
+    """
+    Traverse a nested object using a dotted path.
+    
+    Parameters:
+    	obj: The dictionary or list to traverse.
+    	path (str): A dot-separated path containing dictionary keys and list indexes.
+    
+    Returns:
+    	The value at the specified path, or `None` when the path is invalid or unavailable.
+    """
     for part in path.split("."):
         if obj is None:
             return None
@@ -64,6 +74,15 @@ def dig(obj, path: str):
 
 
 def load_json(path: Path):
+    """
+    Load and parse a UTF-8 JSON file.
+    
+    Parameters:
+        path (Path): Path to the JSON file.
+    
+    Returns:
+        object: The parsed JSON value, or `None` if the file cannot be read or parsed.
+    """
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -71,7 +90,12 @@ def load_json(path: Path):
 
 
 def load_dash():
-    """executive_dashboard/data.js is `window.DASH = {...};`."""
+    """
+    Load the dashboard data embedded in the JavaScript source file.
+    
+    Returns:
+    	dict: The parsed dashboard data, or `None` if the file cannot be read or parsed.
+    """
     try:
         txt = DASH_JS.read_text(encoding="utf-8")
         return json.loads(txt[txt.index("{"):txt.rindex("}") + 1].replace("<\\/", "</"))
@@ -80,6 +104,12 @@ def load_dash():
 
 
 def capture() -> dict:
+    """
+    Collect configured KPI values from source JSON files and dashboard data.
+    
+    Returns:
+    	dict: A label-keyed mapping containing each metric's value and formatting kind. Missing or invalid values are represented as `None`.
+    """
     out, cache = {}, {}
     for label, (path, dotted, kind) in METRICS.items():
         if path not in cache:
@@ -95,6 +125,16 @@ def capture() -> dict:
 
 
 def fmt(value, kind: str) -> str:
+    """
+    Format a metric value according to its display kind.
+    
+    Parameters:
+        value: The metric value to format.
+        kind (str): The display format, such as currency or percentage.
+    
+    Returns:
+        str: The formatted value, or "—" when the value is unavailable.
+    """
     if value is None:
         return "—"
     if kind == "egp":
@@ -105,6 +145,17 @@ def fmt(value, kind: str) -> str:
 
 
 def delta(before, after, kind: str) -> str:
+    """
+    Describe the change between two metric values.
+    
+    Parameters:
+        before: The earlier metric value.
+        after: The later metric value.
+        kind (str): The metric formatting kind used to represent numeric differences.
+    
+    Returns:
+        str: A localized description of the change, including numeric and percentage differences when applicable.
+    """
     if before is None and after is None:
         return "—"
     if before is None:
@@ -124,6 +175,16 @@ def delta(before, after, kind: str) -> str:
 
 
 def diff(a: dict, b: dict) -> str:
+    """
+    Build an Arabic Markdown comparison table for two KPI snapshots.
+    
+    Parameters:
+    	a (dict): The earlier KPI snapshot.
+    	b (dict): The later KPI snapshot.
+    
+    Returns:
+    	str: A Markdown table containing each metric's earlier value, later value, and difference, followed by a change summary.
+    """
     lines = ["### أثر البيانات الجديدة على الأرقام", "",
              "| المؤشر | قبل | بعد | الفرق |", "|---|---:|---:|---:|"]
     changed = 0
@@ -142,6 +203,15 @@ def diff(a: dict, b: dict) -> str:
 
 
 def main(argv: list[str]) -> int:
+    """
+    Handle command-line requests to capture KPI data or compare two snapshots.
+    
+    Parameters:
+    	argv (list[str]): Command-line arguments containing a `capture` or `diff` command and its file paths.
+    
+    Returns:
+    		int: `0` for a successful command, `2` for invalid arguments.
+    """
     if len(argv) == 3 and argv[1] == "capture":
         Path(argv[2]).write_text(
             json.dumps(capture(), ensure_ascii=False, indent=2), encoding="utf-8")

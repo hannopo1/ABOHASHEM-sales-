@@ -57,19 +57,24 @@ THEME = "#0a0e1a"
 
 
 def data_uri(name: str) -> str:
+    """Convert an image asset to a base64-encoded PNG data URI.
+    
+    Parameters:
+    	name (str): The image asset filename.
+    
+    Returns:
+    	str: A PNG data URI containing the asset's base64-encoded contents.
+    """
     return "data:image/png;base64," + b64(ASSETS / name)
 
 
 def head_meta() -> str:
-    """Icons, theme colour and an inline manifest, so the app can be installed
-    to a phone's home screen and open chrome-free.
-
-    No service worker, deliberately. The bundle issues no network requests at
-    all — React, ECharts, the fonts, the dataset and the snapshots are inlined —
-    so there is nothing for one to cache, and a worker cannot be registered from
-    a blob URL anyway. Offline already works; the manifest only adds the install
-    and the standalone window, and a browser will only honour it when the file
-    is served over http(s), not opened from file://.
+    """
+    Generate HTML metadata for mobile installation and standalone display.
+    
+    Returns:
+    	str: Meta tags and links for theme colors, app icons, Apple touch icons,
+    	and an inline web app manifest.
     """
     manifest = json.dumps({
         "name": "أبو هاشم للحوم — لوحة الأداء",
@@ -100,10 +105,24 @@ def head_meta() -> str:
 
 
 def b64(path: Path) -> str:
+    """
+    Encode a file's contents as base64 text.
+    
+    Parameters:
+    	path (Path): Path to the file to encode.
+    
+    Returns:
+    	str: Base64-encoded file contents.
+    """
     return base64.b64encode(path.read_bytes()).decode()
 
 
 def font_css() -> str:
+    """Generate inline CSS declarations for the embedded Cairo font files.
+    
+    Returns:
+    	str: CSS containing one `@font-face` declaration for each configured font weight.
+    """
     return "\n".join(
         f"@font-face{{font-family:'Cairo';font-style:normal;font-weight:{w};"
         f"font-display:swap;src:url(data:font/woff2;base64,{b64(FONT_DIR / f)}) "
@@ -112,19 +131,49 @@ def font_css() -> str:
 
 
 def safe_js(txt: str) -> str:
-    """Stop a literal closing script tag inside data from ending the block."""
+    """
+    Escape literal closing script tags so embedded data cannot terminate a script block.
+    
+    Parameters:
+    	txt (str): Text to escape.
+    
+    Returns:
+    	str: The text with closing script-tag sequences escaped.
+    """
     return txt.replace("</script", "<\\/script")
 
 
 def read(p: Path) -> str:
+    """
+    Read UTF-8 text from a required input file.
+    
+    Parameters:
+    	p (Path): Path to the file to read.
+    
+    Returns:
+    	str: The file contents.
+    
+    Raises:
+    	SystemExit: If the file does not exist.
+    """
     if not p.exists():
         raise SystemExit(f"missing input: {p.relative_to(ROOT)}")
     return p.read_text(encoding="utf-8")
 
 
 def read_css(p: Path) -> str:
-    """A stray </style> would close the inlined block early and dump the rest of
-    the stylesheet into the page as visible text. Fail loudly instead."""
+    """
+    Read a CSS file and verify that it can be safely inlined.
+    
+    Parameters:
+    	p (Path): Path to the CSS file.
+    
+    Returns:
+    	str: The file contents.
+    
+    Raises:
+    	SystemExit: If the file contains a literal closing style tag.
+    """
     txt = read(p)
     if "</style" in txt.lower():
         raise SystemExit(f"{p.name} contains a literal </style> tag — that is "
@@ -133,6 +182,12 @@ def read_css(p: Path) -> str:
 
 
 def build() -> Path:
+    """
+    Build the standalone offline HTML dashboard.
+    
+    Returns:
+    	Path: The path to the generated standalone HTML file.
+    """
     parts: list[str] = []
 
     # --- vendor ------------------------------------------------------------

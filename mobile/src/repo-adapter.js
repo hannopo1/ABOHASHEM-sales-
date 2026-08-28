@@ -52,7 +52,11 @@ const SECTIONS = [
    therefore cannot honestly be re-derived for a filtered subset. */
 const UNFILTERABLE = ["fin", "forecast", "quality"];
 
-/* KPI rows — exactly the label/value/sub triples the repo tabs build. */
+/**
+ * Builds financial KPI rows for the dashboard.
+ * @param {Object} D - Dashboard data containing the financial metrics.
+ * @return {Array} KPI rows with labels, formatted values, subtitles, and colors.
+ */
 function kpisFin(D){
   const f=D.financial;
   return [
@@ -64,6 +68,11 @@ function kpisFin(D){
     ["حصة أعلى 10 عملاء", fmtPct(f.top10_customer_share_pct), "من إجمالي الإيرادات", C.orange],
   ];
 }
+/**
+ * Builds sales KPI rows from dashboard summary and monthly data.
+ * @param {Object} D - Dashboard data containing sales summary and monthly series.
+ * @return {Array<Array<*>>} KPI rows for active customers, sold items, brands, and average invoice value.
+ */
 function kpisSales(D){
   const m=D.monthly_series;
   return [
@@ -73,6 +82,11 @@ function kpisSales(D){
     ["متوسط قيمة الفاتورة", fmtEGP(m.reduce((a,r)=>a+r.revenue_per_invoice,0)/m.length), "متوسط 18 شهرًا", C.indigo],
   ];
 }
+/**
+ * Builds customer-focused KPI rows from customer Pareto and financial data.
+ * @param {Object} D - Dashboard data containing customer Pareto and financial metrics.
+ * @return {Array} Customer KPI rows with labels, formatted values, supporting details, and colors.
+ */
 function kpisCust(D){
   const c=D.customer_pareto, f=D.financial;
   return [
@@ -82,12 +96,22 @@ function kpisCust(D){
     ["عملاء لديهم رصيد مدين حاليًا", fmt0(f.ar_n_customers_with_debit_balance), "من لقطة 2026/7/4", C.amber],
   ];
 }
+/**
+ * Builds KPI rows for classified brands and overall brand concentration.
+ * @param {Object} D - Dashboard data containing brand summaries and financial metrics.
+ * @return {Array<Array>} KPI rows for each classified brand, followed by the brand HHI metric.
+ */
 function kpisBrands(D){
   const f=D.financial;
   return D.brand_summary.filter(b=>b.brand!=="غير مصنف")
     .map(b=>[b.brand, fmtEGP(b.revenue), fmtPct(b.revenue_share_pct)+" من الإيراد · "+fmt0(b.n_customers)+" عميلاً", BRAND_COLORS[b.brand]])
     .concat([["مؤشر تركّز العلامات (HHI)", fmt0(f.hhi_brands), "تركّز مرتفع", C.red]]);
 }
+/**
+ * Builds debt and receivables KPI rows from financial dashboard data.
+ * @param {Object} D - Dashboard data containing financial receivables metrics.
+ * @return {Array<Array>} KPI rows for balances, DSO, debtor concentration, and credit-balance counts.
+ */
 function kpisDebt(D){
   const f=D.financial;
   return [
@@ -99,6 +123,11 @@ function kpisDebt(D){
     ["عملاء برصيد دائن", fmt0(f.ar_n_customers_with_credit_balance), "", C.blue],
   ];
 }
+/**
+ * Builds product-performance KPI rows from item classification and revenue data.
+ * @param {Object} D - Dashboard data containing item classifications and financial metrics.
+ * @return {Array} Product KPI rows.
+ */
 function kpisProducts(D){
   const items=D.item_abc_xyz;
   return [
@@ -108,6 +137,11 @@ function kpisProducts(D){
     ["حصة أعلى 10 أصناف", fmtPct(D.financial.top10_item_share_pct), "من إجمالي الإيراد", C.orange],
   ];
 }
+/**
+ * Build KPI rows that summarize data quality metrics.
+ * @param {Object} D - Dashboard data containing the `data_quality` metrics.
+ * @return {Array} KPI rows for data-quality reporting.
+ */
 function kpisQuality(D){
   const q=D.data_quality;
   return [
@@ -139,6 +173,11 @@ function kpisQuality(D){
 const UNASSIGNED_REP = "غير محدد";
 
 const _repCache = new WeakMap();
+/**
+ * Builds or retrieves the representative mapping for a dashboard dataset.
+ * @param {Object} D - Dashboard data containing customer dimension records.
+ * @return {Map} A mapping from customer codes to representative names.
+ */
 function repByCustomer(D){
   let m = _repCache.get(D);
   if(!m){
@@ -155,17 +194,23 @@ const isEmptyFilters = f => !f || (!f.rep && !f.brand && !f.customerCode && !f.i
 const activeFilterCount = f =>
   f ? [f.rep, f.brand, f.customerCode, f.itemName].filter(Boolean).length : 0;
 
-/* Whether a monthly trend can honestly be drawn for the current slice:
-   "company" (no filter) | "brand" (brand alone) | "unavailable". */
+/**
+ * Determines whether monthly trend data is available for the current filter selection.
+ * @param {Object} f - The active filter selection.
+ * @return {string} `"company"` for no filters, `"brand"` for a brand-only filter, or `"unavailable"` otherwise.
+ */
 function monthlyAvailability(f){
   if(isEmptyFilters(f)) return "company";
   if(f.brand && !f.rep && !f.customerCode && !f.itemName) return "brand";
   return "unavailable";
 }
 
-/* One pass over the cube, aggregating every dimension. Only leaf nodes that
-   survive all four filters contribute, so the filters compose rather than
-   override one another. */
+/**
+ * Aggregates sales and quantities across the hierarchy for the active filters.
+ * @param {Object} D - Dashboard data containing the hierarchy and financial totals.
+ * @param {Object} f - Optional representative, brand, customer, and item filters.
+ * @returns {Object} Filtered totals, ranked dimension breakdowns, company share, average price, monthly availability, and empty-state information.
+ */
 function applyFilters(D, f){
   f = f || EMPTY_FILTERS;
   const byRep=new Map(), byBrand=new Map(), byCustomer=new Map(),
@@ -211,21 +256,33 @@ function applyFilters(D, f){
   };
 }
 
-/* Option lists for the filter sheet, ordered by revenue so the likely choices
-   sit at the top. */
+/**
+ * Build filter option lists ordered by revenue.
+ * @param {Object} D - Dashboard data used to derive representative, brand, customer, and item options.
+ * @return {Object} Filter options grouped by representative, brand, customer, and item.
+ */
 function filterOptions(D){
   const all = applyFilters(D, EMPTY_FILTERS);
   return {reps:all.byRep, brands:all.byBrand, customers:all.byCustomer, items:all.byItem};
 }
 
-/* Customer codes matching the current slice — used to narrow the AR and customer
-   tables, which carry a rep but no item dimension. */
+/**
+ * Identifies customer codes included in the current filtered slice.
+ * @param {Object} D - Dashboard data.
+ * @param {Object} f - Active filter selections.
+ * @returns {Set<string>|null} Customer codes matching the filters, or `null` when no filters are active.
+ */
 function matchingCustomerCodes(D, f){
   if(isEmptyFilters(f)) return null;                      // null = no narrowing
   return new Set(applyFilters(D, f).byCustomer.map(r=>r.code));
 }
 
-/* Monthly revenue for one brand, aligned to monthly_series and zero-filled. */
+/**
+ * Builds a brand's monthly revenue series aligned with the dataset's monthly timeline.
+ * @param {Object} D - Dashboard data containing brand revenue and monthly timeline data.
+ * @param {string} brand - Brand name to include.
+ * @return {number[]} Monthly revenue values, using zero for months without recorded revenue.
+ */
 function brandSeries(D, brand){
   const by=new Map();
   for(const r of (D.brand_month_revenue||[])) if(r.brand===brand) by.set(r.month, r.line_total);

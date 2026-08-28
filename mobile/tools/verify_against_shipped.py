@@ -28,13 +28,26 @@ fails: list[str] = []
 
 
 def check(name: str, ok: bool, detail: str = "") -> None:
+    """Print the result of a verification check and record failures.
+    
+    Parameters:
+        name (str): The name of the check.
+        ok (bool): Whether the check passed.
+        detail (str): Optional detail to include in the output.
+    """
     print(f"  {'PASS' if ok else 'FAIL'}  {name}{('  — ' + detail) if detail else ''}")
     if not ok:
         fails.append(name)
 
 
 def scripts(html: str) -> list[tuple[str, str]]:
-    """(id, body) for every script block, in document order."""
+    """Extract script block identifiers and contents in document order.
+    
+    Parameters:
+    	html (str): HTML source containing script blocks.
+    
+    Returns:
+    	list[tuple[str, str]]: Each script block's identifier and body."""
     out = []
     for m in re.finditer(r"<script([^>]*)>(.*?)</script>", html, re.S):
         attrs, body = m.group(1), m.group(2)
@@ -44,12 +57,31 @@ def scripts(html: str) -> list[tuple[str, str]]:
 
 
 def js_payload(body: str, var: str):
+    """
+    Extract and decode the JSON object assigned to a JavaScript variable.
+    
+    Parameters:
+        body (str): JavaScript source containing the variable assignment.
+        var (str): Variable name whose JSON object should be extracted.
+    
+    Returns:
+        object: The decoded JSON value.
+    """
     s = body.replace("<\\/", "</")
     i = s.index("{", s.index(var))
     return json.loads(s[i:s.rindex("}") + 1])
 
 
 def main(shipped_path: str) -> int:
+    """
+    Verify that a rebuilt mobile standalone HTML matches the shipped build.
+    
+    Parameters:
+        shipped_path (str): Path to the shipped HTML file.
+    
+    Returns:
+        int: `0` if all checks pass, or `1` if any check fails.
+    """
     shipped = Path(shipped_path).read_text(encoding="utf-8")
     built = BUILT.read_text(encoding="utf-8")
     sb, bb = scripts(shipped), scripts(built)
@@ -66,6 +98,15 @@ def main(shipped_path: str) -> int:
     orig_rt = next(b for i, b in sb if not i and "const T = (function()" in b)
 
     def code_lines(txt):
+        """
+        Extract executable source lines while ignoring blank lines and comments.
+        
+        Parameters:
+        	txt (str): Source text to process.
+        
+        Returns:
+        	list[str]: Stripped lines that are not blank or part of a comment block.
+        """
         out, in_block = [], False
         for raw in txt.split("\n"):
             t = raw.strip()
@@ -114,6 +155,15 @@ def main(shipped_path: str) -> int:
 
     # 3. snapshots ------------------------------------------------------------
     def snaps(pairs):
+        """
+        Parse dashboard snapshot payloads from script identifier and body pairs.
+        
+        Parameters:
+        	pairs: Iterable of `(identifier, body)` pairs to filter and parse.
+        
+        Returns:
+        	dict: A mapping of snapshot identifiers to their decoded JSON payloads.
+        """
         return {i: json.loads(b.replace("<\\/", "</"))
                 for i, b in pairs if i and i.startswith("snap-dash")}
     sa, sbn = snaps(sb), snaps(bb)

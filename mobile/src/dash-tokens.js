@@ -25,6 +25,13 @@ const int = x => Math.round(x||0).toLocaleString("en-US");
 const pct = (x,d=1) => ((x||0)*100).toFixed(d) + "%";
 const round2 = x => Math.round((x||0)*100)/100;
 const sum = (arr,k) => arr.reduce((a,x)=>a+(x[k]||0),0);
+/**
+ * Groups records by a key and totals a numeric property for each group.
+ * @param {Array<Object>} arr - The records to aggregate.
+ * @param {string} key - The property used to identify each group.
+ * @param {string} val - The numeric property to total.
+ * @return {Map<*, number>} A map from group keys to summed values.
+ */
 function groupSum(arr,key,val){const m=new Map();for(const x of arr){const k=x[key];m.set(k,(m.get(k)||0)+(x[val]||0));}return m;}
 
 /* Section inventory — verbatim from SECTIONS, in source order. */

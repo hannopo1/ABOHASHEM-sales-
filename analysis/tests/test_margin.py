@@ -32,11 +32,23 @@ PCT_TOL = 0.01     # percentage points
 
 @pytest.fixture(scope="module")
 def summary():
+    """
+    Load the summary report from its JSON file.
+    
+    Returns:
+    	dict: The parsed summary report.
+    """
     return json.loads(SUMMARY.read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="module")
 def dash():
+    """
+    Load the dashboard report from its JSON file.
+    
+    Returns:
+        dict: Parsed dashboard report data.
+    """
     return json.loads(DASHBOARD.read_text(encoding="utf-8"))
 
 

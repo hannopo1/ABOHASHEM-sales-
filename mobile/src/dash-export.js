@@ -26,6 +26,10 @@ const X = (function(){
 
 const pad = n => String(n).padStart(2, "0");
 
+/**
+ * Creates a timestamp formatted as `YYYYMMDD-HHMM`.
+ * @return {string} The current local date and time as a compact timestamp.
+ */
 function stamp(){
   const d = new Date();
   return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate())
@@ -35,7 +39,12 @@ function stamp(){
 const safeName = s => String(s || "تقرير")
   .replace(/[\\/:*?"<>|]/g, "-").replace(/\s+/g, " ").trim().slice(0, 60);
 
-/* Hand the file to the user. Returns a short Arabic status for the sheet. */
+/**
+ * Shares a file when supported, or downloads it through the browser.
+ * @param {Blob} blob - The file data to share or download.
+ * @param {string} filename - The file name used for sharing or download.
+ * @return {string} An Arabic status message indicating whether the file was shared, downloaded, or sharing was canceled.
+ */
 async function deliver(blob, filename){
   if(navigator.canShare && navigator.share){
     try{
@@ -65,6 +74,11 @@ const csvCell = v => {
   return /[",\n\r;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 };
 
+/**
+ * Converts tabular data into CSV text with a header row and CRLF line endings.
+ * @param {Object} table - The table containing column definitions and rows.
+ * @return {string} The CSV-formatted text.
+ */
 function toCSV(table){
   const head = table.columns.map(c => csvCell(c.label)).join(",");
   const body = table.rows.map(r =>
@@ -72,6 +86,11 @@ function toCSV(table){
   return head + "\r\n" + body + "\r\n";
 }
 
+/**
+ * Downloads table data as a UTF-8 CSV file with a timestamped filename.
+ * @param {Object} table - The table data and label used to generate the CSV file.
+ * @return {*} The result of delivering the generated file.
+ */
 function downloadCSV(table){
   /* U+FEFF: without it Excel reads the file as the system codepage and every
      Arabic column becomes mojibake. */
@@ -94,12 +113,22 @@ const CRC = (function(){
   return t;
 })();
 
+/**
+ * Calculates the CRC-32 checksum for a byte sequence.
+ * @param {Uint8Array} bytes - The bytes to checksum.
+ * @return {number} The unsigned CRC-32 checksum.
+ */
 function crc32(bytes){
   let c = 0xFFFFFFFF;
   for(let i = 0; i < bytes.length; i++) c = CRC[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
   return (c ^ 0xFFFFFFFF) >>> 0;
 }
 
+/**
+ * Creates an XLSX-compatible archive from UTF-8 text files.
+ * @param {Array<{name: string, data: string}>} files - Files to include in the archive.
+ * @return {Blob} The generated archive as an XLSX-format blob.
+ */
 function zip(files){
   const enc = new TextEncoder();
   const parts = [], central = [];
@@ -150,8 +179,11 @@ const colRef = i => {
   return s;
 };
 
-/* Numbers go in as numbers so Excel can total them; everything else is an
-   inline string, which avoids a shared-string table for no benefit here. */
+/**
+ * Builds worksheet XML for an Excel-compatible spreadsheet.
+ * @param {Object} table - Table definition containing column labels, row data, and value accessors.
+ * @return {string} Worksheet XML with headers, data rows, numeric values, inline strings, right-to-left layout, and a frozen header row.
+ */
 function sheetXML(table){
   const rows = [];
   const cells = (vals, header) => vals.map((v, i) => {
@@ -180,6 +212,11 @@ function sheetXML(table){
     + "<sheetData>" + rows.join("") + "</sheetData></worksheet>";
 }
 
+/**
+ * Creates an XLSX workbook from tabular data.
+ * @param {Array<Object>} tables - The worksheet definitions, including labels and table data.
+ * @return {Blob} The generated XLSX workbook.
+ */
 function workbook(tables){
   const names = tables.map((t, i) =>
     (safeName(t.label).replace(/[\[\]:*?/\\]/g, "").slice(0, 28) || ("ورقة" + (i + 1))));
@@ -234,8 +271,10 @@ const downloadXLSX = (tables, label) =>
 
 /* ---------------------------------------------------------------- charts -- */
 
-/* Charts currently mounted, newest section first, with the card title each was
-   given. REGISTRY is maintained by the EChart component in dash-charts.js. */
+/**
+ * Lists currently mounted charts with their titles and display indexes.
+ * @returns {Array<{i: number, title: string, inst: object}>} Connected chart entries, ordered from newest to oldest.
+ */
 function charts(){
   return REGISTRY
     .filter(c => c.inst && c.el && c.el.isConnected)
@@ -246,16 +285,12 @@ function charts(){
     }));
 }
 
-/* PNG needs care: the app renders every chart with the SVG renderer, and on an
-   SVG-rendered instance getDataURL({type:'png'}) hands back an SVG data URL,
-   not a raster. Rasterising the SVG through an <img> would also lose the page's
-   embedded Cairo face, because an image document does not inherit the host
-   document's CSS.
-
-   So the chart is re-rendered once into an off-screen canvas instance built
-   from the live instance's own resolved option. It is a real element in this
-   document, so it resolves the same fonts, and getDataURL then returns a true
-   PNG. The temporary instance is always disposed. */
+/**
+ * Renders a chart as a rasterized PNG data URL.
+ * @param {Object} entry - Chart entry containing the live ECharts instance.
+ * @param {number} [scale] - Pixel ratio used for the generated image; defaults to 2.
+ * @return {string} A PNG data URL.
+ */
 function chartPNGDataURL(entry, scale){
   const src = entry.inst.getDom();
   const w = Math.max(src.clientWidth || 0, 320);
@@ -284,6 +319,11 @@ function chartPNGDataURL(entry, scale){
   }
 }
 
+/**
+ * Exports a chart as a PNG image.
+ * @param {Object} entry - The chart entry containing its title and instance.
+ * @return {Promise<*>} The delivery result, or an Arabic error message if PNG generation fails.
+ */
 function downloadChartPNG(entry){
   const url = chartPNGDataURL(entry, 2);
   if(url.indexOf("data:image/png;base64,") !== 0)
@@ -295,6 +335,11 @@ function downloadChartPNG(entry){
                  safeName(entry.title) + "-" + stamp() + ".png");
 }
 
+/**
+ * Export a chart as an SVG file.
+ * @param {Object} entry - The chart entry containing the chart instance and title.
+ * @return {Promise<string>} A status message describing the export result.
+ */
 function downloadChartSVG(entry){
   const svg = entry.inst.renderToSVGString
     ? entry.inst.renderToSVGString()
@@ -306,9 +351,10 @@ function downloadChartSVG(entry){
 
 /* ------------------------------------------------------------------- PDF -- */
 
-/* Print-to-PDF. The print stylesheet in app.css unclips the scroll container,
-   hides the chrome and switches to ink-on-white; the browser shapes the Arabic,
-   which is the part a JS PDF library gets wrong. */
+/**
+ * Opens the browser print dialog for saving the report as a PDF.
+ * @return {string} Instructions to select “Save as PDF” in the print dialog.
+ */
 function printReport(){
   document.body.setAttribute("data-printing", "1");
   const done = () => document.body.removeAttribute("data-printing");

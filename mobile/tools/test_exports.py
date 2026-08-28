@@ -30,12 +30,28 @@ fails: list[str] = []
 
 
 def check(name: str, ok: bool, detail: str = "") -> None:
+    """Print the result of a validation check and record failures.
+    
+    Parameters:
+    	name (str): Name of the check.
+    	ok (bool): Whether the check passed.
+    	detail (str): Optional detail to include in the output.
+    """
     print(f"  {'PASS' if ok else 'FAIL'}  {name}{('  — ' + detail) if detail else ''}")
     if not ok:
         fails.append(name)
 
 
 def run(path: Path) -> int:
+    """
+    Validate CSV, XLSX, and chart exports from the specified mobile HTML application.
+    
+    Parameters:
+    	path (Path): Path to the HTML file to load.
+    
+    Returns:
+    	int: 0 if all export checks pass, otherwise 1.
+    """
     with sync_playwright() as pw:
         b = pw.chromium.launch(executable_path=CHROMIUM)
         page = b.new_page(viewport={"width": 390, "height": 844})

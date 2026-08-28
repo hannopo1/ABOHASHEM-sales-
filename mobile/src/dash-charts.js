@@ -26,12 +26,10 @@ const { PAL, AGING_KEYS, AGING_COLORS, egp, egpK, int, num, pct, sum, groupSum }
 
 /* ---------------------------------------------------------------- base ---- */
 
-/* Mobile-tuned equivalent of the desktop's ecBase(). Differences from the
-   desktop, all forced by the narrow viewport:
-     - tooltip.confine so it cannot overflow the screen edge
-     - legend scrolls instead of wrapping into three rows
-     - axis labels elide rather than rotate where possible
-     - fatter series so a fingertip can hit them */
+/**
+ * Creates shared mobile ECharts configuration for dashboard charts.
+ * @return {Object} Base chart options with mobile-friendly styling, layout, tooltips, and legends.
+ */
 function ecBase(){
   const ink="#e2e8f0", muted="#94a3b8", grid="rgba(255,255,255,.07)";
   return {
@@ -69,8 +67,12 @@ const H = {short:240, base:300, tall:380};
 
 /* ------------------------------------------------------- line and area ---- */
 
-/* chMonthly — reads D.monthly directly and ignores the filters, exactly as the
-   desktop does. The selected month is marked, not filtered to. */
+/**
+ * Builds a monthly sales chart for data from January 2025 onward.
+ * @param {Object} D - Dashboard data containing monthly sales records.
+ * @param {Object} filters - Filter state used to mark the selected month.
+ * @return {Object} The chart option, or EMPTY when no monthly records are available.
+ */
 function monthly(D, filters){
   const rows = (D.monthly||[]).filter(m => m.month >= "2025-01");
   if(!rows.length) return EMPTY;
@@ -112,7 +114,11 @@ function daily(X){
     ]};
 }
 
-/* chVariance — month-over-month delta, diverging. Reads D.monthly, unfiltered. */
+/**
+ * Displays month-over-month sales changes from July 2025 onward.
+ * @param {Object} D - Dashboard data containing monthly sales records.
+ * @returns {Object} A diverging bar chart option, or `EMPTY` when fewer than two monthly records are available.
+ */
 function variance(D){
   const rows = (D.monthly||[]).filter(m => m.month >= "2025-07");
   if(rows.length < 2) return EMPTY;
@@ -129,8 +135,12 @@ function variance(D){
 
 /* -------------------------------------------------------------- bars ------ */
 
-/* chTopCustomers / chTopProducts. `n` defaults lower than the desktop's 20 —
-   20 horizontal bars at 390 px are 14 px apart and unreadable. */
+/**
+ * Builds a horizontal bar chart of the highest-selling customers.
+ * @param {Object} X - Dashboard data containing customer sales records.
+ * @param {number} [n=12] - Maximum number of customers to display.
+ * @return {Object} A chart option object, or an empty-chart marker when no customers are available.
+ */
 function topCustomers(X, n){
   const cs = [...X.customers].sort((a,b2)=>b2.sales-a.sales).slice(0, n||12).reverse();
   if(!cs.length) return EMPTY;
@@ -147,6 +157,12 @@ function topCustomers(X, n){
   };
 }
 
+/**
+ * Creates a horizontal bar chart of the top products by sales.
+ * @param {Object} X - Dataset containing product sales data.
+ * @param {number} n - Maximum number of products to include.
+ * @return {Object} ECharts options with product sales data and item codes.
+ */
 function topProducts(X, n){
   const ps = X.products.slice(0, n||12).reverse();
   if(!ps.length) return EMPTY;
@@ -163,7 +179,11 @@ function topProducts(X, n){
   };
 }
 
-/* chByRep — receivables stacked current vs overdue. */
+/**
+ * Summarize current and overdue receivables by representative.
+ * @param {Object} X - Dataset containing receivables records.
+ * @returns {Object} A stacked horizontal bar chart option, or `EMPTY` when no receivables exist.
+ */
 function byRep(X){
   const reps = [...X.recv.reduce((m,r)=>{ const o=m.get(r.rep)||{c:0,o:0};
       o.c+=r.current; o.o+=r.overdue; m.set(r.rep,o); return m; }, new Map())]
@@ -188,7 +208,12 @@ function byRep(X){
   };
 }
 
-/* chAgingBar */
+/**
+ * Display receivables grouped by aging bucket.
+ * @param {Object} X - Chart data containing receivable bucket totals.
+ * @param {Object} D - Dashboard data containing localized bucket labels.
+ * @return {Object} The ECharts option object, or an empty-chart marker when all buckets are empty.
+ */
 function agingBar(X, D){
   const bk = X.buckets, lab = (D.receivables&&D.receivables.bucket_labels)||{};
   if(!AGING_KEYS.some(k=>bk[k])) return EMPTY;
@@ -205,7 +230,11 @@ function agingBar(X, D){
   };
 }
 
-/* chBonusDist */
+/**
+ * Display the distribution of customers across bonus percentage tiers.
+ * @param {Object} X - Dashboard data containing customer records.
+ * @returns {Object} An ECharts option object, or `EMPTY` when all tier counts are zero.
+ */
 function bonusDist(X){
   const tiers = {0:0,1:0,2:0,3:0,5:0};
   X.customers.forEach(c => { const t = Math.round(c.bonus_pct*100); if(tiers[t]!=null) tiers[t]++; });
@@ -224,7 +253,12 @@ function bonusDist(X){
 
 /* ----------------------------------------------------------- waterfall ---- */
 
-/* chAgingWaterfall — transparent-base stacked bar, as the desktop does it. */
+/**
+ * Build a stacked waterfall chart for receivables aging buckets.
+ * @param {Object} X - Receivables data containing aging bucket totals.
+ * @param {Object} D - Display data containing localized bucket labels.
+ * @return {Object} The ECharts option, or an empty-chart marker when all buckets are empty.
+ */
 function agingWaterfall(X, D){
   const bk = X.buckets, lab = (D.receivables&&D.receivables.bucket_labels)||{};
   if(!AGING_KEYS.some(k=>bk[k])) return EMPTY;
@@ -244,7 +278,11 @@ function agingWaterfall(X, D){
     ]};
 }
 
-/* chWaterfall — sales bridge by brand contribution. */
+/**
+ * Build a waterfall chart showing sales contributions by brand.
+ * @param {Object} X - Dataset containing sales line items.
+ * @returns {Object|string} The ECharts option object, or the empty-chart marker when no brand totals exist.
+ */
 function salesWaterfall(X){
   const bm = [...groupSum(X.lines,"brand","line_total")].sort((a,c)=>c[1]-a[1]);
   if(!bm.length) return EMPTY;
@@ -268,8 +306,11 @@ function salesWaterfall(X){
 
 /* ------------------------------------------------------------- pareto ----- */
 
-/* chPareto — every customer, bar + cumulative % on a second axis, 80% marker.
-   The x labels are hidden on the desktop too, so nothing is lost on mobile. */
+/**
+ * Build a Pareto chart of customer sales and cumulative percentages.
+ * @param {Object} X - Dataset containing customer sales records.
+ * @return {Object} Chart options, or the empty-chart marker when no customers are available.
+ */
 function pareto(X){
   const cs = [...X.customers].sort((a,b2)=>b2.sales-a.sales);
   if(!cs.length) return EMPTY;
@@ -301,7 +342,12 @@ function pareto(X){
   };
 }
 
-/* -------------------------------------------------------------- donut ----- */
+/**
+ * Creates a labeled donut chart from positive-value entries.
+ * @param {Array} pairs - Entries containing a label, value, and optional color.
+ * @param {Function} [fmt] - Formatter for tooltip values.
+ * @returns {Object|string} The donut chart options, or `EMPTY` when no positive entries exist.
+ */
 
 function donut(pairs, fmt){
   const rows = (pairs||[]).filter(p => p[1] > 0);
@@ -322,7 +368,12 @@ function donut(pairs, fmt){
   };
 }
 
-/* -------------------------------------------------------------- gauge ----- */
+/**
+ * Create a collection-rate gauge chart.
+ * @param {number} rate - The collection rate as a decimal fraction.
+ * @param {string} [label] - Optional label displayed beneath the gauge.
+ * @return {Object} The ECharts gauge option.
+ */
 
 function gauge(rate, label){
   const b = ecBase();
@@ -343,7 +394,11 @@ function gauge(rate, label){
 
 /* ------------------------------------------------------------ treemap ----- */
 
-/* chTreemap — brand -> item, tap to zoom into a brand. */
+/**
+ * Build a zoomable treemap of sales totals grouped by brand and item.
+ * @param {Object} X - Dataset containing invoice line data.
+ * @returns {Object} The ECharts treemap options, or `EMPTY` when no brand data exists.
+ */
 function treemap(X){
   const brands = new Map();
   X.lines.forEach(l => {
@@ -371,10 +426,11 @@ function treemap(X){
 
 /* ------------------------------------------------------------ boxplot ----- */
 
-/* chBox — MOBILE CHANGE: top 6 items instead of 10, drawn horizontally. The
-   desktop rotates 10 category labels 35 degrees, which at 390 px overlaps into
-   an unreadable stripe. Quantiles keep the source's nearest-rank method so the
-   figures match the desktop exactly. */
+/**
+ * Creates a horizontal boxplot of unit prices for up to six products.
+ * @param {Object} X - Dataset containing product price histories.
+ * @return {Object} A chart configuration, or an empty-chart marker when no product has at least three prices.
+ */
 function priceBox(X){
   const items = X.products.filter(p => p.prices && p.prices.length >= 3).slice(0, 6);
   if(!items.length) return EMPTY;
@@ -400,7 +456,11 @@ function priceBox(X){
 
 /* ------------------------------------------------------------ scatter ----- */
 
-/* chScatter — sales vs outstanding, radius by sales, colour by collection rate. */
+/**
+ * Compare customer sales with outstanding balances.
+ * @param {Object} X - Dataset containing customer sales, balances, collection rates, and identifiers.
+ * @return {Object} An ECharts scatter-plot option, or `EMPTY` when no customers have outstanding balances.
+ */
 function scatter(X){
   const pts = X.customers.filter(c => c.outstanding != null)
     .map(c => [Math.round(c.sales), Math.round(c.outstanding), c.customer_name,
@@ -423,7 +483,11 @@ function scatter(X){
   };
 }
 
-/* -------------------------------------------------------------- radar ----- */
+/**
+ * Build a radar chart comparing the top customers across sales, invoices, items, units, and collection rate.
+ * @param {Object} X - Dashboard data containing customer metrics.
+ * @return {Object} An ECharts option object, or an empty-chart marker when no customers are available.
+ */
 
 function radar(X){
   /* MOBILE CHANGE: 4 series instead of the desktop's 5. Five long Arabic names
@@ -455,7 +519,11 @@ function radar(X){
 
 /* ----------------------------------------------------------- sunburst ----- */
 
-/* chSunburst — rep -> item, restricted to the top 8 items, exactly as desktop. */
+/**
+ * Build a sunburst chart showing sales by representative and item for the top eight products.
+ * @param {Object} X - Dataset containing product and invoice-line records.
+ * @returns {Object} An ECharts option object, or `EMPTY` when no matching representative data exists.
+ */
 function sunburst(X){
   const top = X.products.slice(0,8).map(p=>p.item_code);
   const reps = new Map();
@@ -479,10 +547,11 @@ function sunburst(X){
 
 /* ------------------------------------------------------------- sankey ----- */
 
-/* chSankey — MOBILE CHANGE: top 5 customers x 5 items instead of 8x8, and the
-   flow runs vertically. A 16-node horizontal sankey at 390 px collapses its
-   labels into overlapping slivers; 10 nodes top-to-bottom stays legible.
-   Matching is by NAME, as in the source (duplicate names would merge). */
+/**
+ * Build a vertical Sankey chart showing flows between the highest-selling customers and products.
+ * @param {Object} X - Dataset containing customers, products, and invoice lines.
+ * @return {Object} An ECharts option object, or `EMPTY` when no positive flows exist.
+ */
 function sankey(X){
   const topC = [...X.customers].sort((a,c)=>c.sales-a.sales).slice(0,5).map(c=>c.customer_name);
   const topP = X.products.slice(0,5).map(p=>p.item_name);
@@ -513,7 +582,11 @@ function sankey(X){
 
 /* ------------------------------------------------------------ heatmap ----- */
 
-/* chHeatmap — rep x brand matrix. */
+/**
+ * Builds a representative-by-brand sales heatmap.
+ * @param {Object} X - Dataset containing invoice line records.
+ * @returns {Object} An ECharts heatmap option, or `EMPTY` when representatives or brands are unavailable.
+ */
 function heatmap(X){
   const reps = [...new Set(X.lines.map(l=>l.rep))];
   const brands = [...new Set(X.lines.map(l=>l.brand))];
@@ -544,8 +617,11 @@ function heatmap(X){
 
 /* ---------------------------------------------------------- histogram ----- */
 
-/* chHistogram — the desktop's only Plotly chart. Binned here by hand so the
-   4.7 MB Plotly bundle is not shipped. Same input set, same 30 bins. */
+/**
+ * Builds a 30-bin invoice-value histogram.
+ * @param {Object} X - Dataset containing invoice records.
+ * @returns {Object} An ECharts histogram option, or `EMPTY` when fewer than two positive invoice totals exist.
+ */
 function histogram(X){
   const vals = X.invoices.filter(v => v.reported_total > 0).map(v => v.reported_total);
   if(vals.length < 2) return EMPTY;
@@ -570,7 +646,12 @@ function histogram(X){
 
 /* ---------------------------------------------- collections-only charts --- */
 
-/* co_monthly — sales vs collections vs returns, full 2026, month-invariant. */
+/**
+ * Build a monthly chart comparing sales, collections, and returns for 2026.
+ * @param {Object} D - Dashboard data containing invoices and monthly collections.
+ * @param {Object} filters - Filter state used to mark the selected month.
+ * @return {Object} An ECharts option object, or `EMPTY` when no monthly data exists.
+ */
 function collectionsMonthly(D, filters){
   const bmonth = groupSum((D.invoices||[]).filter(v=>v.month>="2026-01"), "month", "reported_total");
   const cmonth = new Map(), rmonth = new Map();
@@ -601,7 +682,12 @@ function collectionsMonthly(D, filters){
     ]};
 }
 
-/* co_rep — collections vs returns by rep, top 12 by collected. */
+/**
+ * Compare collections and returns by representative.
+ * @param {Object} D - Dashboard data containing collection receipts and returns.
+ * @param {Object} filters - Optional month, representative, and customer filters.
+ * @return {Object} A horizontal bar chart option for up to 12 representatives, or an empty chart marker when no data is available.
+ */
 function collectionsByRep(D, filters){
   const f = filters, mAll = !f.month || f.month === "all";
   const flt = r => (mAll || r.month===f.month) && (!f.rep || r.rep===f.rep)
@@ -628,7 +714,11 @@ function collectionsByRep(D, filters){
     ]};
 }
 
-/* co_bottom — worst 15 collection rates, RAG at 0.9 / 0.7. */
+/**
+ * Build a horizontal bar chart showing customers with the lowest collection rates.
+ * @param {Object} X - Dataset containing customer collection-rate records.
+ * @returns {Object|string} A chart option object with customer codes for drill-down, or the empty-chart marker when no customers have collection rates.
+ */
 function worstCollectors(X){
   const bottom = X.customers.filter(c => c.collection_rate != null)
     .sort((a,c)=>a.collection_rate-c.collection_rate).slice(0,15).reverse();
@@ -650,8 +740,12 @@ function worstCollectors(X){
 
 /* ------------------------------------------------- AR movement (new) ------ */
 
-/* Not a desktop chart: the desktop only ever holds ONE snapshot, so it cannot
-   compare two. Given two payloads it diffs the AR ledger per customer. */
+/**
+ * Compares receivables snapshots and summarizes customer-level account movements.
+ * @param {Object} Dfrom - Earlier receivables snapshot.
+ * @param {Object} Dto - Later receivables snapshot.
+ * @return {Object} Customer movement rows, receivables totals, movement counts and deltas, and the reconciliation difference.
+ */
 function arMovement(Dfrom, Dto){
   const a = new Map(((Dfrom.receivables&&Dfrom.receivables.rows)||[])
     .map(r=>[String(r.customer_code), r]));
@@ -683,6 +777,11 @@ function arMovement(Dfrom, Dto){
           reconDelta: rows.reduce((s,r)=>s+r.delta, 0) - (totTo-totFrom)};
 }
 
+/**
+ * Build a horizontal bar chart of the largest accounts receivable movements.
+ * @param {Object} mv - Receivables movement data containing customer movement rows.
+ * @return {Object} An ECharts option object, or `EMPTY` when no movement rows exist.
+ */
 function arMovementChart(mv){
   if(!mv.rows.length) return EMPTY;
   const top = mv.rows.slice(0,12).reverse();

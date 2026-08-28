@@ -39,15 +39,23 @@ const arMonth = m => {
   return AR[parseInt(p[1],10)-1]+" "+p[0];
 };
 
-/* The reliable window as a human phrase, e.g. "مارس – يونيو 2026". */
+/**
+ * Formats the reliable month window as an Arabic month label or range.
+ * @param {Object} d - Dashboard data containing the reliable months.
+ * @return {string} The formatted month label, range, or `—` when no reliable months are available.
+ */
 function windowLabel(d){
   const r=(d.meta.reliable_months||[]).slice().sort();
   if(!r.length) return "—";
   return r.length===1 ? arMonth(r[0]) : arMonth(r[0])+" – "+arMonth(r[r.length-1]);
 }
 
-/* Colour a margin against the measured month, which is the only benchmark the
-   data actually supports. */
+/**
+ * Assigns a display color to a margin based on the measured-month benchmark.
+ * @param {number|null} pct - The margin percentage to classify.
+ * @param {number|null} ref - The measured-month margin percentage used as the benchmark.
+ * @return {string} The display color for the margin.
+ */
 function marginColour(pct, ref){
   if(pct==null) return MUTED;
   if(ref==null) return OK;
@@ -58,8 +66,11 @@ function marginColour(pct, ref){
 
 /* ------------------------------------------------------------------- KPIs -- */
 
-/* Headline: the reliable window (measured June + the indicative months that
-   pass the gate). This is the widest span the data can honestly support. */
+/**
+ * Builds KPI rows for the measured period and approved indicative months.
+ * @param {Object} d - Profitability data containing totals and metadata.
+ * @return {Array} KPI rows with labels, formatted values, contextual descriptions, and display colors.
+ */
 function kpisWindow(d, R){
   const m=d.totals.measured||{}, i=d.totals.indicative||{};
   const rev=(m.revenue_costed||0)+(i.revenue_costed||0);
@@ -78,7 +89,11 @@ function kpisWindow(d, R){
   ];
 }
 
-/* The measured month on its own — the row that ties to the income statement. */
+/**
+ * Builds KPI rows for the measured costing month.
+ * @param {Object} d - Dashboard data containing measured totals and the costing month.
+ * @return {Array} KPI rows for measured gross margin, operating margin, gross profit, and operating profit.
+ */
 function kpisMeasured(d, R){
   const m=d.totals.measured||{};
   return [
@@ -91,9 +106,12 @@ function kpisMeasured(d, R){
 
 /* ----------------------------------------------------------------- charts -- */
 
-/* Margin trend across every month. Months that fail the gate are still drawn —
-   hiding them would hide the price step that causes them — but greyed, with the
-   reliable window marked, so nobody reads the 2025 dip as a trading loss. */
+/**
+ * Build the monthly margin and price-index trend chart.
+ * @param {Object} d - Monthly profitability data.
+ * @param {Object} C - Chart configuration and theme helpers.
+ * @return {Object} The chart configuration, or an empty-state marker when monthly data is unavailable.
+ */
 function trend(d, C){
   const rows=(d.by_month||[]).slice().sort((a,b)=>a.month<b.month?-1:1);
   if(!rows.length) return {__empty:true};
@@ -139,8 +157,12 @@ function trend(d, C){
   });
 }
 
-/* Revenue against gross margin, one bubble per item. The quadrant that matters
-   is high revenue with low margin — volume earning little. */
+/**
+ * Builds a revenue-versus-gross-margin bubble chart for costed items.
+ * @param {Object} d - Dashboard data containing item-level profitability records.
+ * @param {Object} C - Chart configuration and theme helpers.
+ * @return {Object} The configured scatter chart, or an empty-state marker when no qualifying items exist.
+ */
 function itemScatter(d, C){
   const rows=(d.by_item||[]).filter(r=>r.gross_margin_pct!=null && r.revenue_costed>0);
   if(!rows.length) return {__empty:true};

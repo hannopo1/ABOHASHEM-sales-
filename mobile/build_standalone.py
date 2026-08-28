@@ -167,13 +167,18 @@ def build() -> Path:
                      + safe_js(payload) + "</script>")
 
     # --- app modules -------------------------------------------------------
-    mods = [read(SRC / m) for m in MODULES if (SRC / m).exists()]
+    # No .exists() filter: MODULES is the required load order, so a renamed or
+    # deleted module must stop the build. Skipping it produced a bundle that
+    # loaded cleanly and then failed at runtime, with nothing printed.
+    mods = [read(SRC / m) for m in MODULES]
     parts.append("<script>\n" + safe_js("\n".join(mods)) + "\n</script>")
 
     head = (
         '<!DOCTYPE html>\n<html dir="rtl" lang="ar">\n<head>\n<meta charset="utf-8">\n'
+        # No maximum-scale: several Arabic labels render at 9-11px and
+        # blocking pinch zoom leaves a low-vision reader no way to enlarge them.
         '<meta name="viewport" content="width=device-width, initial-scale=1, '
-        'maximum-scale=1, viewport-fit=cover">\n'
+        'viewport-fit=cover">\n'
         f"<title>{TITLE}</title>\n"
         + head_meta()
         + f"<style>\n{font_css()}\n{read_css(SRC / 'app.css')}</style>\n</head>\n"

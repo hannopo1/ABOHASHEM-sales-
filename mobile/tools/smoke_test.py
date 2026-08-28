@@ -7,7 +7,7 @@ Loads the file over file:// exactly as a phone would. The app carries two
 independent datasets and switches between them, so both are exercised:
 
   تفصيلي   window.DASH      — the AR snapshots (11 sections)
-  18 شهرًا  window.DASH_DATA — the repo's precomputed aggregates (9 sections)
+  18 شهرًا  window.DASH_DATA — the repo's precomputed aggregates (10 sections)
 
 Fails on any JS error, any section that renders empty, or any section missing
 from the nav — so a broken build cannot pass silently.

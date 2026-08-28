@@ -227,7 +227,7 @@ function trend(d, C){
 
 /* Revenue against gross margin, one bubble per item. The quadrant that matters
    is high revenue with low margin — volume earning little. */
-function itemScatter(d, C){
+function itemScatter(d, C, R){
   const rows=(d.by_item||[]).filter(r=>r.gross_margin_pct!=null && r.revenue_costed>0);
   if(!rows.length) return {__empty:true};
   const b=C.ecBase();

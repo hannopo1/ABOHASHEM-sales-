@@ -37,7 +37,10 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 
 def run(path: Path) -> int:
     with sync_playwright() as pw:
-        b = pw.chromium.launch(executable_path=CHROMIUM)
+        # Same fallback as smoke_test.py: the pinned path is this image's
+        # Chromium, and hard-coding it fails a machine that has its own.
+        kw = {"executable_path": CHROMIUM} if Path(CHROMIUM).exists() else {}
+        b = pw.chromium.launch(**kw)
         page = b.new_page(viewport={"width": 390, "height": 844})
         errs: list[str] = []
         page.on("pageerror", lambda e: errs.append(str(e)))

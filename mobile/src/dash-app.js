@@ -1257,7 +1257,7 @@ class App extends React.Component {
         this.barsH(M.bars(d.by_rep||[],"rep",R,(d.totals.measured||{}).gross_margin_pct),
                    v=>R.fmtPct(v)),
         {k:"mrp",sub:win,approx:true}),
-      this.chartCard("الإيراد مقابل الهامش لكل صنف",M.itemScatter(d,C),
+      this.chartCard("الإيراد مقابل الهامش لكل صنف",M.itemScatter(d,C,R),
         {k:"mis",h:C.H.tall,approx:true,
          sub:"أفقي: الإيراد · رأسي: هامش مجمل · حجم الفقاعة: الإيراد · "+win}),
       this.card("أصناف سعرها الفعلي دون السعر الموصى به",

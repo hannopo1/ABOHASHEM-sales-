@@ -144,3 +144,53 @@ def test_pricing_gap_rows_are_actually_under_priced(dash):
 def test_caveats_travel_with_the_figures(summary, dash):
     assert summary["caveats"], "figures must not ship without their caveats"
     assert dash["caveats"] == summary["caveats"]
+
+
+def test_measured_month_is_net_of_returns(summary):
+    """The measured basis must reproduce the June income statement.
+
+    It did not, once: cost was charged against GROSS invoice revenue while the
+    costing model and the statement both net returns off revenue and charge
+    cost for the whole quantity shipped. Every reconciliation check still
+    passed — they only prove the model ties to the invoices, not what the join
+    then does with the revenue — and the app reported a 14.08% operating margin
+    for a month whose own statement says 11.19%.
+
+    The gap was exactly the returns, 125,718.79, in revenue and in profit
+    alike. These are the figures the statement states.
+    """
+    m = summary["measured"]
+    assert abs(m["revenue_costed"] - 3_741_772.00) < TOL
+    assert abs(m["gross_profit"] - 1_701_838.92) < TOL
+    assert abs(m["op_profit"] - 418_841.92) < TOL
+    assert abs(m["gross_margin_pct"] - 45.48) < 0.01
+    assert abs(m["op_margin_pct"] - 11.19) < 0.01
+
+
+def test_the_two_profitability_levels_agree_on_the_cost_month(dash):
+    """June is the one month both levels measure, so they must match there.
+
+    Level 1 comes from the income statements, level 2 from the invoices joined
+    to the costing model. The app shows them one above the other; if they ever
+    disagreed about the same month, a reader would see two different margins
+    for June on one screen and have no way to tell which to believe.
+    """
+    st = dash.get("statements")
+    if not st:
+        pytest.skip("statements absent — run analysis/14_income_statements.py")
+    june = next(r for r in st["by_month"] if r["period"] == "2026-06")
+    meas = dash["totals"]["measured"]
+    assert abs(june["gross_margin_pct"] - meas["gross_margin_pct"]) < PCT_TOL
+    assert abs(june["net_sales"] - meas["revenue_costed"]) < TOL
+    assert abs(june["net_profit"] - meas["op_profit"]) < TOL
+
+
+def test_reconciliation_checks_quantities_per_item(summary):
+    """A total-only check passes when two items have swapped quantities.
+
+    Every cost in the join is computed from the individual SKU quantity, so an
+    aggregate match is not enough to make the margins right.
+    """
+    checks = summary["reconciliation"]["checks"]
+    assert checks["june_qty_matches_invoices_per_item"] is True
+    assert summary["reconciliation"]["qty_mismatched_items"] == []

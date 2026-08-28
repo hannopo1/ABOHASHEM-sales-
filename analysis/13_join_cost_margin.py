@@ -112,6 +112,12 @@ def unit_costs(cost_rows: dict) -> pd.DataFrame:
             "conv_unit": r["conv_alloc"] / q,
             "opex_unit": r["opex_alloc"] / q,
             "full_unit": r["full_loaded_total"] / q,
+            # The model books returns per SKU and nets them off revenue while
+            # charging cost for the full quantity shipped — that is how its
+            # figures tie to the income statement. The join has to do the same,
+            # so the rate travels with the unit costs.
+            "june_return_rate": ((r.get("returns") or 0.0) / r["gross_revenue"]
+                                 if r.get("gross_revenue") else 0.0),
             "june_avg_price": r.get("avg_price"),
             "list_price": r.get("list_price"),
             "rec_price": r.get("rec_price"),
@@ -170,6 +176,18 @@ def reconcile(cost_rows: dict, tx: pd.DataFrame) -> dict:
     codes = {str(c).strip() for c in cost_rows}
     jc = june[june["item_code"].isin(codes)]
 
+    # Per-SKU, not just the total. Two items with swapped quantities sum to the
+    # same grand total and would sail through an aggregate check, while every
+    # cost in build() is computed from the individual quantity — so the totals
+    # would agree and the margins would still be wrong.
+    model_qty = {str(c).strip(): float(r.get("qty") or 0.0)
+                 for c, r in cost_rows.items() if (r.get("qty") or 0) > 0}
+    inv_qty = jc.groupby("item_code")["qty"].sum().to_dict()
+    qty_mismatches = sorted(
+        code for code in set(model_qty) | set(inv_qty)
+        if abs(model_qty.get(code, 0.0) - float(inv_qty.get(code, 0.0)))
+        >= RECON_TOL)
+
     checks = {
         "model_net_profit_ties_to_statement": abs(
             tot["revenue"] - tot["act_mat_total"] - tot["conv_alloc"]
@@ -178,11 +196,13 @@ def reconcile(cost_rows: dict, tx: pd.DataFrame) -> dict:
             tot["revenue"] - STATEMENT["revenue_net"]) < RECON_TOL,
         "june_qty_matches_invoices": abs(
             tot["qty"] - float(jc["qty"].sum())) < RECON_TOL,
+        "june_qty_matches_invoices_per_item": not qty_mismatches,
         "june_gross_revenue_matches_invoices": abs(
             tot["gross_revenue"] - float(jc["line_total"].sum())) < RECON_TOL,
     }
     return {
         "checks": checks,
+        "qty_mismatched_items": qty_mismatches,
         "all_passed": all(checks.values()),
         "model_totals": tot,
         "june_invoice_qty": float(jc["qty"].sum()),
@@ -201,9 +221,28 @@ def build(tx: pd.DataFrame, u: pd.DataFrame, pidx: pd.DataFrame) -> pd.DataFrame
         # NaN, not 0, where there is no cost row: an uncosted item must never
         # look like a free one.
         j[col] = j["qty"] * j[unit]
-    j["gross_profit"] = j["line_total"] - j["cogs"]
-    j["op_profit"] = j["line_total"] - j["full_cost"]
     j["basis"] = np.where(j["month"] == COST_MONTH, "measured", "indicative")
+
+    # REVENUE BASIS — the measured month is net of returns, the rest is not.
+    #
+    # The costing model nets each SKU's returns off its revenue but charges
+    # cost for the whole quantity shipped; that is precisely how it reconciles
+    # to the June income statement (net sales 3,741,772.00, net profit
+    # 418,841.92). Charging that same cost against GROSS invoice revenue
+    # overstated June by exactly the returns — 125,718.79 on both revenue and
+    # profit — and put 47.25%/14.08% in front of a reader whose own income
+    # statement says 45.48%/11.19%.
+    #
+    # Outside June there is no per-SKU return detail, so those months stay on
+    # gross revenue and remain overstated by roughly the return rate. That was
+    # already true, is reported in margin_summary.json, and is one more reason
+    # the indicative basis is not quotable.
+    j["net_revenue"] = np.where(
+        j["basis"] == "measured",
+        j["line_total"] * (1 - j["june_return_rate"].fillna(0.0)),
+        j["line_total"])
+    j["gross_profit"] = j["net_revenue"] - j["cogs"]
+    j["op_profit"] = j["net_revenue"] - j["full_cost"]
     # The cost month is measured, so the gate only governs the other months.
     j["reliable"] = (j["basis"] == "measured") | j["indicative_reliable"].fillna(False)
     return j
@@ -219,12 +258,16 @@ def agg(j: pd.DataFrame, keys: list[str], reliable_only: bool = True) -> pd.Data
     src = j[j["reliable"]] if reliable_only else j
     c = src[src["is_costed"]]
     g = c.groupby(keys, dropna=False).agg(
-        revenue_costed=("line_total", "sum"), qty=("qty", "sum"),
+        # net_revenue, not line_total: a margin percentage whose denominator
+        # is gross while its numerator is net is wrong in both directions.
+        revenue_costed=("net_revenue", "sum"), qty=("qty", "sum"),
         cogs=("cogs", "sum"), conv_cost=("conv_cost", "sum"),
         opex_cost=("opex_cost", "sum"), full_cost=("full_cost", "sum"),
         gross_profit=("gross_profit", "sum"), op_profit=("op_profit", "sum"),
         n_lines=("qty", "size"))
-    allr = src.groupby(keys, dropna=False).agg(revenue_total=("line_total", "sum"))
+    # Same basis as revenue_costed, so revenue_uncosted stays exactly the
+    # revenue with no cost row rather than absorbing a returns difference.
+    allr = src.groupby(keys, dropna=False).agg(revenue_total=("net_revenue", "sum"))
     out = g.join(allr, how="outer").reset_index()
     out["revenue_uncosted"] = (out["revenue_total"] - out["revenue_costed"]).round(2)
     # Margins are stated against COSTED revenue only — the denominator the
@@ -328,6 +371,24 @@ def main() -> None:
 
     j = build(tx, u, pidx)
 
+    # The join's own measured month must reproduce the income statement. The
+    # four checks above only prove the model ties to the invoices; they say
+    # nothing about what build() then does with the revenue. Charging June cost
+    # against gross invoice revenue passed every one of them while reporting a
+    # 14.08% operating margin for a month whose statement says 11.19%. This is
+    # the check that catches that class of error.
+    meas = j[j["basis"] == "measured"]
+    for label, got, want in (
+            ("measured revenue", float(meas["net_revenue"].sum()),
+             STATEMENT["revenue_net"]),
+            ("measured operating profit", float(meas["op_profit"].sum()),
+             STATEMENT["net_profit"])):
+        if abs(got - want) >= RECON_TOL:
+            raise SystemExit(
+                f"\n{label} is {got:,.2f} but the {COST_MONTH} income "
+                f"statement says {want:,.2f} — refusing to emit margin figures")
+    print("  PASS  measured_month_reproduces_the_income_statement")
+
     by_month = (agg(j, ["month", "basis"], reliable_only=False)
                 .merge(pidx, on="month", how="left").sort_values("month"))
 
@@ -350,7 +411,9 @@ def main() -> None:
                       ["line_total"].sum().sort_values(ascending=False))
 
     def block(d: pd.DataFrame) -> dict:
-        rev = float(d["line_total"].sum())
+        # net_revenue, matching agg(): the measured month is net of returns and
+        # its margin percentages have to be taken against that same figure.
+        rev = float(d["net_revenue"].sum())
         return {"revenue_costed": rev, "qty": float(d["qty"].sum()),
                 "cogs": float(d["cogs"].sum()),
                 "gross_profit": float(d["gross_profit"].sum()),

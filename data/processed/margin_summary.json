@@ -138,15 +138,15 @@
   },
   "measured": {
     "cogs": 2039933.0800715,
-    "gross_margin_pct": 47.25435196003401,
-    "gross_profit": 1827557.7099284998,
+    "gross_margin_pct": 45.482165135597135,
+    "gross_profit": 1701838.9201285,
     "months": [
       "2026-06"
     ],
-    "op_margin_pct": 14.08046558787022,
-    "op_profit": 544560.7098000001,
+    "op_margin_pct": 11.193678288725573,
+    "op_profit": 418841.92000000004,
     "qty": 62786.5,
-    "revenue_costed": 3867490.79
+    "revenue_costed": 3741772.0002
   },
   "price_drift": {
     "basis": "Laspeyres, June-2026 quantities as fixed weights, cost month = 100",
@@ -307,6 +307,7 @@
     "checks": {
       "june_gross_revenue_matches_invoices": true,
       "june_qty_matches_invoices": true,
+      "june_qty_matches_invoices_per_item": true,
       "model_net_profit_ties_to_statement": true,
       "model_revenue_ties_to_statement": true
     },
@@ -322,7 +323,8 @@
       "qty": 62786.5,
       "returns": 125718.78979999998,
       "revenue": 3741772.0001999997
-    }
+    },
+    "qty_mismatched_items": []
   },
   "statements": {
     "by_month": [

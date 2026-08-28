@@ -27,6 +27,20 @@ STRICT = "--strict" in sys.argv       # fail on any runtime-code drift
 fails: list[str] = []
 
 
+def one(blocks, pred, what: str):
+    """The single script block matching pred, or a named failure.
+
+    A bare next() raises StopIteration with no message when a block the tool
+    expects is absent, which turns a legible "this file is not what I thought"
+    into an unexplained traceback.
+    """
+    hit = next((b for i, b in blocks if pred(i, b)), None)
+    if hit is None:
+        check(f"file carries the {what} block", False, "no such script block")
+        raise SystemExit(1)
+    return hit
+
+
 def check(name: str, ok: bool, detail: str = "") -> None:
     print(f"  {'PASS' if ok else 'FAIL'}  {name}{('  — ' + detail) if detail else ''}")
     if not ok:
@@ -63,7 +77,8 @@ def main(shipped_path: str) -> int:
              "dash-margin.js", "dash-charts.js", "dash-export.js", "dash-app.js"]
     mods = [(src / m).read_text(encoding="utf-8") for m in order if (src / m).exists()]
     rebuilt_rt = "\n".join(mods)
-    orig_rt = next(b for i, b in sb if not i and "const T = (function()" in b)
+    orig_rt = one(sb, lambda i, b: not i and "const T = (function()" in b,
+                  "app runtime")
 
     def code_lines(txt):
         out, in_block = [], False
@@ -84,10 +99,15 @@ def main(shipped_path: str) -> int:
             out.append(t)
         return out
 
+    # One set, built once: the comprehension below rebuilt it per element,
+    # which is quadratic over a runtime this size. And `added` is counted from
+    # unique lines like `kept`, so a line the rebuild repeats — a bare brace,
+    # say — no longer inflates the figure.
     o, r = code_lines(orig_rt), code_lines(rebuilt_rt)
-    kept = len(set(o) & set(r))
-    dropped = [x for x in o if x not in set(r)]
-    added = len(r) - kept
+    o_set, r_set = set(o), set(r)
+    kept = len(o_set & r_set)
+    dropped = [x for x in o if x not in r_set]
+    added = len(r_set - o_set)
 
     # This was the acceptance gate for the extraction: at that point the two had
     # to match line for line. The app has since grown features, so the ongoing
@@ -108,8 +128,10 @@ def main(shipped_path: str) -> int:
             print(f"        … and {len(dropped) - 10} more")
 
     # 2. window.DASH_DATA -----------------------------------------------------
-    a = js_payload(next(b for i, b in sb if not i and "window.DASH_DATA" in b), "window.DASH_DATA")
-    b_ = js_payload(next(b for i, b in bb if not i and "window.DASH_DATA" in b), "window.DASH_DATA")
+    a = js_payload(one(sb, lambda i, b: not i and "window.DASH_DATA" in b,
+                       "shipped window.DASH_DATA"), "window.DASH_DATA")
+    b_ = js_payload(one(bb, lambda i, b: not i and "window.DASH_DATA" in b,
+                        "rebuilt window.DASH_DATA"), "window.DASH_DATA")
     check("window.DASH_DATA payload identical", a == b_, f"{len(a)} top-level keys")
 
     # 3. snapshots ------------------------------------------------------------
@@ -121,8 +143,8 @@ def main(shipped_path: str) -> int:
     for k in sorted(set(sa) & set(sbn)):
         check(f"snapshot {k[5:]} payload identical", sa[k] == sbn[k],
               f"as_of={sa[k]['meta']['as_of']}")
-    ia = next(b for i, b in sb if i == "snap-index")
-    ib = next(b for i, b in bb if i == "snap-index")
+    ia = one(sb, lambda i, b: i == "snap-index", "shipped snapshot index")
+    ib = one(bb, lambda i, b: i == "snap-index", "rebuilt snapshot index")
     check("snapshot index identical", json.loads(ia) == json.loads(ib))
 
     # 4. vendor libraries -----------------------------------------------------

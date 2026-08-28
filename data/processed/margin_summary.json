@@ -1,39 +1,24 @@
 {
+  "caveats": [
+    "المقيس: يونيو 2026 فقط — تكلفة مرصودة، مطابقة لقائمة الدخل.",
+    "بوابة انحراف الأسعار: تُستبعد الشهور التي تبعد أسعارها عن شهر التكلفة بأكثر من 10%. الأسعار كانت أدنى من يونيو 2026 بنحو 15% حتى فبراير 2026 ثم ارتفعت في مارس–أبريل 2026؛ احتساب تكلفة يونيو على أسعار ما قبل الزيادة يُظهر هامشًا تشغيليًا سالبًا طوال 2025 وهو أثر منهجي لا واقعة تاريخية. لذلك لا يمتد الهامش الموثوق قبل مارس 2026.",
+    "التقديري: تكلفة وحدة يونيو 2026 مطبَّقة على كميات شهور أخرى. تقدير لا قياس.",
+    "إيراد الشهور غير يونيو إجمالي (قبل المرتجعات)؛ لا توجد مرتجعات لكل صنف خارج يونيو. نسبة المرتجعات في يونيو 3.25% من الإجمالي، ولذلك الهامش التقديري أعلى من الواقع بهذا القدر تقريبًا.",
+    "الأصناف بلا تكلفة لا تُحتسب لها تكلفة صفرية؛ إيرادها يُعرض منفصلًا وكل نسبة هامش محسوبة على الإيراد المُسعَّر فقط."
+  ],
   "cost_month": "2026-06",
   "cost_source": {
-    "repo": "hannopo1/Abohashem",
     "path": "model/model_rows.json",
+    "repo": "hannopo1/Abohashem",
     "see": "data/cost/PROVENANCE.md"
   },
-  "reconciliation": {
-    "checks": {
-      "model_net_profit_ties_to_statement": true,
-      "model_revenue_ties_to_statement": true,
-      "june_qty_matches_invoices": true,
-      "june_gross_revenue_matches_invoices": true
-    },
-    "all_passed": true,
-    "model_totals": {
-      "revenue": 3741772.0001999997,
-      "gross_revenue": 3867490.79,
-      "returns": 125718.78979999998,
-      "act_mat_total": 2039933.08,
-      "conv_alloc": 544605.0,
-      "opex_alloc": 738391.9998000001,
-      "full_loaded_total": 3322930.0802,
-      "qty": 62786.5
-    },
-    "june_invoice_qty": 62786.5,
-    "june_invoice_gross_revenue": 3867490.79,
-    "june_return_rate_pct": 3.250655182555715
-  },
   "coverage": {
+    "coverage_pct": 94.12955408995818,
     "n_items_costed": 33,
     "n_items_total": 87,
-    "revenue_total": 57590362.16,
     "revenue_costed": 54209551.1,
+    "revenue_total": 57590362.16,
     "revenue_uncosted": 3380811.0599999996,
-    "coverage_pct": 94.12955408995818,
     "uncosted_items_top": [
       {
         "item_code": "10",
@@ -112,142 +97,186 @@
       }
     ]
   },
+  "indicative": {
+    "cogs": 6403721.560752001,
+    "gross_margin_pct": 44.6562895455783,
+    "gross_profit": 5167099.239248,
+    "months": [
+      "2026-03",
+      "2026-04",
+      "2026-05"
+    ],
+    "op_margin_pct": 10.408133686605806,
+    "op_profit": 1204306.4975015915,
+    "qty": 211236.0,
+    "revenue_costed": 11570820.8
+  },
+  "indicative_excluded": {
+    "cogs": 24263663.644164003,
+    "gross_margin_pct": 37.41839582429176,
+    "gross_profit": 14507575.865835998,
+    "months": [
+      "2025-01",
+      "2025-02",
+      "2025-03",
+      "2025-04",
+      "2025-05",
+      "2025-06",
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02"
+    ],
+    "op_margin_pct": -2.129044516364751,
+    "op_profit": -825456.9487142989,
+    "qty": 854891.0,
+    "revenue_costed": 38771239.510000005
+  },
+  "measured": {
+    "cogs": 2039933.0800715,
+    "gross_margin_pct": 47.25435196003401,
+    "gross_profit": 1827557.7099284998,
+    "months": [
+      "2026-06"
+    ],
+    "op_margin_pct": 14.08046558787022,
+    "op_profit": 544560.7098000001,
+    "qty": 62786.5,
+    "revenue_costed": 3867490.79
+  },
   "price_drift": {
-    "max_drift_pct": 10.0,
     "basis": "Laspeyres, June-2026 quantities as fixed weights, cost month = 100",
     "by_month": [
       {
-        "month": "2025-01",
-        "price_index": 84.27028351384284,
         "cost_period_drift_pct": -15.729716486157159,
+        "indicative_reliable": false,
+        "month": "2025-01",
         "n_skus_in_basket": 18,
-        "indicative_reliable": false
+        "price_index": 84.27028351384284
       },
       {
-        "month": "2025-02",
-        "price_index": 83.92397393390314,
         "cost_period_drift_pct": -16.07602606609686,
+        "indicative_reliable": false,
+        "month": "2025-02",
         "n_skus_in_basket": 18,
-        "indicative_reliable": false
+        "price_index": 83.92397393390314
       },
       {
-        "month": "2025-03",
-        "price_index": 83.88010604233125,
         "cost_period_drift_pct": -16.11989395766875,
+        "indicative_reliable": false,
+        "month": "2025-03",
         "n_skus_in_basket": 18,
-        "indicative_reliable": false
+        "price_index": 83.88010604233125
       },
       {
-        "month": "2025-04",
-        "price_index": 84.6542024559242,
         "cost_period_drift_pct": -15.345797544075793,
+        "indicative_reliable": false,
+        "month": "2025-04",
         "n_skus_in_basket": 19,
-        "indicative_reliable": false
+        "price_index": 84.6542024559242
       },
       {
-        "month": "2025-05",
-        "price_index": 85.23930513273,
         "cost_period_drift_pct": -14.760694867270004,
+        "indicative_reliable": false,
+        "month": "2025-05",
         "n_skus_in_basket": 26,
-        "indicative_reliable": false
+        "price_index": 85.23930513273
       },
       {
-        "month": "2025-06",
-        "price_index": 84.26157653475687,
         "cost_period_drift_pct": -15.73842346524313,
+        "indicative_reliable": false,
+        "month": "2025-06",
         "n_skus_in_basket": 26,
-        "indicative_reliable": false
+        "price_index": 84.26157653475687
       },
       {
-        "month": "2025-07",
-        "price_index": 85.64868091166933,
         "cost_period_drift_pct": -14.35131908833067,
+        "indicative_reliable": false,
+        "month": "2025-07",
         "n_skus_in_basket": 26,
-        "indicative_reliable": false
+        "price_index": 85.64868091166933
       },
       {
-        "month": "2025-08",
-        "price_index": 85.16553562448567,
         "cost_period_drift_pct": -14.83446437551433,
+        "indicative_reliable": false,
+        "month": "2025-08",
         "n_skus_in_basket": 28,
-        "indicative_reliable": false
+        "price_index": 85.16553562448567
       },
       {
-        "month": "2025-09",
-        "price_index": 85.85935138216215,
         "cost_period_drift_pct": -14.140648617837854,
+        "indicative_reliable": false,
+        "month": "2025-09",
         "n_skus_in_basket": 28,
-        "indicative_reliable": false
+        "price_index": 85.85935138216215
       },
       {
-        "month": "2025-10",
-        "price_index": 85.50333933525967,
         "cost_period_drift_pct": -14.496660664740332,
+        "indicative_reliable": false,
+        "month": "2025-10",
         "n_skus_in_basket": 28,
-        "indicative_reliable": false
+        "price_index": 85.50333933525967
       },
       {
-        "month": "2025-11",
-        "price_index": 86.29219875884658,
         "cost_period_drift_pct": -13.707801241153419,
+        "indicative_reliable": false,
+        "month": "2025-11",
         "n_skus_in_basket": 28,
-        "indicative_reliable": false
+        "price_index": 86.29219875884658
       },
       {
-        "month": "2025-12",
-        "price_index": 85.89261927016202,
         "cost_period_drift_pct": -14.107380729837985,
+        "indicative_reliable": false,
+        "month": "2025-12",
         "n_skus_in_basket": 28,
-        "indicative_reliable": false
+        "price_index": 85.89261927016202
       },
       {
-        "month": "2026-01",
-        "price_index": 85.21438136557713,
         "cost_period_drift_pct": -14.785618634422875,
+        "indicative_reliable": false,
+        "month": "2026-01",
         "n_skus_in_basket": 28,
-        "indicative_reliable": false
+        "price_index": 85.21438136557713
       },
       {
-        "month": "2026-02",
-        "price_index": 85.77042703588948,
         "cost_period_drift_pct": -14.229572964110517,
+        "indicative_reliable": false,
+        "month": "2026-02",
         "n_skus_in_basket": 28,
-        "indicative_reliable": false
+        "price_index": 85.77042703588948
       },
       {
-        "month": "2026-03",
-        "price_index": 90.66900162939791,
         "cost_period_drift_pct": -9.330998370602089,
+        "indicative_reliable": true,
+        "month": "2026-03",
         "n_skus_in_basket": 28,
-        "indicative_reliable": true
+        "price_index": 90.66900162939791
       },
       {
-        "month": "2026-04",
-        "price_index": 98.84915917130373,
         "cost_period_drift_pct": -1.1508408286962748,
+        "indicative_reliable": true,
+        "month": "2026-04",
         "n_skus_in_basket": 28,
-        "indicative_reliable": true
+        "price_index": 98.84915917130373
       },
       {
-        "month": "2026-05",
-        "price_index": 100.35118364289228,
         "cost_period_drift_pct": 0.35118364289228055,
+        "indicative_reliable": true,
+        "month": "2026-05",
         "n_skus_in_basket": 29,
-        "indicative_reliable": true
+        "price_index": 100.35118364289228
       },
       {
-        "month": "2026-06",
-        "price_index": 100.0,
         "cost_period_drift_pct": 0.0,
+        "indicative_reliable": true,
+        "month": "2026-06",
         "n_skus_in_basket": 33,
-        "indicative_reliable": true
+        "price_index": 100.0
       }
-    ],
-    "reliable_months": [
-      "2026-03",
-      "2026-04",
-      "2026-05",
-      "2026-06"
     ],
     "excluded_months": [
       "2025-01",
@@ -264,64 +293,261 @@
       "2025-12",
       "2026-01",
       "2026-02"
-    ]
-  },
-  "measured": {
-    "revenue_costed": 3867490.79,
-    "qty": 62786.5,
-    "cogs": 2039933.0800715,
-    "gross_profit": 1827557.7099284998,
-    "op_profit": 544560.7098000001,
-    "gross_margin_pct": 47.25435196003401,
-    "op_margin_pct": 14.08046558787022,
-    "months": [
+    ],
+    "max_drift_pct": 10.0,
+    "reliable_months": [
+      "2026-03",
+      "2026-04",
+      "2026-05",
       "2026-06"
     ]
   },
-  "indicative": {
-    "revenue_costed": 11570820.8,
-    "qty": 211236.0,
-    "cogs": 6403721.560752001,
-    "gross_profit": 5167099.239248,
-    "op_profit": 1204306.4975015915,
-    "gross_margin_pct": 44.6562895455783,
-    "op_margin_pct": 10.408133686605806,
-    "months": [
-      "2026-03",
-      "2026-04",
-      "2026-05"
-    ]
+  "reconciliation": {
+    "all_passed": true,
+    "checks": {
+      "june_gross_revenue_matches_invoices": true,
+      "june_qty_matches_invoices": true,
+      "model_net_profit_ties_to_statement": true,
+      "model_revenue_ties_to_statement": true
+    },
+    "june_invoice_gross_revenue": 3867490.79,
+    "june_invoice_qty": 62786.5,
+    "june_return_rate_pct": 3.250655182555715,
+    "model_totals": {
+      "act_mat_total": 2039933.08,
+      "conv_alloc": 544605.0,
+      "full_loaded_total": 3322930.0802,
+      "gross_revenue": 3867490.79,
+      "opex_alloc": 738391.9998000001,
+      "qty": 62786.5,
+      "returns": 125718.78979999998,
+      "revenue": 3741772.0001999997
+    }
   },
-  "indicative_excluded": {
-    "revenue_costed": 38771239.510000005,
-    "qty": 854891.0,
-    "cogs": 24263663.644164003,
-    "gross_profit": 14507575.865835998,
-    "op_profit": -825456.9487142989,
-    "gross_margin_pct": 37.41839582429176,
-    "op_margin_pct": -2.129044516364751,
-    "months": [
-      "2025-01",
-      "2025-02",
-      "2025-03",
-      "2025-04",
-      "2025-05",
-      "2025-06",
-      "2025-07",
-      "2025-08",
-      "2025-09",
-      "2025-10",
-      "2025-11",
-      "2025-12",
-      "2026-01",
-      "2026-02"
-    ]
-  },
-  "caveats": [
-    "المقيس: يونيو 2026 فقط — تكلفة مرصودة، مطابقة لقائمة الدخل.",
-    "بوابة انحراف الأسعار: تُستبعد الشهور التي تبعد أسعارها عن شهر التكلفة بأكثر من 10%. الأسعار كانت أدنى من يونيو 2026 بنحو 15% حتى فبراير 2026 ثم ارتفعت في مارس–أبريل 2026؛ احتساب تكلفة يونيو على أسعار ما قبل الزيادة يُظهر هامشًا تشغيليًا سالبًا طوال 2025 وهو أثر منهجي لا واقعة تاريخية. لذلك لا يمتد الهامش الموثوق قبل مارس 2026.",
-    "التقديري: تكلفة وحدة يونيو 2026 مطبَّقة على كميات شهور أخرى. تقدير لا قياس.",
-    "إيراد الشهور غير يونيو إجمالي (قبل المرتجعات)؛ لا توجد مرتجعات لكل صنف خارج يونيو. نسبة المرتجعات في يونيو 3.25% من الإجمالي، ولذلك الهامش التقديري أعلى من الواقع بهذا القدر تقريبًا.",
-    "الأصناف بلا تكلفة لا تُحتسب لها تكلفة صفرية؛ إيرادها يُعرض منفصلًا وكل نسبة هامش محسوبة على الإيراد المُسعَّر فقط."
-  ]
+  "statements": {
+    "by_month": [
+      {
+        "allocation_weight": null,
+        "basis": "measured",
+        "cogs": 1289237.0,
+        "estimated": false,
+        "gross_margin_pct": 49.1812,
+        "gross_profit": 1247692.0,
+        "months": 1,
+        "net_margin_pct": 15.7159,
+        "net_profit": 398701.0,
+        "net_sales": 2536929.0,
+        "period": "2025-07",
+        "source_period": "2025-07",
+        "total_expenses": 848991.0
+      },
+      {
+        "allocation_weight": null,
+        "basis": "measured",
+        "cogs": 1745079.05,
+        "estimated": false,
+        "gross_margin_pct": 41.9466,
+        "gross_profit": 1260911.95,
+        "months": 1,
+        "net_margin_pct": 17.4226,
+        "net_profit": 523720.95,
+        "net_sales": 3005991.0,
+        "period": "2025-08",
+        "source_period": "2025-08",
+        "total_expenses": 737191.0
+      },
+      {
+        "allocation_weight": null,
+        "basis": "measured",
+        "cogs": 2633584.4,
+        "estimated": false,
+        "gross_margin_pct": 31.6084,
+        "gross_profit": 1217160.6,
+        "months": 1,
+        "net_margin_pct": 11.4418,
+        "net_profit": 440595.6,
+        "net_sales": 3850745.0,
+        "period": "2025-09",
+        "source_period": "2025-09",
+        "total_expenses": 776565.0
+      },
+      {
+        "allocation_weight": null,
+        "basis": "measured",
+        "cogs": 2317112.19,
+        "estimated": false,
+        "gross_margin_pct": 37.2941,
+        "gross_profit": 1378091.81,
+        "months": 1,
+        "net_margin_pct": 20.1799,
+        "net_profit": 745688.81,
+        "net_sales": 3695204.0,
+        "period": "2025-10",
+        "source_period": "2025-10",
+        "total_expenses": 632403.0
+      },
+      {
+        "allocation_weight": null,
+        "basis": "measured",
+        "cogs": 1726407.5,
+        "estimated": false,
+        "gross_margin_pct": 43.0709,
+        "gross_profit": 1306147.64,
+        "months": 1,
+        "net_margin_pct": 20.0079,
+        "net_profit": 606751.64,
+        "net_sales": 3032555.14,
+        "period": "2025-11",
+        "source_period": "2025-11",
+        "total_expenses": 699396.0
+      },
+      {
+        "allocation_weight": null,
+        "basis": "measured",
+        "cogs": 1795859.68,
+        "estimated": false,
+        "gross_margin_pct": 43.363,
+        "gross_profit": 1374966.32,
+        "months": 1,
+        "net_margin_pct": 15.5362,
+        "net_profit": 492625.32,
+        "net_sales": 3170826.0,
+        "period": "2025-12",
+        "source_period": "2025-12",
+        "total_expenses": 882341.0
+      },
+      {
+        "allocation_weight": 0.283245,
+        "basis": "allocated",
+        "cogs": 1939188.46,
+        "estimated": true,
+        "gross_margin_pct": 31.2747,
+        "gross_profit": 882463.78,
+        "months": 1,
+        "net_margin_pct": 5.2991,
+        "net_profit": 149521.93,
+        "net_sales": 2821652.24,
+        "period": "2026-01",
+        "source_period": "2026-Q1",
+        "total_expenses": 732941.85
+      },
+      {
+        "allocation_weight": 0.366462,
+        "basis": "allocated",
+        "cogs": 2508917.96,
+        "estimated": true,
+        "gross_margin_pct": 31.2747,
+        "gross_profit": 1141729.76,
+        "months": 1,
+        "net_margin_pct": 5.2991,
+        "net_profit": 193451.15,
+        "net_sales": 3650647.72,
+        "period": "2026-02",
+        "source_period": "2026-Q1",
+        "total_expenses": 948278.61
+      },
+      {
+        "allocation_weight": 0.350293,
+        "basis": "allocated",
+        "cogs": 2398224.41,
+        "estimated": true,
+        "gross_margin_pct": 31.2747,
+        "gross_profit": 1091356.63,
+        "months": 1,
+        "net_margin_pct": 5.2991,
+        "net_profit": 184916.09,
+        "net_sales": 3489581.04,
+        "period": "2026-03",
+        "source_period": "2026-Q1",
+        "total_expenses": 906440.54
+      },
+      {
+        "allocation_weight": null,
+        "basis": "measured",
+        "cogs": 2448699.45,
+        "estimated": false,
+        "gross_margin_pct": 34.9804,
+        "gross_profit": 1317397.05,
+        "months": 1,
+        "net_margin_pct": 1.6305,
+        "net_profit": 61407.05,
+        "net_sales": 3766096.5,
+        "period": "2026-04",
+        "source_period": "2026-04",
+        "total_expenses": 1255990.0
+      },
+      {
+        "allocation_weight": null,
+        "basis": "measured",
+        "cogs": 1998174.59,
+        "estimated": false,
+        "gross_margin_pct": 51.8508,
+        "gross_profit": 2151792.41,
+        "months": 1,
+        "net_margin_pct": 30.268,
+        "net_profit": 1256113.41,
+        "net_sales": 4149967.0,
+        "period": "2026-05",
+        "source_period": "2026-05",
+        "total_expenses": 895679.0
+      },
+      {
+        "allocation_weight": null,
+        "basis": "measured",
+        "cogs": 2039933.08,
+        "estimated": false,
+        "gross_margin_pct": 45.4822,
+        "gross_profit": 1701838.92,
+        "months": 1,
+        "net_margin_pct": 11.1937,
+        "net_profit": 418841.92,
+        "net_sales": 3741772.0,
+        "period": "2026-06",
+        "source_period": "2026-06",
+        "total_expenses": 1282997.0
+      },
+      {
+        "allocation_weight": null,
+        "basis": "measured",
+        "cogs": 2736459.37,
+        "estimated": false,
+        "gross_margin_pct": 42.8014,
+        "gross_profit": 2047675.63,
+        "months": 1,
+        "net_margin_pct": 20.0449,
+        "net_profit": 958973.09,
+        "net_sales": 4784135.0,
+        "period": "2026-07",
+        "source_period": "2026-07",
+        "total_expenses": 1088702.54
+      }
+    ],
+    "meta": {
+      "level": "company",
+      "n_observations": 11,
+      "quarter_months": [
+        "2026-01",
+        "2026-02",
+        "2026-03"
+      ],
+      "quarter_period": "2026-Q1",
+      "sales_window": "2025-01..2026-06",
+      "see": "data/cost/PROVENANCE.md",
+      "source_commit": "5833cc3ca851a48cb18746330924f988dc9450ea",
+      "source_repo": "hannopo1/Abohashem",
+      "statement_window": "2025-07..2026-07"
+    },
+    "totals": {
+      "cogs": 27576877.14,
+      "gross_margin_pct": 39.6516,
+      "gross_profit": 18119224.5,
+      "months": 13,
+      "n_allocated_months": 3,
+      "net_margin_pct": 14.0741,
+      "net_profit": 6431307.96,
+      "net_sales": 45696101.64,
+      "period_from": "2025-07",
+      "period_to": "2026-07"
+    }
+  }
 }

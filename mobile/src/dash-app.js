@@ -1168,32 +1168,81 @@ class App extends React.Component {
   }
 
   /* ---- الربحية ------------------------------------------------------------
-     Built from window.DASH_MARGIN (analysis/13_join_cost_margin.py). Ignores
-     the filter bar: margin comes from precomputed company-level aggregates and
-     cannot honestly be re-derived for an arbitrary slice, exactly as with the
-     fin / forecast / quality sections. */
+     Two levels, from two sources measured at different scopes:
+
+       level 1  window.DASH_MARGIN.statements — thirteen months of company-level
+                margin, cost of sales measured from the income statements
+                (analysis/14_income_statements.py).
+       level 2  the rest of window.DASH_MARGIN — margin by item, customer, rep
+                and brand, still June 2026 only because the statements carry no
+                per-SKU cost (analysis/13_join_cost_margin.py).
+
+     They are drawn as two labelled levels rather than one merged view: a
+     thirteen-month company margin says nothing about any single brand or
+     representative, and a layout that blurred the two would invite exactly
+     that reading.
+
+     Ignores the filter bar: both levels are precomputed aggregates and cannot
+     honestly be re-derived for an arbitrary slice, as with the fin / forecast /
+     quality sections. */
   repoMargin(R,RD){
     if(!M.has()) return [this.empty("بيانات التكلفة غير محمّلة في هذا البناء.")];
     const d=M.D(), C=this.state.C, win=M.windowLabel(d);
     const ex=(d.meta.excluded_months||[]).length;
+    const st=M.hasStmt()?M.S():null;
 
+    /* The banner used to open with "cost is measured for June only". Since the
+       statements arrived that is true of the per-item detail and false of the
+       company series, so it now says which is which instead. */
     const banner=React.createElement("div",{key:"mb",style:{padding:"11px 12px",borderRadius:12,
         background:"rgba(245,158,11,.10)",border:"1px solid rgba(245,158,11,.30)",
         fontSize:11,lineHeight:1.85,color:"#fcd9a0"}},
-      "التكلفة مقيسة لشهر "+M.arMonth(d.meta.cost_month)+" فقط. النافذة الموثوقة هي "+win+
-      " — وهي الشهور التي لا تبعد أسعارها عن شهر التكلفة بأكثر من "+
-      d.meta.max_drift_pct+"%. ",
-      React.createElement("br"),
-      "استُبعد "+ex+" شهرًا سابقًا: كانت الأسعار أدنى بنحو 15% قبل زيادة مارس–أبريل 2026، "+
-      "واحتساب تكلفة يونيو عليها يُظهر هامشًا سالبًا هو أثر منهجي لا خسارة فعلية.");
+      st?["تكلفة المبيعات مقيسة شهريًا على مستوى الشركة لـ"+st.totals.months+" شهرًا ("+
+          M.arMonth(st.totals.period_from)+" – "+M.arMonth(st.totals.period_to)+
+          ") من قوائم الدخل. أما التفصيل حسب الصنف والعلامة والمندوب فيبقى على شهر "+
+          M.arMonth(d.meta.cost_month)+" وحده: القوائم لا تعطي تكلفة لكل صنف.",
+          React.createElement("br",{key:"b1"}),
+          "الشهور المستبعدة من التفصيل ("+ex+" شهرًا) كانت تُظهر هامشًا سالبًا عند تحميل تكلفة "+
+          "يونيو على أسعار أدنى بنحو 15%. القوائم تقيس تلك الشهور مباشرة ولا تُظهر أي هامش "+
+          "سالب — فالأمر أثر منهجي مثبت الآن بقياس مستقل، لا خسارة فعلية."]
+        :["التكلفة مقيسة لشهر "+M.arMonth(d.meta.cost_month)+" فقط. النافذة الموثوقة هي "+win+
+          " — وهي الشهور التي لا تبعد أسعارها عن شهر التكلفة بأكثر من "+
+          d.meta.max_drift_pct+"%. ",
+          React.createElement("br",{key:"b1"}),
+          "استُبعد "+ex+" شهرًا سابقًا: كانت الأسعار أدنى بنحو 15% قبل زيادة مارس–أبريل 2026، "+
+          "واحتساب تكلفة يونيو عليها يُظهر هامشًا سالبًا هو أثر منهجي لا خسارة فعلية."]);
 
     const uncosted=(d.uncosted_items||[]).slice(0,8)
       .map(r=>[r.item_name||r.item_code, r.revenue, "#64748b"]);
 
     const gaps=M.pricingGap(d);
 
+    /* Level 1. Omitted entirely from a build made before the statements step
+       ran, rather than shown empty. */
+    const level1 = st ? [
+      this.levelHead("m_l1","المستوى الأول · مقيس على مستوى الشركة",
+        st.totals.months+" شهرًا · "+M.arMonth(st.totals.period_from)+" – "+
+        M.arMonth(st.totals.period_to)),
+      this.kpiGridRepo(M.kpisStatements(R)),
+      this.chartCard("صافي المبيعات والتكلفة والهامش شهريًا",M.stmtTrend(C),
+        {k:"mst",h:C.H.tall,
+         sub:"الأعمدة الباهتة: "+(st.meta.quarter_months||[]).length+
+             " أشهر موزّعة تناسبيًا من قائمة الربع الأول"}),
+      st.totals.n_allocated_months?React.createElement("div",{key:"mall",
+        style:{padding:"10px 12px",borderRadius:12,fontSize:10.5,lineHeight:1.85,
+               color:"#94a3b8",background:"rgba(255,255,255,.03)",
+               border:"1px solid rgba(255,255,255,.07)"}},
+        "وصل الربع الأول 2026 قائمةً واحدة مجمّعة، ووُزّع على "+
+        st.totals.n_allocated_months+" أشهر بأوزان إيراد الفواتير. "+
+        "التوزيع يقسم المقادير ولا يخلق تفاوتًا في النسب: الأشهر الثلاثة تحمل "+
+        "نسبة الربع نفسها بحكم الطريقة، فلا يصحّ قراءتها كدليل على حركة الهامش داخل الربع."):null,
+      this.levelHead("m_l2","المستوى الثاني · تفصيل شهر "+M.arMonth(d.meta.cost_month),
+        "القوائم لا تعطي تكلفة لكل صنف"),
+    ] : [];
+
     return [
       banner,
+    ].concat(level1).concat([
       this.kpiGridRepo(M.kpisWindow(d,R)),
       this.card("الشهر المقيس — مطابق لقائمة الدخل",
         this.kpiGridRepo(M.kpisMeasured(d,R)),
@@ -1225,7 +1274,19 @@ class App extends React.Component {
       this.card("إيراد بلا بيانات تكلفة",
         this.barsH(uncosted,R.fmtEGPk),
         {k:"muc",sub:R.fmtPct(100-d.meta.coverage_pct)+" من الإيراد — لا تُحتسب له تكلفة صفرية"}),
-    ];
+    ]);
+  }
+
+  /* A divider naming the scope of the cards that follow it. The two levels of
+     الربحية are measured differently, and a reader who scrolls past the join
+     without noticing would carry a company figure onto a single brand. */
+  levelHead(k,title,sub){
+    return React.createElement("div",{key:k,style:{display:"flex",alignItems:"baseline",
+        gap:8,margin:"6px 2px 0",paddingTop:6,
+        borderTop:"1px solid rgba(255,255,255,.08)"}},
+      React.createElement("span",{style:{fontSize:12,fontWeight:700,color:"#cbd5e1"}},title),
+      sub?React.createElement("span",{style:{fontSize:10,color:"#64748b",
+        marginInlineStart:"auto",textAlign:"end"}},sub):null);
   }
 
   /* ---- استخراج التقارير والرسوم ------------------------------------------
@@ -1344,7 +1405,32 @@ class App extends React.Component {
 
     /* Profitability travels with either dataset: it is company-level and does
        not belong to one of them. Every label says تقديري where the figure is,
-       so the caveat survives leaving the app. */
+       so the caveat survives leaving the app — including the الأساس column on
+       the statements sheet, which is the only thing distinguishing a measured
+       month from one split out of the Q1 statement once the file is open in
+       Excel. The sheets below are June-2026 detail; the one above is the
+       company series. */
+    if(M.hasStmt()){
+      /* Level 1 travels as its own sheet, never merged into the June detail
+         below. The الأساس column carries the estimated flag out of the app: a
+         workbook on someone's laptop is exactly where an allocated month would
+         otherwise lose its label. */
+      out.push(
+        {id:"m_pnl", label:"الربحية — قوائم الدخل (الشركة)",
+         rows:M.S().by_month||[], columns:[
+          col("الشهر","period"),
+          col("الأساس",null,r=>r.basis==="allocated"
+              ?"موزّع تناسبيًا — تقديري":"مقيس"),
+          col("مصدر الرقم","source_period"),
+          col("صافي المبيعات",null,r=>num(r.net_sales)),
+          col("تكلفة المبيعات",null,r=>num(r.cogs)),
+          col("مجمل الربح",null,r=>num(r.gross_profit)),
+          col("هامش مجمل %",null,r=>num(r.gross_margin_pct)),
+          col("المصروفات",null,r=>num(r.total_expenses)),
+          col("صافي الربح",null,r=>num(r.net_profit)),
+          col("هامش صافي %",null,r=>num(r.net_margin_pct))]});
+    }
+
     if(M.has()){
       const d=M.D(), win=M.windowLabel(d);
       const mg=[col("هامش مجمل %",null,r=>num(r.gross_margin_pct)),

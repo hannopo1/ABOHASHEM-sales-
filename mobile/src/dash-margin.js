@@ -1,8 +1,21 @@
 /* Abu Hashem — mobile runtime · الربحية (profitability).
 
-   Reads window.DASH_MARGIN, emitted by analysis/13_join_cost_margin.py from the
-   June-2026 costing model joined to sales invoices. Until that join existed the
-   app could show revenue but never margin.
+   Reads window.DASH_MARGIN. It carries two different things and the section
+   shows them as two levels, because they are measured at different scopes:
+
+     LEVEL 1  window.DASH_MARGIN.statements — a company-level series of
+              thirteen months (July 2025 – July 2026) built by
+              analysis/14_income_statements.py from the income statements.
+              Cost of sales here is measured, month by month.
+
+     LEVEL 2  everything else — margin by item, customer, representative and
+              brand, from analysis/13_join_cost_margin.py. The statements carry
+              no per-SKU cost, so this level is still June 2026 only, behind the
+              price-drift gate, exactly as before.
+
+   Collapsing the two would be the easiest mistake to make here and the most
+   damaging: it would let a reader take a thirteen-month company margin as
+   evidence about a brand or a representative, which no data supports.
 
    TWO THINGS THIS MODULE REFUSES TO DO, because both would mislead:
 
@@ -23,14 +36,19 @@ const M = (function(){
 
 const SECTION = {
   id:"margin", label:"الربحية", title:"الربحية — التكلفة والهامش",
-  sub:"مبنية على نموذج تكاليف يونيو 2026 المطابق لقائمة الدخل، مربوطًا بفواتير المبيعات. "+
-      "النسب محسوبة على الإيراد المُسعَّر فقط، والشهور التي تبعد أسعارها عن شهر التكلفة مستبعدة."
+  sub:"مستويان: هامش مقيس على مستوى الشركة من قوائم الدخل (13 شهرًا)، "+
+      "ثم تفصيل حسب الصنف والعلامة والمندوب من نموذج تكاليف يونيو 2026 وحده."
 };
 
 const OK = "#10b981", WARN = "#f59e0b", BAD = "#ef4444", MUTED = "#64748b";
 
 const has = () => !!(typeof window !== "undefined" && window.DASH_MARGIN);
 const D   = () => window.DASH_MARGIN;
+
+/* Level 1 is absent from any build made before analysis/14_income_statements.py
+   ran, so every use of it is guarded rather than assumed. */
+const hasStmt = () => !!(has() && window.DASH_MARGIN.statements);
+const S       = () => window.DASH_MARGIN.statements;
 
 const arMonth = m => {
   if(!m) return "";
@@ -57,6 +75,74 @@ function marginColour(pct, ref){
 }
 
 /* ------------------------------------------------------------------- KPIs -- */
+
+/* ------------------------------------------------- level 1 · the statements -- */
+
+/* The company-level series. Every figure here is measured cost of sales from a
+   signed income statement, so unlike level 2 it carries no coverage caveat and
+   no price-drift gate — but it also says nothing about any single product. */
+function kpisStatements(R){
+  const t = S().totals, m = S().meta;
+  return [
+    ["هامش مجمل — مقيس", R.fmtPct(t.gross_margin_pct),
+     t.months+" شهرًا · "+arMonth(t.period_from)+" – "+arMonth(t.period_to), OK],
+    ["هامش صافي", R.fmtPct(t.net_margin_pct), "بعد كل المصروفات", OK],
+    ["صافي المبيعات", R.fmtEGP(t.net_sales), "بعد المردودات", R.C.blue],
+    ["تكلفة المبيعات", R.fmtEGP(t.cogs), "مقيسة شهريًا", R.C.indigo],
+    ["مجمل الربح", R.fmtEGP(t.gross_profit), "الإيراد − التكلفة", R.C.blue],
+    ["صافي الربح", R.fmtEGP(t.net_profit), "حسب القوائم", R.C.green],
+  ];
+}
+
+/* Net sales and cost of sales as columns, gross margin as a line.
+
+   The three months split out of the combined Q1 statement are drawn in a
+   different colour and named in the tooltip. They are not a separate series:
+   hiding them would leave a gap in the middle of the year, and giving them
+   their own legend entry would imply they are a different kind of quantity.
+   They are the same quantity, estimated. */
+function stmtTrend(C){
+  const rows=(S().by_month||[]).slice().sort((a,b)=>a.period<b.period?-1:1);
+  if(!rows.length) return {__empty:true};
+  const est=r=>r.basis==="allocated";
+  const b=C.ecBase();
+  const label=r=>arMonth(r.period)+(est(r)?" (موزّع)":"");
+
+  return Object.assign(b, {
+    legend:Object.assign(b.legend,{data:["صافي المبيعات","تكلفة المبيعات","هامش مجمل %"]}),
+    grid:{left:6,right:10,top:34,bottom:6,containLabel:true},
+    tooltip:Object.assign(b.tooltip,{trigger:"axis",
+      formatter:ps=>{
+        const r=rows[ps[0].dataIndex];
+        return "<b>"+arMonth(r.period)+"</b><br>"
+          +(est(r)?"<span style='color:"+WARN+"'>موزّع تناسبيًا من قائمة الربع الأول — تقديري</span><br>":"")
+          +ps.map(p=>p.marker+" "+p.seriesName+": <b>"
+              +(p.value==null?"—":Number(p.value).toLocaleString("en",{maximumFractionDigits:1}))
+              +"</b>").join("<br>")
+          +"<br>هامش صافي: <b>"+(r.net_margin_pct==null?"—":r.net_margin_pct.toFixed(1)+"%")+"</b>";
+      }}),
+    xAxis:{type:"category",data:rows.map(label),
+           axisLabel:{color:b._muted,fontSize:9,rotate:55},
+           axisLine:{lineStyle:{color:b._grid}}},
+    yAxis:[{type:"value",name:"ج.م",nameTextStyle:{color:b._muted,fontSize:9},
+            axisLabel:{color:b._muted,fontSize:9,formatter:v=>(v/1e6).toFixed(1)+"M"},
+            splitLine:{lineStyle:{color:b._grid}}},
+           {type:"value",name:"%",min:0,max:60,nameTextStyle:{color:b._muted,fontSize:9},
+            axisLabel:{color:b._muted,fontSize:9},splitLine:{show:false}}],
+    series:[
+      {name:"صافي المبيعات",type:"bar",barGap:"-30%",
+       data:rows.map(r=>({value:r.net_sales,
+         itemStyle:{color:est(r)?"rgba(59,130,246,.38)":"#3b82f6"}}))},
+      {name:"تكلفة المبيعات",type:"bar",
+       data:rows.map(r=>({value:r.cogs,
+         itemStyle:{color:est(r)?"rgba(239,68,68,.32)":"rgba(239,68,68,.62)"}}))},
+      {name:"هامش مجمل %",type:"line",yAxisIndex:1,smooth:true,symbolSize:6,
+       data:rows.map(r=>({value:r.gross_margin_pct,
+         itemStyle:{color:est(r)?WARN:OK}})),
+       lineStyle:{color:OK,width:2}},
+    ],
+  });
+}
 
 /* Headline: the reliable window (measured June + the indicative months that
    pass the gate). This is the widest span the data can honestly support. */
@@ -187,6 +273,7 @@ const bars = (rows, keyName, R, ref) => rows
    Straight from the model's own pricing engine — not re-derived here. */
 const pricingGap = d => (d.pricing_gap||[]).slice(0, 12);
 
-return {SECTION, has, D, kpisWindow, kpisMeasured, trend, itemScatter, bars,
+return {SECTION, has, D, hasStmt, S, kpisStatements, stmtTrend,
+        kpisWindow, kpisMeasured, trend, itemScatter, bars,
         pricingGap, windowLabel, arMonth, marginColour, OK, WARN, BAD, MUTED};
 })();

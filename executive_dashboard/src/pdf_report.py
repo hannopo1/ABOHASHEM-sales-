@@ -187,9 +187,9 @@ def build(kpis, customers, products, receivables, insights, path=C.OUT_PDF):
     story.append(Spacer(1, 4 * mm))
     story.append(Paragraph(_ar_block(
         ("قيود المصدر: لا توجد موازنة، ولا تواريخ استحقاق على الفواتير (أعمار "
-         "الديون تقديرية مبنية على لقطة المديونية). بيانات التكلفة متاحة لشهر "
-         "يونيو 2026 فقط — تفاصيلها في الصفحة التالية. كل رقم قابل للتتبع حتى "
-         "الملف المصدري.")
+         "الديون تقديرية مبنية على لقطة المديونية). التكلفة مقيسة شهريًا على "
+         "مستوى الشركة، ولشهر واحد فقط على مستوى الصنف — تفاصيلها في الصفحة "
+         "التالية. كل رقم قابل للتتبع حتى الملف المصدري.")
         if mg else
         ("قيود المصدر: لا توجد بيانات تكلفة (لا هامش ربح)، ولا موازنة، ولا تواريخ "
          "استحقاق على الفواتير (أعمار الديون تقديرية مبنية على لقطة المديونية). "
@@ -203,6 +203,49 @@ def build(kpis, customers, products, receivables, insights, path=C.OUT_PDF):
     return path
 
 
+def _statements_block(st, h2, body):
+    """The measured company-level series, above the June per-item detail.
+
+    Deliberately a compact summary rather than all thirteen rows: this page
+    exists to state what is measured and at what scope, and a full monthly
+    table belongs in the exported workbook, not in a one-page board summary.
+    The allocated months are named anyway — a reader must not carry an
+    estimated figure away believing it was measured.
+    """
+    t, m = st["totals"], st["meta"]
+    out = [Paragraph(_ar("المستوى الأول — مقيس على مستوى الشركة"), h2)]
+
+    rows = [[_ar("الفترة"), _ar("صافي المبيعات"), _ar("تكلفة المبيعات"),
+             _ar("هامش مجمل"), _ar("هامش صافي")],
+            [_ar(f"{t['months']} شهرًا · {t['period_from']} – {t['period_to']}"),
+             _egp(t["net_sales"]), _egp(t["cogs"]),
+             _pct(t["gross_margin_pct"]), _pct(t["net_margin_pct"])]]
+    tbl = Table(rows, colWidths=[52 * mm, 30 * mm, 30 * mm, 23 * mm, 23 * mm])
+    tbl.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), "Amiri"),
+        ("FONTNAME", (0, 0), (-1, 0), "Amiri-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("BACKGROUND", (0, 0), (-1, 0), _PANEL),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d9d2c2")),
+        ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TEXTCOLOR", (0, 1), (-1, 1), _GOOD),
+    ]))
+    out.append(tbl)
+
+    note = (f"تكلفة المبيعات مقيسة شهريًا من قوائم الدخل "
+            f"({st['meta']['n_observations']} قائمة). ")
+    if t.get("n_allocated_months"):
+        note += (f"{t['n_allocated_months']} أشهر منها "
+                 f"({'، '.join(m['quarter_months'])}) موزّعة تناسبيًا من قائمة "
+                 f"{m['quarter_period']} المجمّعة، وهي تقدير: التوزيع يقسم "
+                 f"المقادير ولا يخلق تفاوتًا في النسب. ")
+    note += ("القوائم على مستوى الشركة ولا تعطي تكلفة لكل صنف، فالتفصيل أدناه "
+             "يبقى على شهر التكلفة وحده.")
+    out.append(Paragraph(_ar_block(note), body))
+    return out
+
+
 def _profitability(mg, title, sub, h2, body):
     """Page 2 — profitability, with the price-drift caveat attached to the
     figures rather than buried in a footnote."""
@@ -210,15 +253,28 @@ def _profitability(mg, title, sub, h2, body):
     meas, ind = mg["measured"], mg["indicative"]
     window = ", ".join(drift["reliable_months"])
 
+    st = mg.get("statements")
+
     out = [
         Paragraph(_ar("الربحية — التكلفة والهامش"), title),
         Paragraph(_ar_block(
+            "مستويان مقيسان على نطاقين مختلفين: هامش الشركة من قوائم الدخل، "
+            "ثم تفصيل حسب الصنف والعلامة والمندوب من نموذج التكاليف. "
+            f"التغطية على مستوى الصنف {cov['coverage_pct']:.1f}% من الإيراد "
+            f"({cov['n_items_costed']} صنفًا من {cov['n_items_total']}).",
+            size=11) if st else _ar_block(
             f"نموذج تكاليف {mg['cost_month']} مطابق لقائمة الدخل، مربوطًا بفواتير "
             f"المبيعات. التغطية {cov['coverage_pct']:.1f}% من الإيراد "
             f"({cov['n_items_costed']} صنفًا من {cov['n_items_total']}).",
             size=11), sub),
         Spacer(1, 6 * mm),
     ]
+
+    if st:
+        out.extend(_statements_block(st, h2, body))
+        out.append(Spacer(1, 5 * mm))
+        out.append(Paragraph(_ar(
+            f"المستوى الثاني — تفصيل شهر {mg['cost_month']}"), h2))
 
     rows = [[_ar("الأساس"), _ar("الإيراد المُسعَّر"), _ar("هامش مجمل"),
              _ar("هامش تشغيلي"), _ar("الشهور")]]
@@ -253,7 +309,8 @@ def _profitability(mg, title, sub, h2, body):
 
     out.append(Paragraph(_ar("لماذا استُبعدت شهور"), h2))
     out.append(Paragraph(_ar_block(
-        f"التكلفة مقيسة لشهر {mg['cost_month']} فقط. مؤشر أسعار بسلّة ثابتة يبيّن "
+        f"التكلفة لكل صنف مقيسة لشهر {mg['cost_month']} وحده. مؤشر أسعار بسلّة "
+        f"ثابتة يبيّن "
         f"أن الأسعار كانت أدنى من شهر التكلفة بنحو 15% حتى فبراير 2026 ثم ارتفعت "
         f"في مارس–أبريل 2026. احتساب تكلفة يونيو على أسعار ما قبل الزيادة يُنتج "
         f"هامشًا تشغيليًا سالبًا طوال 2025، وهو أثر منهجي لا خسارة فعلية. لذلك "
@@ -286,6 +343,10 @@ def _profitability(mg, title, sub, h2, body):
 
     src = mg["cost_source"]
     out.append(Spacer(1, 5 * mm))
-    out.append(Paragraph(_ar(
-        f"مصدر التكلفة: {src['repo']} · {src['path']} — انظر {src['see']}."), sub))
+    # Both levels come from the same repository but from different documents,
+    # and a reader tracing a figure needs to know which one it came from.
+    line = f"مصدر التكلفة: {src['repo']} · {src['path']}"
+    if st:
+        line += f" · قوائم الدخل (الالتزام {st['meta']['source_commit'][:7]})"
+    out.append(Paragraph(_ar(f"{line} — انظر {src['see']}."), sub))
     return out

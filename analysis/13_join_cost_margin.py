@@ -67,13 +67,31 @@ STATEMENT = {"revenue_net": 3_741_772.00, "cogs": 2_039_933.08,
 
 
 def month_key(s: pd.Series) -> pd.Series:
-    """Invoice dates are stored as YYYY/M/D (unpadded). -> 'YYYY-MM'."""
+    """
+    Convert date values to year-month keys in ``YYYY-MM`` format.
+    
+    Parameters:
+        s (pd.Series): Date values to convert.
+    
+    Returns:
+        pd.Series: Formatted year-month values, with invalid or missing dates represented as missing values.
+    """
     d = pd.to_datetime(s, format="mixed", dayfirst=False, errors="coerce")
     return d.dt.strftime("%Y-%m")
 
 
 def clean(obj):
-    """NaN/inf -> None, so the JSON is strict. Same helper as step 10."""
+    """
+    Convert nested data to JSON-compatible values.
+    
+    Replaces NaN and infinite floating-point values with `None` and converts NumPy numeric values to native Python types.
+    
+    Parameters:
+    	obj: A value that may contain nested dictionaries, lists, or NumPy values.
+    
+    Returns:
+    	The converted value with JSON-compatible numeric types and null values.
+    """
     if isinstance(obj, dict):
         return {k: clean(v) for k, v in obj.items()}
     if isinstance(obj, list):
@@ -87,16 +105,14 @@ def clean(obj):
 
 # ----------------------------------------------------------------- unit costs
 def unit_costs(cost_rows: dict) -> pd.DataFrame:
-    """Per-SKU unit costs implied by the June model.
-
-    The model states totals; quantities match the June invoices exactly, so
-    dividing gives a defensible cost per unit. Three levels are kept because
-    they answer different questions:
-
-        mat_unit    materials + packaging   -> gross profit (the statement's
-                                               "تكلفة المبيعات")
-        conv_unit   conversion overhead     -> factory cost
-        opex_unit   allocated opex          -> operating profit
+    """
+    Build per-SKU unit costs from June cost-model totals and quantities.
+    
+    Parameters:
+        cost_rows (dict): Mapping of SKU codes to cost-model totals and metadata.
+    
+    Returns:
+        pandas.DataFrame: Per-SKU material, conversion, operating-expense, and fully loaded unit costs, along with pricing, classification, and margin metadata. SKUs with non-positive quantities are omitted.
     """
     rows = []
     for code, r in cost_rows.items():
@@ -160,7 +176,18 @@ def price_index(tx: pd.DataFrame, u: pd.DataFrame) -> pd.DataFrame:
 
 # -------------------------------------------------------------------- reconcile
 def reconcile(cost_rows: dict, tx: pd.DataFrame) -> dict:
-    """Hard checks. A failure here means the two repositories have drifted."""
+    """
+    Reconcile costing-model totals with the income statement and June invoice data.
+    
+    Parameters:
+        cost_rows (dict): Costing-model records keyed by item code.
+        tx (pd.DataFrame): Sales transactions containing month, item code, quantity,
+            and line-total fields.
+    
+    Returns:
+        dict: Reconciliation checks, pass status, model totals, June invoice totals,
+            and the June return rate percentage.
+    """
     m = pd.DataFrame(cost_rows).T
     tot = {k: float(pd.to_numeric(m[k]).sum()) for k in
            ["revenue", "gross_revenue", "returns", "act_mat_total",
@@ -194,6 +221,17 @@ def reconcile(cost_rows: dict, tx: pd.DataFrame) -> dict:
 
 # ------------------------------------------------------------------ the join
 def build(tx: pd.DataFrame, u: pd.DataFrame, pidx: pd.DataFrame) -> pd.DataFrame:
+    """
+    Join transactions with unit costs and monthly price reliability data, then calculate transaction-level profitability fields.
+    
+    Parameters:
+    	tx (pd.DataFrame): Sales transactions to enrich.
+    	u (pd.DataFrame): Per-item unit-cost data keyed by `item_code`.
+    	pidx (pd.DataFrame): Monthly price-index reliability data keyed by `month`.
+    
+    Returns:
+    	pd.DataFrame: Enriched transactions with cost, profit, costing-status, measurement-basis, and reliability fields. Missing costs remain null.
+    """
     j = tx.merge(u, on="item_code", how="left").merge(pidx, on="month", how="left")
     j["is_costed"] = j["mat_unit"].notna()
     for col, unit in [("cogs", "mat_unit"), ("conv_cost", "conv_unit"),
@@ -210,11 +248,16 @@ def build(tx: pd.DataFrame, u: pd.DataFrame, pidx: pd.DataFrame) -> pd.DataFrame
 
 
 def agg(j: pd.DataFrame, keys: list[str], reliable_only: bool = True) -> pd.DataFrame:
-    """Aggregate, keeping costed and uncosted revenue apart throughout.
-
-    reliable_only drops months that fail the price-drift gate, so a per-customer
-    or per-item margin is never a blend of comparable and non-comparable months.
-    The per-month file passes False: it reports every month with its own flag.
+    """
+    Aggregate profitability metrics by the specified dimensions while keeping costed and uncosted revenue separate.
+    
+    Parameters:
+        j (pd.DataFrame): Transaction-level profitability data.
+        keys (list[str]): Columns used to group the results.
+        reliable_only (bool): Whether to include only rows marked as reliable.
+    
+    Returns:
+        pd.DataFrame: Aggregated revenue, quantities, costs, profits, margins, and cost-coverage metrics, sorted by total revenue descending.
     """
     src = j[j["reliable"]] if reliable_only else j
     c = src[src["is_costed"]]
@@ -236,12 +279,28 @@ def agg(j: pd.DataFrame, keys: list[str], reliable_only: bool = True) -> pd.Data
 
 
 def dashboard_payload(summary: dict, outs: dict, u: pd.DataFrame) -> dict:
-    """Compact payload the mobile app inlines as window.DASH_MARGIN.
-
-    Deliberately separate from dashboards/data.js: that file is the desktop
-    dashboard's data contract and nothing here should perturb it.
+    """
+    Create a compact mobile-dashboard payload with profitability, coverage, pricing-gap, and caveat data.
+    
+    Parameters:
+    	summary (dict): Reconciliation, coverage, price-drift, and profitability summary data.
+    	outs (dict): Aggregate output tables keyed by their output filenames.
+    	u (pd.DataFrame): Per-item unit-cost and pricing data.
+    
+    Returns:
+    	dict: JSON-compatible dashboard payload containing metadata, totals, dimensional aggregates, uncosted items, pricing gaps, and caveats.
     """
     def rows(df, cols, n=None):
+        """Convert selected dataframe columns into cleaned record dictionaries.
+        
+        Parameters:
+            df (pandas.DataFrame): Source dataframe.
+            cols (list): Columns to include in each record.
+            n (int, optional): Maximum number of leading rows to include.
+        
+        Returns:
+            list: Cleaned records with numeric values rounded to four decimal places.
+        """
         d = df if n is None else df.head(n)
         return clean(d[cols].round(4).to_dict("records"))
 
@@ -295,6 +354,12 @@ def dashboard_payload(summary: dict, outs: dict, u: pd.DataFrame) -> dict:
 
 
 def main() -> None:
+    """
+    Load source data, validate cost reconciliation, and generate profitability outputs and dashboard files.
+    
+    Raises:
+    	SystemExit: If the costing model does not reconcile with the sales invoices or income statement.
+    """
     tx = pd.read_csv(P / "sales_transactions.csv",
                      dtype={"customer_code": str, "item_code": str})
     tx["item_code"] = tx["item_code"].str.strip()
@@ -350,6 +415,15 @@ def main() -> None:
                       ["line_total"].sum().sort_values(ascending=False))
 
     def block(d: pd.DataFrame) -> dict:
+        """
+        Summarize revenue, quantity, costs, profits, margins, and covered months for a transaction subset.
+        
+        Parameters:
+        	d (pd.DataFrame): Transaction rows containing line totals, quantities, costs, profits, and month values.
+        
+        Returns:
+        	dict: Aggregated financial metrics, margin percentages, and sorted months represented in the subset.
+        """
         rev = float(d["line_total"].sum())
         return {"revenue_costed": rev, "qty": float(d["qty"].sum()),
                 "cogs": float(d["cogs"].sum()),

@@ -52,6 +52,11 @@ const DAY = 864e5;
 const days = (a, b) => Math.round((a - b) / DAY);
 const parse = s => Date.parse(String(s).slice(0, 10));
 
+/**
+ * Determines the aging tier for an invoice age in days.
+ * @param {number} age - The invoice age in days relative to the reporting date.
+ * @return {string} The matching aging tier key, or the first tier key for negative ages.
+ */
 function tierOf(age){
   for(const t of AGE_TIERS) if(age >= t.lo && age < t.hi) return t.key;
   return AGE_TIERS[0].key;                       // age < 0 (invoice dated after as_of)
@@ -61,6 +66,11 @@ function tierOf(age){
    per payload and let callers narrow afterwards. */
 const _cache = new WeakMap();
 
+/**
+ * Builds customer-level debt-aging rows from invoices, credits, and reported receivables.
+ * @param {Object} D - Dashboard data containing invoices, collections, receivables, and an as-of date.
+ * @return {Array<Object>} Customer rows with aging tiers, opening balances, overpayments, invoice details, and sorting weights.
+ */
 function agingRows(D){
   let rows = _cache.get(D);
   if(rows) return rows;
@@ -129,7 +139,11 @@ function agingRows(D){
   return rows;
 }
 
-/* Narrow to a cohort of customer codes (null = every customer). */
+/**
+ * Retrieves aging rows for all customers or a specified cohort.
+ * @param {Set<string>|null} codes - Customer codes to include, or `null` to include every customer.
+ * @return {Array} The matching aging rows, including unattributed returns.
+ */
 function agingFor(D, codes){
   const all = agingRows(D);
   if(!codes) return all;
@@ -138,6 +152,11 @@ function agingFor(D, codes){
   return out;
 }
 
+/**
+ * Aggregates aging balances and reconciliation metrics for a customer cohort.
+ * @param {Array} rows - Customer aging rows to aggregate.
+ * @return {Object} Aggregated tier balances, aged totals, residual balances, customer counts, and reconciliation metrics.
+ */
 function agingTotals(rows){
   const tiers = {}; for(const k of AGE_KEYS) tiers[k] = 0;
   let snapshot = 0, opening = 0, overpaid = 0;
@@ -157,6 +176,11 @@ function agingTotals(rows){
   };
 }
 
+/**
+ * Groups aging rows by representative and summarizes each representative's receivables.
+ * @param {Array<Object>} rows - Customer aging rows containing representative, snapshot, opening, tier, and balance data.
+ * @return {Array<Object>} Representative summaries sorted by snapshot balance in descending order.
+ */
 function agingByRep(rows){
   const m = new Map();
   for(const r of rows){
@@ -168,8 +192,12 @@ function agingByRep(rows){
   return [...m.values()].sort((a,b)=>b.snapshot-a.snapshot);
 }
 
-/* The source's own six due-date buckets, for the side-by-side reconciliation.
-   Recomputed from the same cohort so both columns describe the same customers. */
+/**
+ * Recalculate source due-date bucket totals for the selected customer cohort.
+ * @param {Array<Object>} rows - Customer aging rows defining the cohort.
+ * @param {Object} D - Dashboard data containing source receivable buckets.
+ * @return {Object} Aggregated totals for current, 1–30, 31–60, 61–90, 91–120, and over-120-day buckets.
+ */
 function sourceBuckets(rows, D){
   const byCode = new Map(((D.receivables&&D.receivables.rows)||[]).map(r=>[String(r.customer_code), r]));
   const b = {current:0, d1_30:0, d31_60:0, d61_90:0, d91_120:0, d120p:0};

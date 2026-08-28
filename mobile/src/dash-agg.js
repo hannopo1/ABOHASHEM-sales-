@@ -5,10 +5,11 @@
    `python3 mobile/build_standalone.py`. */
 const A = (function(){
 const { sum, round2 } = T;
-/* Abu Hashem — mobile runtime · PART 2: context + aggregation.
-   buildContext / aggCustomers / aggProducts / aggKpis / bucketsFromRows are
-   copied VERBATIM from the source dashboard's client runtime so every mobile
-   number is computed by the source's own formulas. */
+/**
+ * Create the mobile dashboard runtime API for the supplied data.
+ * @param {Object} D - Dashboard source data and metadata used for month helpers, filtering, aggregation, and insights.
+ * @return {Object} An API exposing the source data, month metadata and helpers, filtered context builder, and insight lookup.
+ */
 
 function makeApi(D){
   const MONTHLABEL = Object.fromEntries((D.meta.available_months||[]).map(m=>[m.v,m.l]));
@@ -19,6 +20,12 @@ function makeApi(D){
   const curMonthLabel = m => (!m || m==="all") ? ALL_LABEL
     : (MONTHLABEL[m] || m) + (monthHasData(m) ? "" : " — لا توجد بيانات");
 
+  /**
+   * Aggregates sales, collection, activity, billing, and overdue-invoice metrics by customer.
+   * @param {Array<Object>} lines - Invoice line items used to calculate units, boxes, and item counts.
+   * @param {Array<Object>} invoices - Invoice records used to calculate sales, collections, invoice counts, and outstanding amounts.
+   * @return {Array<Object>} Customer summary records sorted by sales, each with a sales rank.
+   */
   function aggCustomers(lines, invoices){
     const asOf = new Date(D.meta.as_of), net = D.meta.net_terms_days, m = new Map();
     for (const v of invoices){
@@ -65,6 +72,11 @@ function makeApi(D){
     return rows;
   }
 
+  /**
+   * Aggregate receivable amounts into aging buckets.
+   * @param {Array<Object>} rows - Rows containing either precomputed bucket amounts or current and overdue values.
+   * @return {Object} The totals for current, 1–30, 31–60, 61–90, 91–120, and over-120-day buckets.
+   */
   function bucketsFromRows(rows){
     const b={current:0,d1_30:0,d31_60:0,d61_90:0,d91_120:0,d120p:0};
     for(const r of rows){
@@ -74,6 +86,11 @@ function makeApi(D){
     return b;
   }
 
+  /**
+   * Aggregates sales and volume metrics by product.
+   * @param {Array<Object>} lines - Sales lines containing product, customer, sales, quantity, box, and unit-price data.
+   * @return {Array<Object>} Products sorted by sales, including totals, customer and line counts, price range, average selling price, sales contribution, and rank.
+   */
   function aggProducts(lines){
     const m=new Map(), grand=sum(lines,"line_total")||1;
     for(const l of lines){
@@ -93,6 +110,14 @@ function makeApi(D){
     return rows;
   }
 
+  /**
+   * Calculates sales, receivables, collection metrics, and invoice statistics for dashboard KPIs.
+   * @param {Array} lines - Invoice line items used to calculate net sales, quantities, boxes, and average selling price.
+   * @param {Array} invoices - Invoices used to calculate reported sales, invoice counts, payments, and zero-value invoices.
+   * @param {Array} recv - Receivable records used to calculate outstanding and overdue amounts.
+   * @param {Array} customers - Customer aggregates used to calculate billing, collections, returns, and collection rate.
+   * @return {Object} Aggregated KPI values, including sales, receivables, collection metrics, invoice counts, and customer counts.
+   */
   function aggKpis(lines, invoices, recv, customers){
     const total_sales=sum(invoices,"reported_total"), net_sales=sum(lines,"line_total");
     const qty=sum(lines,"qty"), boxes=lines.reduce((a,l)=>a+(l.boxes||0),0);
@@ -118,6 +143,11 @@ function makeApi(D){
       avg_invoice_value:nInv?total_sales/nInv:0};
   }
 
+  /**
+   * Builds an aggregated dashboard context using the specified filters.
+   * @param {Object} f - Filter criteria for month, customer, representative, brand, item, invoice status, and receivables aging.
+   * @return {Object} The filtered lines, invoices, receivables, customer and product aggregates, aging buckets, and KPI metrics.
+   */
   function buildContext(f){
     const mAll = !f.month || f.month==="all";
     let lines = (D.lines||[]).filter(l =>
@@ -138,6 +168,12 @@ function makeApi(D){
       buckets:bucketsFromRows(recv), kpis:aggKpis(lines,invoices,recv,customers)};
   }
 
+  /**
+   * Retrieves an insight for a specified month or the complete dataset.
+   * @param {string} monthKey - The month identifier, or `"all"` for the complete dataset.
+   * @param {string} key - The insight identifier.
+   * @return {*} The requested insight, or `null` when unavailable.
+   */
   function insight(monthKey, key){
     const set = (monthKey && monthKey!=="all")
       ? (D.insights_by_month||{})[monthKey] : (D.insights_by_month||{})["all"];

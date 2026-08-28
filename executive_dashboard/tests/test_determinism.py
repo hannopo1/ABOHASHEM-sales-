@@ -22,6 +22,12 @@ pytestmark = pytest.mark.skipif(not DATA_JS.exists(),
 
 @pytest.fixture(scope="module")
 def dash():
+    """
+    Load and parse the JSON payload from the committed data file.
+    
+    Returns:
+        dict: The parsed data object.
+    """
     txt = DATA_JS.read_text(encoding="utf-8")
     return json.loads(txt[txt.index("{"):txt.rindex("}") + 1].replace("<\\/", "</"))
 
@@ -39,5 +45,8 @@ def test_customer_ar_keys_are_sorted(dash):
 
 
 def test_no_duplicate_customers_in_collections(dash):
+    """
+    Verify that each customer appears at most once in the customer collections.
+    """
     codes = [r["customer_code"] for r in dash["collections"]["by_customer"]]
     assert len(codes) == len(set(codes))

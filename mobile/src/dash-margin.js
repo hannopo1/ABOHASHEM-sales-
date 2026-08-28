@@ -83,12 +83,22 @@ function marginColour(pct, ref){
    no price-drift gate — but it also says nothing about any single product. */
 function kpisStatements(R){
   const t = S().totals, m = S().meta;
+  /* The thirteen-month total IS measured: the Q1 parts sum back to the quarter
+     its own statement measures, so no estimate enters the aggregate. What is
+     estimated is the split into three months. Saying only "مقيس" beside "13
+     شهرًا" would let that read as thirteen measured months, so the label names
+     the statements and the sub-line names the allocated ones. */
+  const alloc = t.n_allocated_months
+    ? " · منها "+t.n_allocated_months+" أشهر موزّعة" : "";
   return [
-    ["هامش مجمل — مقيس", R.fmtPct(t.gross_margin_pct),
-     t.months+" شهرًا · "+arMonth(t.period_from)+" – "+arMonth(t.period_to), OK],
-    ["هامش صافي", R.fmtPct(t.net_margin_pct), "بعد كل المصروفات", OK],
+    ["هامش مجمل — "+m.n_observations+" قوائم", R.fmtPct(t.gross_margin_pct),
+     t.months+" شهرًا · "+arMonth(t.period_from)+" – "+arMonth(t.period_to)+alloc, OK],
+    ["هامش صافي", R.fmtPct(t.net_margin_pct),
+     "بعد كل المصروفات"+alloc, OK],
     ["صافي المبيعات", R.fmtEGP(t.net_sales), "بعد المردودات", R.C.blue],
-    ["تكلفة المبيعات", R.fmtEGP(t.cogs), "مقيسة شهريًا", R.C.indigo],
+    ["تكلفة المبيعات", R.fmtEGP(t.cogs),
+     t.n_allocated_months ? "مقيسة في "+m.n_observations+" قوائم"
+                          : "مقيسة شهريًا", R.C.indigo],
     ["مجمل الربح", R.fmtEGP(t.gross_profit), "الإيراد − التكلفة", R.C.blue],
     ["صافي الربح", R.fmtEGP(t.net_profit), "حسب القوائم", R.C.green],
   ];

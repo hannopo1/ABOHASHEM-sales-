@@ -373,9 +373,11 @@ def main(argv=None):
         die(f"{repo} is not a git repository")
     commit = git_rev(repo, args.ref)
 
-    rows = parse_workbook(repo, args.ref)
+    # Read from the resolved commit, never from args.ref: a ref that advances
+    # mid-run would mix revisions and still record one commit as the source.
+    rows = parse_workbook(repo, commit)
     for path, period, months in PDF_SOURCES:
-        rows.append(parse_pdf(repo, args.ref, path, period, months))
+        rows.append(parse_pdf(repo, commit, path, period, months))
     rows.sort(key=lambda r: r["period"])
 
     for obs in rows:

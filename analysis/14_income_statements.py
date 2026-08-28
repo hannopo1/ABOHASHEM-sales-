@@ -61,7 +61,11 @@ QUARTER_MONTHS = ["2026-01", "2026-02", "2026-03"]
 # if the two repositories ever stop describing the same June statement, and it
 # must fail without importing a numbered module.
 JUNE = {"period": "2026-06", "net_sales": 3_741_772.00,
-        "cogs": 2_039_933.08, "gross_profit": 1_701_838.92}
+        "cogs": 2_039_933.08, "gross_profit": 1_701_838.92,
+        # net_profit too: total_expenses and net_profit can be edited together
+        # in a way that still satisfies both identities, so pinning the profit
+        # is what actually closes that hole.
+        "net_profit": 418_841.92}
 
 
 def die(msg):

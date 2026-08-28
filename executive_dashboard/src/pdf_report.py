@@ -348,5 +348,11 @@ def _profitability(mg, title, sub, h2, body):
     line = f"مصدر التكلفة: {src['repo']} · {src['path']}"
     if st:
         line += f" · قوائم الدخل (الالتزام {st['meta']['source_commit'][:7]})"
-    out.append(Paragraph(_ar(f"{line} — انظر {src['see']}."), sub))
+    # _ar_block, not _ar: adding the statements clause made this long enough
+    # to wrap, and _ar reorders the whole run before wrapping, so the wrapped
+    # lines print in reverse vertical order.
+    # size must match the `sub` style (11pt): _ar_block measures with the size
+    # it is given, so a smaller one decides the text fits, emits no <br/>, and
+    # hands reportlab a single long run to wrap itself — in reverse order.
+    out.append(Paragraph(_ar_block(f"{line} — انظر {src['see']}.", size=11), sub))
     return out

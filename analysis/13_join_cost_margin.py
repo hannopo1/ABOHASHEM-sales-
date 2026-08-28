@@ -43,6 +43,7 @@ Inputs   data/processed/sales_transactions.csv, dim_items.csv, dim_customers.csv
 Outputs  data/processed/margin_unit_costs.csv
          data/processed/margin_by_{item,customer,rep,brand,month}.csv
          data/processed/margin_summary.json
+         data/processed/margin_dashboard.json  (compact payload for the mobile app)
 """
 import json
 from pathlib import Path
@@ -234,6 +235,65 @@ def agg(j: pd.DataFrame, keys: list[str], reliable_only: bool = True) -> pd.Data
     return out.sort_values("revenue_total", ascending=False)
 
 
+def dashboard_payload(summary: dict, outs: dict, u: pd.DataFrame) -> dict:
+    """Compact payload the mobile app inlines as window.DASH_MARGIN.
+
+    Deliberately separate from dashboards/data.js: that file is the desktop
+    dashboard's data contract and nothing here should perturb it.
+    """
+    def rows(df, cols, n=None):
+        d = df if n is None else df.head(n)
+        return clean(d[cols].round(4).to_dict("records"))
+
+    # Items priced below what the costing model recommends, worst gap first.
+    pricing = u.dropna(subset=["rec_price", "june_avg_price"]).copy()
+    pricing["gap_pct"] = ((pricing["rec_price"] - pricing["june_avg_price"])
+                          / pricing["june_avg_price"] * 100)
+    pricing = pricing[pricing["gap_pct"] > 0].sort_values("gap_pct", ascending=False)
+
+    return {
+        "meta": {
+            "cost_month": summary["cost_month"],
+            "coverage_pct": summary["coverage"]["coverage_pct"],
+            "revenue_uncosted": summary["coverage"]["revenue_uncosted"],
+            "n_items_costed": summary["coverage"]["n_items_costed"],
+            "n_items_total": summary["coverage"]["n_items_total"],
+            "reliable_months": summary["price_drift"]["reliable_months"],
+            "excluded_months": summary["price_drift"]["excluded_months"],
+            "max_drift_pct": MAX_DRIFT_PCT,
+            "source": summary["cost_source"],
+        },
+        "totals": {"measured": summary["measured"],
+                   "indicative": summary["indicative"],
+                   "excluded": summary["indicative_excluded"]},
+        "by_month": rows(outs["margin_by_month.csv"],
+                         ["month", "basis", "revenue_costed", "gross_profit", "op_profit",
+                          "gross_margin_pct", "op_margin_pct", "price_index",
+                          "cost_period_drift_pct", "indicative_reliable"]),
+        "by_brand": rows(outs["margin_by_brand.csv"],
+                         ["brand", "revenue_total", "revenue_costed", "gross_profit",
+                          "op_profit", "gross_margin_pct", "op_margin_pct",
+                          "cost_coverage_pct"]),
+        "by_rep": rows(outs["margin_by_rep.csv"],
+                       ["rep", "revenue_total", "revenue_costed", "gross_profit",
+                        "op_profit", "gross_margin_pct", "op_margin_pct",
+                        "cost_coverage_pct"]),
+        "by_item": rows(outs["margin_by_item.csv"],
+                        ["item_code", "item_name", "brand", "revenue_costed", "qty",
+                         "gross_profit", "op_profit", "gross_margin_pct", "op_margin_pct"]),
+        "by_customer": rows(outs["margin_by_customer.csv"],
+                            ["customer_code", "customer_name", "rep", "revenue_total",
+                             "revenue_costed", "gross_profit", "op_profit",
+                             "gross_margin_pct", "op_margin_pct"], n=60),
+        "uncosted_items": summary["coverage"]["uncosted_items_top"],
+        "pricing_gap": clean(pricing[["item_code", "cost_item_name", "cost_brand",
+                                      "june_avg_price", "rec_price", "floor_price",
+                                      "gap_pct", "abc", "flags"]]
+                             .round(4).to_dict("records")),
+        "caveats": summary["caveats"],
+    }
+
+
 def main() -> None:
     tx = pd.read_csv(P / "sales_transactions.csv",
                      dtype={"customer_code": str, "item_code": str})
@@ -343,6 +403,10 @@ def main() -> None:
     (P / "margin_summary.json").write_text(
         json.dumps(clean(summary), ensure_ascii=False, indent=2), encoding="utf-8")
 
+    (P / "margin_dashboard.json").write_text(
+        json.dumps(clean(dashboard_payload(summary, outs, u)),
+                   ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+
     cov = summary["coverage"]
     print(f"\ncoverage  {cov['n_items_costed']}/{cov['n_items_total']} items · "
           f"{cov['coverage_pct']:.1f}% of {cov['revenue_total']:,.0f} EGP revenue")
@@ -357,7 +421,8 @@ def main() -> None:
             continue
         print(f"  {label:28s} revenue {b['revenue_costed']:>13,.0f}  "
               f"gross {b['gross_margin_pct']:>6.2f}%  operating {b['op_margin_pct']:>7.2f}%")
-    print(f"\nwrote margin_unit_costs.csv + {len(outs)} aggregates + margin_summary.json")
+    print(f"\nwrote margin_unit_costs.csv + {len(outs)} aggregates + "
+          "margin_summary.json + margin_dashboard.json")
 
 
 if __name__ == "__main__":

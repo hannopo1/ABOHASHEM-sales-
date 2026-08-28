@@ -1160,6 +1160,67 @@ class App extends React.Component {
       this.card("مقارنة نماذج التنبؤ (rolling CV)",this.rowsList(cvRows,[["النموذج",r=>r.name],["RMSE",r=>R.fmt0(r.rmse)],["MAE",r=>R.fmt0(r.mae)],["MAPE%",r=>R.fmt1(r.mape)],["SMAPE%",r=>R.fmt1(r.smape)]]),{k:"fc3",sub:"أقل RMSE = أفضل"})];
   }
 
+  /* ---- الربحية ------------------------------------------------------------
+     Built from window.DASH_MARGIN (analysis/13_join_cost_margin.py). Ignores
+     the filter bar: margin comes from precomputed company-level aggregates and
+     cannot honestly be re-derived for an arbitrary slice, exactly as with the
+     fin / forecast / quality sections. */
+  repoMargin(R,RD){
+    if(!M.has()) return [this.empty("بيانات التكلفة غير محمّلة في هذا البناء.")];
+    const d=M.D(), C=this.state.C, win=M.windowLabel(d);
+    const ex=(d.meta.excluded_months||[]).length;
+
+    const banner=React.createElement("div",{key:"mb",style:{padding:"11px 12px",borderRadius:12,
+        background:"rgba(245,158,11,.10)",border:"1px solid rgba(245,158,11,.30)",
+        fontSize:11,lineHeight:1.85,color:"#fcd9a0"}},
+      "التكلفة مقيسة لشهر "+M.arMonth(d.meta.cost_month)+" فقط. النافذة الموثوقة هي "+win+
+      " — وهي الشهور التي لا تبعد أسعارها عن شهر التكلفة بأكثر من "+
+      d.meta.max_drift_pct+"%. ",
+      React.createElement("br"),
+      "استُبعد "+ex+" شهرًا سابقًا: كانت الأسعار أدنى بنحو 15% قبل زيادة مارس–أبريل 2026، "+
+      "واحتساب تكلفة يونيو عليها يُظهر هامشًا سالبًا هو أثر منهجي لا خسارة فعلية.");
+
+    const uncosted=(d.uncosted_items||[]).slice(0,8)
+      .map(r=>[r.item_name||r.item_code, r.revenue, "#64748b"]);
+
+    const gaps=M.pricingGap(d);
+
+    return [
+      banner,
+      this.kpiGridRepo(M.kpisWindow(d,R)),
+      this.card("الشهر المقيس — مطابق لقائمة الدخل",
+        this.kpiGridRepo(M.kpisMeasured(d,R)),
+        {k:"mm",sub:M.arMonth(d.meta.cost_month)}),
+      this.chartCard("اتجاه الهامش ومؤشر الأسعار",M.trend(d,C),
+        {k:"mt",h:C.H.tall,
+         sub:"الرمادي: شهور خارج النافذة"}),
+      this.card("هامش مجمل حسب العلامة التجارية",
+        this.barsH(M.bars(d.by_brand||[],"brand",R),v=>R.fmtPct(v)),
+        {k:"mbr",sub:win,approx:true}),
+      this.card("هامش مجمل حسب المندوب",
+        this.barsH(M.bars(d.by_rep||[],"rep",R,(d.totals.measured||{}).gross_margin_pct),
+                   v=>R.fmtPct(v)),
+        {k:"mrp",sub:win,approx:true}),
+      this.chartCard("الإيراد مقابل الهامش لكل صنف",M.itemScatter(d,C),
+        {k:"mis",h:C.H.tall,approx:true,
+         sub:"أفقي: الإيراد · رأسي: هامش مجمل · حجم الفقاعة: الإيراد · "+win}),
+      this.card("أصناف سعرها الفعلي دون السعر الموصى به",
+        gaps.length?this.rowsList(gaps,[
+            ["الصنف",r=>r.cost_item_name],
+            ["السعر الفعلي",r=>R.fmt2(r.june_avg_price)],
+            ["الموصى به",r=>R.fmt2(r.rec_price)],
+            ["الفجوة",r=>R.fmtPct(r.gap_pct)],
+            ["الحد الأدنى",r=>R.fmt2(r.floor_price)],
+            ["فئة ABC",r=>r.abc],
+            ["ملاحظة",r=>r.flags||"—"],
+          ]):this.empty("لا توجد أصناف تحت السعر الموصى به."),
+        {k:"mpg",sub:"من محرك التسعير في نموذج التكاليف"}),
+      this.card("إيراد بلا بيانات تكلفة",
+        this.barsH(uncosted,R.fmtEGPk),
+        {k:"muc",sub:R.fmtPct(100-d.meta.coverage_pct)+" من الإيراد — لا تُحتسب له تكلفة صفرية"}),
+    ];
+  }
+
   repoQuality(R,RD){
     const dq=RD.data_quality;
     const missing=Object.entries(dq.missing_values||{}).map(([k,v])=>({field:k,...v}));
@@ -1233,9 +1294,10 @@ class App extends React.Component {
 
   buildRepo(){
     const st=this.state, R=st.R, RD=st.RD, T=st.T;
-    const SEC=R.SECTIONS, cur=SEC.find(s=>s.id===st.section)||SEC[0];
+    const SEC=R.SECTIONS.concat(M.has()?[M.SECTION]:[]);
+    const cur=SEC.find(s=>s.id===st.section)||SEC[0];
     const NAV=[["fin","المالية"],["sales","المبيعات"],["customers","العملاء"],["debt","المديونية"]];
-    const moreIds=["brands","products","forecast","quality","analysis"];
+    const moreIds=["brands","products","margin","forecast","quality","analysis"];
 
     const navEl=React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:2}},
       NAV.map(([id,lab])=>{const on=st.section===id;
@@ -1264,7 +1326,11 @@ class App extends React.Component {
 
     const chipsEl=React.createElement("div",{style:{flex:"none",position:"relative",display:"flex",alignItems:"center",gap:6,padding:"8px 13px",overflowX:"auto",borderBottom:"1px solid rgba(255,255,255,.06)"}},
       [React.createElement("span",{key:"h2",style:{fontSize:12,fontWeight:700,color:"#e2e8f0",flex:"none",whiteSpace:"nowrap"}},cur.title),
-       React.createElement("span",{key:"p",style:{flex:"none",fontSize:10.5,padding:"4px 9px",borderRadius:99,background:"rgba(59,130,246,.14)",border:"1px solid rgba(59,130,246,.3)",color:"#93c5fd",whiteSpace:"nowrap"}},RD.financial.period.start+" — "+RD.financial.period.end)]
+       React.createElement("span",{key:"p",style:{flex:"none",fontSize:10.5,padding:"4px 9px",borderRadius:99,background:"rgba(59,130,246,.14)",border:"1px solid rgba(59,130,246,.3)",color:"#93c5fd",whiteSpace:"nowrap"}},
+         /* الربحية covers only the months that pass the price-drift gate, so it
+            must not wear the dataset-wide period chip. */
+         st.section==="margin"&&M.has() ? M.windowLabel(M.D())
+                                        : RD.financial.period.start+" — "+RD.financial.period.end)]
       .concat(chipDefs.map(([k,lab,val])=>React.createElement("span",{key:k,
         onClick:()=>this.setState(p=>({rf:{...p.rf,[k]:null}})),
         style:{flex:"none",fontSize:10.5,padding:"4px 9px",borderRadius:99,background:"rgba(227,73,72,.14)",border:"1px solid rgba(227,73,72,.28)",color:"#fca5a5",cursor:"pointer",whiteSpace:"nowrap",maxWidth:190,overflow:"hidden",textOverflow:"ellipsis"}},
@@ -1273,7 +1339,9 @@ class App extends React.Component {
     /* fin / forecast / quality are built from precomputed company-level
        scalars, so they render unfiltered under a notice rather than pretending
        a filter applied. */
-    const unfilterable=R.UNFILTERABLE.includes(st.section);
+    /* margin joins precomputed company-level cost aggregates, so like
+       fin / forecast / quality it cannot be re-derived for a slice. */
+    const unfilterable=R.UNFILTERABLE.concat(["margin"]).includes(st.section);
     const f=unfilterable?R.EMPTY_FILTERS:st.rf;
 
     let body;
@@ -1285,6 +1353,7 @@ class App extends React.Component {
     else if(st.section==="products") body=this.repoProducts(R,RD,f);
     else if(st.section==="forecast") body=this.repoForecast(R,RD);
     else if(st.section==="analysis") body=this.repoAnalysis(R,RD,f);
+    else if(st.section==="margin") body=this.repoMargin(R,RD);
     else body=this.repoQuality(R,RD);
 
     const head=[React.createElement("div",{key:"sub",style:{fontSize:11,color:"#64748b",lineHeight:1.7}},cur.sub)];

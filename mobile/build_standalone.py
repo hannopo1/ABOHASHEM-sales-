@@ -32,6 +32,10 @@ SNAPS = APP / "data" / "snapshots"
 # Reused from elsewhere in the repo rather than duplicated here.
 ECHARTS = ROOT / "executive_dashboard" / "vendor" / "echarts.min.js"
 DASH_DATA_JS = ROOT / "dashboards" / "data.js"
+# Profitability payload from analysis/13_join_cost_margin.py. Deliberately a
+# separate global: dashboards/data.js is the desktop dashboard's data contract
+# and nothing here should perturb it. Absent -> the app hides the section.
+MARGIN_JSON = ROOT / "data" / "processed" / "margin_dashboard.json"
 FONT_DIR = ROOT / "executive_dashboard" / "vendor" / "fonts"
 
 # Cairo carries the Arabic text and is embedded as a data URI. The shipped build
@@ -83,6 +87,14 @@ def build() -> Path:
 
     # --- precomputed aggregate dataset (window.DASH_DATA) ------------------
     parts.append(f"<script>{safe_js(read(DASH_DATA_JS))}</script>")
+
+    # --- profitability payload (window.DASH_MARGIN) ------------------------
+    if MARGIN_JSON.exists():
+        parts.append("<script>window.DASH_MARGIN="
+                     + safe_js(read(MARGIN_JSON).strip()) + ";</script>")
+    else:
+        print(f"note: {MARGIN_JSON.name} missing — building without الربحية; "
+              "run analysis/13_join_cost_margin.py first")
 
     # --- AR snapshots as inert JSON blocks, parsed on demand by the app ----
     index = json.loads(read(SNAPS / "index.json"))

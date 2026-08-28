@@ -709,8 +709,14 @@ return {ecBase,isEmpty,H,monthly,daily,variance,topCustomers,topProducts,byRep,a
    devicePixelRatio sizing bugs, and it survives printing. The instance is
    disposed on unmount -- React swaps section subtrees wholesale, and a leaked
    instance keeps a resize listener alive against a detached node. */
+/* Live EChart instances, in mount order. dash-export.js walks this to turn the
+   chart the user is looking at into a PNG or an SVG; nothing else reads it.
+   Entries are removed on unmount, so a disposed instance is never exported. */
+const REGISTRY = [];
+
 class EChart extends React.Component {
   componentDidMount(){
+    REGISTRY.push(this);
     this.draw();
     this.onResize = () => { if(this.inst) this.inst.resize(); };
     window.addEventListener("resize", this.onResize);
@@ -718,6 +724,8 @@ class EChart extends React.Component {
   componentDidUpdate(prev){ if(prev.option !== this.props.option) this.draw(); }
   componentWillUnmount(){
     window.removeEventListener("resize", this.onResize);
+    const i = REGISTRY.indexOf(this);
+    if(i >= 0) REGISTRY.splice(i, 1);
     if(this.inst){ this.inst.dispose(); this.inst = null; }
   }
   draw(){
@@ -732,6 +740,7 @@ class EChart extends React.Component {
   }
   render(){
     return React.createElement("div",{ref:e=>this.el=e,
+      "data-chart-title":this.props.title||null,
       style:{width:"100%", height:(this.props.h||300), touchAction:"pan-y"}});
   }
 }

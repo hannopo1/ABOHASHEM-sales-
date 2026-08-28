@@ -18,6 +18,9 @@ class App extends React.Component {
      a phone screen, so it starts collapsed behind the header button. */
 
   componentDidMount(){
+    /* Handle for the export tests in mobile/tools/, which drive the real page
+       rather than a mock so the shipped bundle is what gets verified. */
+    window.__app = this;
     try{
       const AG = G, C = window.__C;
       /* Several AR snapshots ship as inert JSON blocks; only the selected one is
@@ -161,7 +164,7 @@ class App extends React.Component {
       rs.map((r,i)=>React.createElement("div",{key:i,style:{display:"flex",alignItems:"center",gap:8}},
         React.createElement("span",{style:{width:92,flex:"none",fontSize:10.5,color:"#94a3b8",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}},r[0]),
         React.createElement("span",{style:{flex:1,height:9,borderRadius:99,background:"rgba(255,255,255,.05)",overflow:"hidden",display:"block"}},
-          React.createElement("span",{style:{display:"block",height:"100%",width:(r[1]/mx*100)+"%",borderRadius:99,background:r[2]||"#3b82f6"}})),
+          React.createElement("span",{"data-bar":"fill",style:{display:"block",height:"100%",width:(r[1]/mx*100)+"%",borderRadius:99,background:r[2]||"#3b82f6"}})),
         React.createElement("span",{style:{fontSize:10.5,color:"#cbd5e1",flex:"none",fontFamily:"'JetBrains Mono',monospace"}},fmt(r[1])))));
   }
   gauge(rate,T,label){
@@ -239,7 +242,8 @@ class App extends React.Component {
       React.createElement("b",{style:{color:"#f59e0b"}},"window.DASH غير موجود"),
       React.createElement("div",{style:{marginTop:6,lineHeight:1.9}},"الملفان المرفقان يشملان الأنماط والمنطق والمسميات، لكن حِزمة data.js غير مضمّنة، فلا توجد قيم لعرضها. لا شيء مُختلق: كل خانة تُعلَن «غير متاحة» حتى يُحمّل المصدر."));
     const filterBtnEl=React.createElement("span",{style:{width:34,height:34,flex:"none",borderRadius:10,background:"rgba(255,255,255,.02)",border:"1px solid rgba(255,255,255,.06)",display:"grid",placeItems:"center",color:"#475569",opacity:.6},dangerouslySetInnerHTML:{__html:'<svg viewBox="0 0 24 24" style="width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>'}});
-    return {bodyEl, navEl, chipsEl, filterBarEl:null, srcEl:null, filterBtnEl, sheetEl, statusEl, sectionListEl};
+    return {bodyEl, navEl, chipsEl, filterBarEl:null, srcEl:null, filterBtnEl,
+            exportBtnEl:null, sheetEl, statusEl, sectionListEl};
   }
 
   /* One tile grid for every KPI surface. Rows are [label, value, sub, colour].
@@ -919,7 +923,9 @@ class App extends React.Component {
       noData?[this.empty("لا توجد بيانات لهذا الشهر")]:body);
 
     let sheetEl=null;
-    if(st.sheet){
+    if(st.sheet==="export"){
+      sheetEl=this.exportSheet();
+    } else if(st.sheet){
       let inner;
       if(st.sheet==="nav"){
         inner=SEC.map(s=>React.createElement("div",{key:s.id,onClick:()=>this.setState({section:s.id,sheet:null}),style:{padding:"12px 13px",borderRadius:12,background:st.section===s.id?"rgba(59,130,246,.12)":"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.07)",fontSize:13,color:"#e2e8f0",cursor:"pointer"}},s.label));
@@ -967,6 +973,7 @@ class App extends React.Component {
 
     const stmtEl = st.stmt!=null ? this.statementSheet(st.stmt) : null;
     return {bodyEl:body, navEl, chipsEl, filterBarEl, srcEl, filterBtnEl,
+            exportBtnEl:this.exportBtn(),
             sheetEl:[sheetEl, stmtEl], statusEl, sectionListEl};
   }
 
@@ -1221,6 +1228,236 @@ class App extends React.Component {
     ];
   }
 
+  /* ---- استخراج التقارير والرسوم ------------------------------------------
+     The catalogue of tables the user can take away. Built from the dataset that
+     is currently selected, so what leaves the app is what the app is showing.
+
+     Filters are applied only on columns a row actually carries (rep, brand,
+     customer). Anything the row cannot be filtered on is exported whole rather
+     than half-filtered, and the sheet states the row count either way. */
+  exportTables(){
+    const st=this.state, num=v=>(v==null||v===""?null:Number(v));
+    const col=(label,key,fn)=>({label, get:fn||(r=>r[key])});
+    const out=[];
+
+    const mf=(rows,pred)=>rows.filter(pred);
+
+    if(st.src==="dash" && st.api){
+      const D=st.api.D, f=st.filters||{};
+      const inMonth=r=>!f.month||f.month==="all"||r.month===f.month;
+      const byRep=r=>!f.rep||r.rep===f.rep;
+      out.push(
+        {id:"invoices", label:"الفواتير",
+         rows:mf(D.invoices||[],r=>inMonth(r)&&byRep(r)), columns:[
+          col("رقم الفاتورة","invoice_no"), col("التاريخ","invoice_date"),
+          col("كود العميل","customer_code"), col("العميل","customer_name"),
+          col("المندوب","rep"), col("القيمة",null,r=>num(r.reported_total)),
+          col("المسدد",null,r=>num(r.paid)), col("المتبقي",null,r=>num(r.remaining)),
+          col("الكمية",null,r=>num(r.qty_total)), col("عدد البنود",null,r=>num(r.n_lines)),
+          col("الحالة","status")]},
+        {id:"lines", label:"بنود الفواتير",
+         rows:mf(D.lines||[],r=>inMonth(r)&&byRep(r)), columns:[
+          col("رقم الفاتورة","invoice_no"), col("التاريخ","invoice_date"),
+          col("العميل","customer_name"), col("المندوب","rep"),
+          col("كود الصنف","item_code"), col("الصنف","item_name"),
+          col("العلامة","brand"), col("الكمية",null,r=>num(r.qty)),
+          col("سعر الوحدة",null,r=>num(r.unit_price)),
+          col("الإجمالي",null,r=>num(r.line_total)),
+          col("كراتين",null,r=>num(r.boxes)), col("بونص",null,r=>r.is_bonus?"نعم":"لا")]},
+        {id:"receivables", label:"أرصدة المديونية",
+         rows:mf(((D.receivables||{}).rows)||[],byRep), columns:[
+          col("كود العميل","customer_code"), col("العميل","customer_name"),
+          col("المندوب","rep"), col("الرصيد",null,r=>num(r.balance!=null?r.balance:r.net_balance)),
+          col("متأخر",null,r=>num(r.overdue)), col("جاري",null,r=>num(r.current))]},
+        {id:"collections", label:"التحصيلات",
+         rows:((D.collections||{}).receipts)||[], columns:[
+          col("التاريخ","date"), col("كود العميل","customer_code"),
+          col("العميل","customer_name"), col("المندوب","rep"),
+          col("المبلغ",null,r=>num(r.amount)), col("الوسيلة","method")]},
+        {id:"returns", label:"المرتجعات",
+         rows:((D.collections||{}).returns_rows)||[], columns:[
+          col("التاريخ","date"), col("كود العميل","customer_code"),
+          col("العميل","customer_name"), col("القيمة",null,r=>num(r.amount))]},
+        {id:"monthly", label:"الملخص الشهري", rows:D.monthly||[], columns:[
+          col("الشهر","month"), col("صافي المبيعات",null,r=>num(r.net_sales)),
+          col("الفواتير",null,r=>num(r.invoices)), col("العملاء",null,r=>num(r.customers)),
+          col("الكمية",null,r=>num(r.qty))]});
+
+      try{
+        const rows=AG.agingRows(D);
+        out.push({id:"aging", label:"أعمار المديونية",
+          rows:mf(rows,byRep), columns:[
+            col("كود العميل","code"), col("العميل","name"), col("المندوب","rep"),
+            col("الرصيد",null,r=>num(r.balance))].concat(
+            AG.AGE_TIERS.map(t=>col(t.label,null,r=>num((r.tiers||{})[t.key]))))
+            .concat([col("رصيد افتتاحي",null,r=>num(r.opening))])});
+      }catch(e){}
+    }
+
+    const RD=st.RD;
+    if(st.src!=="dash" && RD){
+      const f=st.rf||{};
+      const okRep=r=>!f.rep||r.rep===f.rep;
+      const okBrand=r=>!f.brand||r.brand===f.brand;
+      const okCust=r=>!f.customerCode||String(r.customer_code)===String(f.customerCode);
+      out.push(
+        {id:"customers", label:"العملاء",
+         rows:mf(RD.dim_customers||[],r=>okRep(r)&&okCust(r)), columns:[
+          col("الكود","customer_code"), col("العميل","customer_name"),
+          col("المندوب","rep"), col("المدينة","city"),
+          col("الإيراد",null,r=>num(r.total_revenue)),
+          col("عدد الفواتير",null,r=>num(r.n_invoices)),
+          col("أول فاتورة","first_invoice_date"), col("آخر فاتورة","last_invoice_date")]},
+        {id:"ar", label:"أرصدة المديونية",
+         rows:mf(RD.ar_balances||[],r=>okRep(r)&&okCust(r)), columns:[
+          col("المندوب","rep"), col("الكود","customer_code"),
+          col("العميل","customer_name"), col("المدينة","city"),
+          col("مدين",null,r=>num(r.debit)), col("دائن",null,r=>num(r.credit)),
+          col("صافي الرصيد",null,r=>num(r.net_balance))]},
+        {id:"items", label:"الأصناف",
+         rows:mf(RD.item_asp_boxes||[],okBrand), columns:[
+          col("الكود","item_code"), col("الصنف","item_name"), col("العلامة","brand"),
+          col("الكمية",null,r=>num(r.total_qty)),
+          col("الإيراد",null,r=>num(r.total_revenue)),
+          col("متوسط السعر",null,r=>num(r.asp_egp)),
+          col("سعة الكرتونة","carton_capacity"),
+          col("كراتين",null,r=>num(r.qty_in_boxes))]},
+        {id:"brands", label:"العلامات التجارية",
+         rows:mf(RD.brand_summary||[],okBrand), columns:[
+          col("العلامة","brand"), col("الإيراد",null,r=>num(r.revenue)),
+          col("الكمية",null,r=>num(r.qty)), col("العملاء",null,r=>num(r.n_customers)),
+          col("الحصة %",null,r=>num(r.revenue_share_pct))]},
+        {id:"monthly", label:"الملخص الشهري", rows:RD.monthly_series||[], columns:[
+          col("الشهر","month"), col("الإيراد",null,r=>num(r.revenue)),
+          col("الكمية",null,r=>num(r.qty)), col("الفواتير",null,r=>num(r.n_invoices)),
+          col("العملاء",null,r=>num(r.n_customers)),
+          col("متوسط السعر",null,r=>num(r.avg_selling_price)),
+          col("نمو شهري %",null,r=>num(r.mom_growth_pct))]},
+        {id:"bonus", label:"البونص لكل عميل",
+         rows:mf(RD.customer_bonus_summary||[],r=>okRep(r)&&okCust(r)), columns:[
+          col("الكود","customer_code"), col("العميل","customer_name"),
+          col("المندوب","rep"), col("المبيعات",null,r=>num(r.total_sales_egp)),
+          col("كمية البونص",null,r=>num(r.bonus_qty)),
+          col("قيمة البونص",null,r=>num(r.bonus_estimated_value_egp)),
+          col("% من الكمية",null,r=>num(r.bonus_pct_of_qty))]});
+    }
+
+    /* Profitability travels with either dataset: it is company-level and does
+       not belong to one of them. Every label says تقديري where the figure is,
+       so the caveat survives leaving the app. */
+    if(M.has()){
+      const d=M.D(), win=M.windowLabel(d);
+      const mg=[col("هامش مجمل %",null,r=>num(r.gross_margin_pct)),
+                col("هامش تشغيلي %",null,r=>num(r.op_margin_pct))];
+      out.push(
+        {id:"m_item", label:"الربحية — الأصناف ("+win+")", rows:d.by_item||[], columns:[
+          col("الكود","item_code"), col("الصنف","item_name"), col("العلامة","brand"),
+          col("الإيراد المُسعَّر",null,r=>num(r.revenue_costed)),
+          col("مجمل الربح",null,r=>num(r.gross_profit)),
+          col("الربح التشغيلي",null,r=>num(r.op_profit))].concat(mg)},
+        {id:"m_cust", label:"الربحية — العملاء ("+win+")", rows:d.by_customer||[], columns:[
+          col("الكود","customer_code"), col("العميل","customer_name"),
+          col("المندوب","rep"), col("الإيراد",null,r=>num(r.revenue_total)),
+          col("الإيراد المُسعَّر",null,r=>num(r.revenue_costed)),
+          col("مجمل الربح",null,r=>num(r.gross_profit)),
+          col("الربح التشغيلي",null,r=>num(r.op_profit))].concat(mg)},
+        {id:"m_rep", label:"الربحية — المناديب ("+win+")", rows:d.by_rep||[], columns:[
+          col("المندوب","rep"), col("الإيراد",null,r=>num(r.revenue_total)),
+          col("الإيراد المُسعَّر",null,r=>num(r.revenue_costed)),
+          col("مجمل الربح",null,r=>num(r.gross_profit)),
+          col("الربح التشغيلي",null,r=>num(r.op_profit))].concat(mg)},
+        {id:"m_month", label:"الربحية — الشهور", rows:d.by_month||[], columns:[
+          col("الشهر","month"), col("الأساس",null,r=>r.basis==="measured"?"مقيس":"تقديري"),
+          col("الإيراد المُسعَّر",null,r=>num(r.revenue_costed)),
+          col("مجمل الربح",null,r=>num(r.gross_profit)),
+          col("الربح التشغيلي",null,r=>num(r.op_profit))].concat(mg).concat([
+          col("مؤشر الأسعار",null,r=>num(r.price_index)),
+          col("انحراف عن شهر التكلفة %",null,r=>num(r.cost_period_drift_pct)),
+          col("ضمن النافذة الموثوقة",null,r=>r.indicative_reliable?"نعم":"لا")])},
+        {id:"m_price", label:"فجوة التسعير", rows:d.pricing_gap||[], columns:[
+          col("الكود","item_code"), col("الصنف","cost_item_name"),
+          col("العلامة","cost_brand"),
+          col("السعر الفعلي",null,r=>num(r.june_avg_price)),
+          col("الموصى به",null,r=>num(r.rec_price)),
+          col("الحد الأدنى",null,r=>num(r.floor_price)),
+          col("الفجوة %",null,r=>num(r.gap_pct)),
+          col("فئة ABC","abc"), col("ملاحظة","flags")]});
+    }
+    return out.filter(t=>t.rows && t.rows.length);
+  }
+
+  exportSheet(){
+    const st=this.state, tables=this.exportTables(), chartList=X.charts();
+    const say=p=>Promise.resolve(p).then(m=>this.setState({xMsg:m}))
+                                   .catch(e=>this.setState({xMsg:"تعذّر التصدير: "+e.message}));
+    const H=(t,n)=>React.createElement("div",{key:"h"+t,style:{fontSize:11,fontWeight:700,
+        color:"#94a3b8",marginTop:4,display:"flex",justifyContent:"space-between"}},
+      React.createElement("span",null,t),
+      n!=null?React.createElement("span",{style:{color:"#475569",fontWeight:400}},n):null);
+    const btn=(lab,fn,accent)=>React.createElement("span",{key:lab,onClick:fn,
+      style:{flex:"none",padding:"6px 11px",borderRadius:9,fontSize:11,cursor:"pointer",
+        background:accent?"rgba(59,130,246,.16)":"rgba(255,255,255,.04)",
+        border:"1px solid "+(accent?"rgba(59,130,246,.42)":"rgba(255,255,255,.10)"),
+        color:accent?"#93c5fd":"#cbd5e1",whiteSpace:"nowrap"}},lab);
+    const row=(label,sub,actions)=>React.createElement("div",{key:label,
+      style:{display:"flex",alignItems:"center",gap:8,padding:"9px 10px",borderRadius:11,
+        background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.07)"}},
+      React.createElement("div",{style:{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:2}},
+        React.createElement("span",{style:{fontSize:12,color:"#e2e8f0",overflow:"hidden",
+          whiteSpace:"nowrap",textOverflow:"ellipsis"}},label),
+        sub?React.createElement("span",{style:{fontSize:9.5,color:"#64748b"}},sub):null),
+      React.createElement("div",{style:{display:"flex",gap:6,flex:"none"}},actions));
+
+    const inner=[];
+    inner.push(React.createElement("div",{key:"t",style:{fontSize:13.5,fontWeight:800,
+      color:"#e2e8f0"}},"استخراج التقارير والرسوم"));
+    inner.push(React.createElement("div",{key:"n",style:{fontSize:10.5,color:"#64748b",
+      lineHeight:1.75}},"كل التصدير يتم على الجهاز — لا يُرسل أي شيء عبر الإنترنت."));
+
+    if(st.xMsg) inner.push(React.createElement("div",{key:"msg",style:{padding:"8px 10px",
+      borderRadius:10,background:"rgba(16,185,129,.12)",border:"1px solid rgba(16,185,129,.3)",
+      fontSize:11,color:"#6ee7b7"}},st.xMsg));
+
+    inner.push(H("تقرير كامل"));
+    inner.push(row("كل الجداول في ملف Excel واحد",
+      tables.length+" ورقة",[btn("Excel",()=>say(X.downloadXLSX(tables,"أبوهاشم-تقرير")),true)]));
+    inner.push(row("التقرير المعروض كـ PDF","عبر نافذة الطباعة — العربية مُشكَّلة صحيحة",
+      [btn("PDF",()=>{this.setState({sheet:null});say(X.printReport());},true)]));
+
+    inner.push(H("الجداول",tables.length));
+    tables.forEach(t=>inner.push(row(t.label,t.rows.length+" صف · "+t.columns.length+" عمود",
+      [btn("CSV",()=>say(X.downloadCSV(t))),
+       btn("Excel",()=>say(X.downloadXLSX([t],t.label)))])));
+
+    inner.push(H("الرسوم البيانية",chartList.length));
+    if(!chartList.length)
+      inner.push(React.createElement("div",{key:"nc",style:{fontSize:11,color:"#64748b",
+        padding:"8px 2px"}},"افتح قسمًا يحتوي رسومًا ثم أعد فتح هذه النافذة."));
+    chartList.forEach(c=>inner.push(row(c.title,null,
+      [btn("PNG",()=>say(X.downloadChartPNG(c))),
+       btn("SVG",()=>say(X.downloadChartSVG(c)))])));
+
+    return React.createElement("div",{onClick:()=>this.setState({sheet:null,xMsg:null}),
+        style:{position:"absolute",inset:0,zIndex:9,background:"rgba(3,6,14,.7)",
+          display:"flex",alignItems:"flex-end"}},
+      React.createElement("div",{onClick:e=>e.stopPropagation(),
+        style:{width:"100%",maxHeight:"86%",overflow:"auto",background:"#111827",
+          borderTop:"1px solid rgba(255,255,255,.10)",borderRadius:"22px 22px 0 0",
+          padding:"14px 14px 26px",display:"flex",flexDirection:"column",gap:9}},
+        [React.createElement("div",{key:"g",style:{width:38,height:4,borderRadius:99,
+          background:"rgba(255,255,255,.2)",margin:"0 auto 6px",flex:"none"}})].concat(inner)));
+  }
+
+  exportBtn(){
+    return React.createElement("span",{onClick:()=>this.setState({sheet:"export",xMsg:null}),
+      style:{position:"relative",width:34,height:34,flex:"none",borderRadius:10,
+        background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.08)",
+        display:"grid",placeItems:"center",color:"#e2e8f0",cursor:"pointer"},
+      dangerouslySetInnerHTML:{__html:'<svg viewBox="0 0 24 24" style="width:17px;height:17px;'
+        +'fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">'
+        +'<path d="M12 3v12M8 11l4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>'}});
+  }
+
   repoQuality(R,RD){
     const dq=RD.data_quality;
     const missing=Object.entries(dq.missing_values||{}).map(([k,v])=>({field:k,...v}));
@@ -1363,7 +1600,9 @@ class App extends React.Component {
     body=head.concat(body);
 
     let sheetEl=null;
-    if(st.sheet==="rfilters"){
+    if(st.sheet==="export"){
+      sheetEl=this.exportSheet();
+    } else if(st.sheet==="rfilters"){
       const inner=this.rfSheet(R,RD);
       sheetEl=React.createElement("div",{onClick:()=>this.setState({sheet:null,rfPick:null,rfQ:""}),style:{position:"absolute",inset:0,zIndex:9,background:"rgba(3,6,14,.7)",display:"flex",alignItems:"flex-end"}},
         React.createElement("div",{onClick:e=>e.stopPropagation(),style:{width:"100%",maxHeight:"82%",overflow:"auto",background:"#111827",borderTop:"1px solid rgba(255,255,255,.10)",borderRadius:"22px 22px 0 0",padding:"14px 14px 26px",display:"flex",flexDirection:"column"}},
@@ -1394,26 +1633,28 @@ class App extends React.Component {
     const sectionListEl=React.createElement("div",{dir:"rtl",style:{display:"flex",flexWrap:"wrap",gap:6}},
       SEC.map(s=>React.createElement("span",{key:s.id,onClick:()=>this.setState({section:s.id}),style:{fontSize:11,padding:"5px 10px",borderRadius:99,cursor:"pointer",background:st.section===s.id?"rgba(59,130,246,.16)":"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.08)",color:"#cbd5e1"}},s.label)));
 
-    return {bodyEl:body, navEl, chipsEl, filterBarEl:null, srcEl, filterBtnEl, sheetEl, statusEl, sectionListEl};
+    return {bodyEl:body, navEl, chipsEl, filterBarEl:null, srcEl, filterBtnEl,
+            exportBtnEl:this.exportBtn(), sheetEl, statusEl, sectionListEl};
   }
 
   render(){
     const v=this.renderVals();
-    return React.createElement("div",{dir:"rtl",style:{height:"100dvh",width:"100%",maxWidth:480,margin:"0 auto",background:"#0a0e1a",color:"#e2e8f0",fontFamily:"'Cairo',system-ui,'Segoe UI',Tahoma,sans-serif",position:"relative",display:"flex",flexDirection:"column",overflow:"hidden"}},
-      React.createElement("div",{style:{position:"absolute",inset:0,background:"radial-gradient(600px 300px at 100% -10%,rgba(59,130,246,.10),transparent 60%),radial-gradient(500px 250px at -10% 8%,rgba(139,92,246,.10),transparent 55%)",pointerEvents:"none"}}),
+    return React.createElement("div",{dir:"rtl","data-print":"app",style:{height:"100dvh",width:"100%",maxWidth:480,margin:"0 auto",background:"#0a0e1a",color:"#e2e8f0",fontFamily:"'Cairo',system-ui,'Segoe UI',Tahoma,sans-serif",position:"relative",display:"flex",flexDirection:"column",overflow:"hidden"}},
+      React.createElement("div",{"data-print":"backdrop",style:{position:"absolute",inset:0,background:"radial-gradient(600px 300px at 100% -10%,rgba(59,130,246,.10),transparent 60%),radial-gradient(500px 250px at -10% 8%,rgba(139,92,246,.10),transparent 55%)",pointerEvents:"none"}}),
       React.createElement("div",{style:{flex:"none",position:"relative",display:"flex",alignItems:"center",gap:11,padding:"12px 14px 12px",borderBottom:"1px solid rgba(255,255,255,.08)",background:"rgba(17,24,39,.85)"}},
         React.createElement("span",{style:{width:40,height:40,flex:"none",borderRadius:12,background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",display:"grid",placeItems:"center",fontWeight:800,fontSize:14,color:"#fff"}},"أه"),
         React.createElement("div",{style:{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:2}},
           React.createElement("span",{style:{fontSize:13.5,fontWeight:800,color:"#e2e8f0",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},"أبو هاشم للحوم — Food Industries"),
           React.createElement("span",{style:{fontSize:11,color:"#94a3b8"}},"لوحة الأداء التنفيذي المالي")),
-        v.filterBtnEl),
+        React.createElement("div",{"data-print":"actions",style:{display:"flex",gap:7,flex:"none"}},
+          v.exportBtnEl||null, v.filterBtnEl)),
       v.srcEl,
       v.chipsEl,
       v.filterBarEl,
-      React.createElement("div",{style:{flex:1,minHeight:0,overflow:"auto",position:"relative",padding:"12px 13px 18px",display:"flex",flexDirection:"column",gap:11}},
+      React.createElement("div",{"data-print":"scroll",style:{flex:1,minHeight:0,overflow:"auto",position:"relative",padding:"12px 13px 18px",display:"flex",flexDirection:"column",gap:11}},
         v.bodyEl),
       v.sheetEl,
-      React.createElement("div",{style:{flex:"none",position:"relative",borderTop:"1px solid rgba(255,255,255,.08)",background:"rgba(13,18,32,.96)",padding:"7px 5px 20px"}},
+      React.createElement("div",{"data-print":"nav",style:{flex:"none",position:"relative",borderTop:"1px solid rgba(255,255,255,.08)",background:"rgba(13,18,32,.96)",padding:"7px 5px 20px"}},
         v.navEl));
   }
 }

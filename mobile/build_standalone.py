@@ -77,6 +77,16 @@ def read(p: Path) -> str:
     return p.read_text(encoding="utf-8")
 
 
+def read_css(p: Path) -> str:
+    """A stray </style> would close the inlined block early and dump the rest of
+    the stylesheet into the page as visible text. Fail loudly instead."""
+    txt = read(p)
+    if "</style" in txt.lower():
+        raise SystemExit(f"{p.name} contains a literal </style> tag — that is "
+                         "HTML, not CSS, and would truncate the inlined block")
+    return txt
+
+
 def build() -> Path:
     parts: list[str] = []
 
@@ -114,7 +124,7 @@ def build() -> Path:
         '<meta name="viewport" content="width=device-width, initial-scale=1, '
         'maximum-scale=1, viewport-fit=cover">\n'
         f"<title>{TITLE}</title>\n"
-        f"<style>\n{font_css()}\n{read(SRC / 'app.css')}</style>\n</head>\n"
+        f"<style>\n{font_css()}\n{read_css(SRC / 'app.css')}</style>\n</head>\n"
     )
     out = head + '<body>\n<div id="root"></div>\n' + "\n".join(parts) + "\n</body>\n</html>\n"
 

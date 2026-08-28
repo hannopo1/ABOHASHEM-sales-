@@ -14,7 +14,67 @@ a{color:#3b82f6;text-decoration:none}
 a:hover{color:#8b5cf6}
 @keyframes shim{0%{background-position:200% 0}100%{background-position:-200% 0}}
 *{box-sizing:border-box}
-</style>
+
+
+/* ---------------------------------------------------------------- printing --
+   The app is a fixed-height, single-screen shell with its own scroll container,
+   so printing it unchanged yields one clipped page. These rules unclip it and
+   switch to ink-on-white so the result is a readable, cheap-to-print report.
+
+   The shell carries data-print hooks (app / backdrop / scroll / nav) precisely
+   so this can target the four elements that matter instead of blanket-styling
+   every div — a blanket height:auto would collapse the fixed-height chart
+   containers to nothing, and hiding #root's last child would hide the whole
+   application, since the app root is #root's only child.
+
+   Arabic shaping is left entirely to the browser. That is the reason PDF export
+   goes through the print dialogue rather than a JavaScript PDF library, which
+   without a text-shaping engine emits disjoint, reversed glyphs. */
+@media print {
+  html, body {
+    background: #fff !important; color: #111 !important;
+    height: auto !important; overflow: visible !important;
+  }
+  #root { height: auto !important; overflow: visible !important; }
+
+  /* Let the page grow instead of scrolling inside a phone-sized box. */
+  [data-print="app"] {
+    height: auto !important; max-height: none !important;
+    max-width: none !important; overflow: visible !important;
+    display: block !important; background: #fff !important;
+  }
+  [data-print="scroll"] {
+    overflow: visible !important; height: auto !important;
+    max-height: none !important; display: block !important; padding: 0 !important;
+  }
+
+  /* Screen-only chrome: the decorative glow, the bottom tab bar and the header
+     buttons. The dataset switch stays — on a financial report, which extract the
+     figures came from is part of the record. */
+  [data-print="backdrop"], [data-print="nav"], [data-print="actions"] {
+    display: none !important;
+  }
+
+  /* Repaint the dark panels onto paper. Charts are excluded: their colours are
+     the data, and ECharts paints its own background into the SVG. */
+  [data-print="app"] *:not(svg):not(svg *):not([data-bar]) {
+    background: transparent !important; color: #111 !important;
+    box-shadow: none !important; text-shadow: none !important;
+  }
+  /* Bar fills are excluded above: their colour IS the value, so flattening them
+     would leave a row of labels with no chart. */
+  [data-bar="fill"] { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  [data-print="scroll"] > div {
+    border: 1px solid #ccc !important; border-radius: 8px !important;
+    margin-bottom: 10px !important; padding: 10px !important;
+    break-inside: avoid; page-break-inside: avoid;
+  }
+
+  /* Keep a chart whole on one page; it is unreadable split across two. */
+  svg { break-inside: avoid; page-break-inside: avoid; max-width: 100% !important; }
+
+  @page { margin: 12mm; }
+}
 </style>
 </head>
 <body>
@@ -1946,8 +2006,14 @@ return {ecBase,isEmpty,H,monthly,daily,variance,topCustomers,topProducts,byRep,a
    devicePixelRatio sizing bugs, and it survives printing. The instance is
    disposed on unmount -- React swaps section subtrees wholesale, and a leaked
    instance keeps a resize listener alive against a detached node. */
+/* Live EChart instances, in mount order. dash-export.js walks this to turn the
+   chart the user is looking at into a PNG or an SVG; nothing else reads it.
+   Entries are removed on unmount, so a disposed instance is never exported. */
+const REGISTRY = [];
+
 class EChart extends React.Component {
   componentDidMount(){
+    REGISTRY.push(this);
     this.draw();
     this.onResize = () => { if(this.inst) this.inst.resize(); };
     window.addEventListener("resize", this.onResize);
@@ -1955,6 +2021,8 @@ class EChart extends React.Component {
   componentDidUpdate(prev){ if(prev.option !== this.props.option) this.draw(); }
   componentWillUnmount(){
     window.removeEventListener("resize", this.onResize);
+    const i = REGISTRY.indexOf(this);
+    if(i >= 0) REGISTRY.splice(i, 1);
     if(this.inst){ this.inst.dispose(); this.inst = null; }
   }
   draw(){
@@ -1969,9 +2037,339 @@ class EChart extends React.Component {
   }
   render(){
     return React.createElement("div",{ref:e=>this.el=e,
+      "data-chart-title":this.props.title||null,
       style:{width:"100%", height:(this.props.h||300), touchAction:"pan-y"}});
   }
 }
+
+/* Abu Hashem — mobile runtime · استخراج التقارير والرسوم (export).
+
+   Four formats, all produced on the device with no network and no server:
+
+     CSV    UTF-8 with a BOM, so Excel opens Arabic correctly instead of as
+            mojibake. This is the single most common failure when exporting
+            Arabic CSV and the BOM is the whole fix.
+     XLSX   Written here as OOXML inside a ZIP built by the small writer below.
+            No library: a spreadsheet is a handful of XML parts, and shipping a
+            ZIP dependency to emit them would cost more than it saves.
+     PNG    Straight off the live ECharts instance via getDataURL.
+     SVG    renderToSVGString on the same instance — vector, so it stays sharp
+            in a report at any size.
+     PDF    Through the browser's own print dialogue. A JavaScript PDF library
+            cannot shape Arabic without a text-shaping engine and would emit
+            disjoint, reversed glyphs; the browser already shapes the page
+            correctly, so print-to-PDF is the only route that produces a
+            readable Arabic document offline.
+
+   Downloads use a blob and an <a download>. On iOS Safari that is unreliable
+   from file://, so the Web Share API is tried first where the platform offers
+   it for files. */
+const X = (function(){
+
+/* --------------------------------------------------------------- utilities */
+
+const pad = n => String(n).padStart(2, "0");
+
+function stamp(){
+  const d = new Date();
+  return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate())
+       + "-" + pad(d.getHours()) + pad(d.getMinutes());
+}
+
+const safeName = s => String(s || "تقرير")
+  .replace(/[\\/:*?"<>|]/g, "-").replace(/\s+/g, " ").trim().slice(0, 60);
+
+/* Hand the file to the user. Returns a short Arabic status for the sheet. */
+async function deliver(blob, filename){
+  if(navigator.canShare && navigator.share){
+    try{
+      const file = new File([blob], filename, {type: blob.type});
+      if(navigator.canShare({files: [file]})){
+        await navigator.share({files: [file], title: filename});
+        return "تمت المشاركة: " + filename;
+      }
+    }catch(e){
+      if(e && e.name === "AbortError") return "أُلغيت المشاركة";
+      /* fall through to the download path */
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.rel = "noopener";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  return "تم التنزيل: " + filename;
+}
+
+/* ------------------------------------------------------------------- CSV -- */
+
+const csvCell = v => {
+  if(v == null) return "";
+  const s = String(v);
+  return /[",\n\r;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+};
+
+function toCSV(table){
+  const head = table.columns.map(c => csvCell(c.label)).join(",");
+  const body = table.rows.map(r =>
+    table.columns.map(c => csvCell(c.get(r))).join(",")).join("\r\n");
+  return head + "\r\n" + body + "\r\n";
+}
+
+function downloadCSV(table){
+  /* U+FEFF: without it Excel reads the file as the system codepage and every
+     Arabic column becomes mojibake. */
+  const blob = new Blob(["﻿" + toCSV(table)],
+                        {type: "text/csv;charset=utf-8"});
+  return deliver(blob, safeName(table.label) + "-" + stamp() + ".csv");
+}
+
+/* ------------------------------------------------------------- ZIP writer -- */
+
+/* Minimal ZIP, stored (no compression). Enough for XLSX, which Excel accepts
+   uncompressed, and far smaller than shipping a compression library. */
+const CRC = (function(){
+  const t = new Uint32Array(256);
+  for(let n = 0; n < 256; n++){
+    let c = n;
+    for(let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(bytes){
+  let c = 0xFFFFFFFF;
+  for(let i = 0; i < bytes.length; i++) c = CRC[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+function zip(files){
+  const enc = new TextEncoder();
+  const parts = [], central = [];
+  let offset = 0;
+
+  const u16 = n => [n & 0xFF, (n >>> 8) & 0xFF];
+  const u32 = n => [n & 0xFF, (n >>> 8) & 0xFF, (n >>> 16) & 0xFF, (n >>> 24) & 0xFF];
+
+  for(const f of files){
+    const name = enc.encode(f.name);
+    const data = enc.encode(f.data);
+    const sum = crc32(data);
+    /* Local header. Version 20, no flags, method 0 (stored), zeroed DOS time —
+       Excel does not care about the timestamp and a fixed one keeps output
+       byte-stable between runs. */
+    const local = new Uint8Array([].concat(
+      u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0),
+      u32(sum), u32(data.length), u32(data.length),
+      u16(name.length), u16(0)));
+    parts.push(local, name, data);
+    central.push(new Uint8Array([].concat(
+      u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
+      u32(sum), u32(data.length), u32(data.length),
+      u16(name.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset))),
+      name);
+    offset += local.length + name.length + data.length;
+  }
+
+  const centralSize = central.reduce((a, b) => a + b.length, 0);
+  const end = new Uint8Array([].concat(
+    u32(0x06054b50), u16(0), u16(0), u16(files.length), u16(files.length),
+    u32(centralSize), u32(offset), u16(0)));
+
+  return new Blob(parts.concat(central, [end]),
+                  {type: "application/vnd.openxmlformats-officedocument."
+                        + "spreadsheetml.sheet"});
+}
+
+/* ------------------------------------------------------------------ XLSX -- */
+
+const xmlEsc = s => String(s == null ? "" : s)
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;");
+
+const colRef = i => {
+  let s = "", n = i + 1;
+  while(n > 0){ const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = ((n - r) / 26) | 0; }
+  return s;
+};
+
+/* Numbers go in as numbers so Excel can total them; everything else is an
+   inline string, which avoids a shared-string table for no benefit here. */
+function sheetXML(table){
+  const rows = [];
+  const cells = (vals, header) => vals.map((v, i) => {
+    const ref = colRef(i) + (rows.length + 1);
+    const num = !header && v !== "" && v != null && v !== "—"
+                && typeof v === "number" && isFinite(v);
+    return num
+      ? `<c r="${ref}" s="0"><v>${v}</v></c>`
+      : `<c r="${ref}" t="inlineStr"${header ? ' s="1"' : ''}>`
+        + `<is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;
+  }).join("");
+
+  rows.push("<row r=\"1\">" + cells(table.columns.map(c => c.label), true) + "</row>");
+  for(const r of table.rows)
+    rows.push(`<row r="${rows.length + 1}">`
+              + cells(table.columns.map(c => c.get(r)), false) + "</row>");
+
+  const last = colRef(Math.max(table.columns.length - 1, 0)) + (table.rows.length + 1);
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+    + `<sheetPr><outlinePr/></sheetPr><dimension ref="A1:${last}"/>`
+    /* rightToLeft: the sheet opens with column A on the right, matching the app. */
+    + '<sheetViews><sheetView rightToLeft="1" workbookViewId="0" tabSelected="1">'
+    + '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>'
+    + '</sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/>'
+    + "<sheetData>" + rows.join("") + "</sheetData></worksheet>";
+}
+
+function workbook(tables){
+  const names = tables.map((t, i) =>
+    (safeName(t.label).replace(/[\[\]:*?/\\]/g, "").slice(0, 28) || ("ورقة" + (i + 1))));
+  const files = [
+    {name: "[Content_Types].xml", data:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+      + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+      + '<Default Extension="xml" ContentType="application/xml"/>'
+      + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+      + '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+      + tables.map((t, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")
+      + "</Types>"},
+    {name: "_rels/.rels", data:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+      + "</Relationships>"},
+    {name: "xl/workbook.xml", data:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+      + 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+      + "<sheets>"
+      + names.map((n, i) => `<sheet name="${xmlEsc(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")
+      + "</sheets></workbook>"},
+    {name: "xl/_rels/workbook.xml.rels", data:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + tables.map((t, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join("")
+      + `<Relationship Id="rId${tables.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`
+      + "</Relationships>"},
+    {name: "xl/styles.xml", data:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+      + '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>'
+      + '<font><b/><sz val="11"/><name val="Calibri"/></font></fonts>'
+      + '<fills count="2"><fill><patternFill patternType="none"/></fill>'
+      + '<fill><patternFill patternType="gray125"/></fill></fills>'
+      + '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+      + '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+      + '<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+      + '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs>'
+      + "</styleSheet>"},
+  ];
+  tables.forEach((t, i) =>
+    files.push({name: `xl/worksheets/sheet${i + 1}.xml`, data: sheetXML(t)}));
+  return zip(files);
+}
+
+const downloadXLSX = (tables, label) =>
+  deliver(workbook(tables), safeName(label) + "-" + stamp() + ".xlsx");
+
+/* ---------------------------------------------------------------- charts -- */
+
+/* Charts currently mounted, newest section first, with the card title each was
+   given. REGISTRY is maintained by the EChart component in dash-charts.js. */
+function charts(){
+  return REGISTRY
+    .filter(c => c.inst && c.el && c.el.isConnected)
+    .map((c, i) => ({
+      i,
+      title: (c.props && c.props.title) || ("رسم " + (i + 1)),
+      inst: c.inst,
+    }));
+}
+
+/* PNG needs care: the app renders every chart with the SVG renderer, and on an
+   SVG-rendered instance getDataURL({type:'png'}) hands back an SVG data URL,
+   not a raster. Rasterising the SVG through an <img> would also lose the page's
+   embedded Cairo face, because an image document does not inherit the host
+   document's CSS.
+
+   So the chart is re-rendered once into an off-screen canvas instance built
+   from the live instance's own resolved option. It is a real element in this
+   document, so it resolves the same fonts, and getDataURL then returns a true
+   PNG. The temporary instance is always disposed. */
+function chartPNGDataURL(entry, scale){
+  const src = entry.inst.getDom();
+  const w = Math.max(src.clientWidth || 0, 320);
+  const h = Math.max(src.clientHeight || 0, 240);
+
+  const host = document.createElement("div");
+  host.style.cssText = "position:fixed;left:-10000px;top:0;width:" + w
+                     + "px;height:" + h + "px;background:#111827;";
+  document.body.appendChild(host);
+
+  let tmp = null;
+  try{
+    tmp = echarts.init(host, null, {renderer: "canvas", width: w, height: h});
+    /* animation:false is essential, not cosmetic. ecBase() sets a 320 ms entry
+       animation, and getDataURL reads the canvas synchronously — with animation
+       on it captures frame zero, producing an image with axes, grid and legend
+       but no data. */
+    const opt = entry.inst.getOption();
+    opt.animation = false;
+    tmp.setOption(opt, true);
+    return tmp.getDataURL({type: "png", pixelRatio: scale || 2,
+                           backgroundColor: "#111827"});
+  } finally {
+    if(tmp) tmp.dispose();
+    host.remove();
+  }
+}
+
+function downloadChartPNG(entry){
+  const url = chartPNGDataURL(entry, 2);
+  if(url.indexOf("data:image/png;base64,") !== 0)
+    return Promise.resolve("تعذّر إنتاج صورة PNG لهذا الرسم");
+  const bin = atob(url.split(",")[1]);
+  const buf = new Uint8Array(bin.length);
+  for(let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return deliver(new Blob([buf], {type: "image/png"}),
+                 safeName(entry.title) + "-" + stamp() + ".png");
+}
+
+function downloadChartSVG(entry){
+  const svg = entry.inst.renderToSVGString
+    ? entry.inst.renderToSVGString()
+    : (entry.inst.getDom().querySelector("svg") || {}).outerHTML;
+  if(!svg) return Promise.resolve("تعذّر استخراج الرسم كـ SVG");
+  return deliver(new Blob([svg], {type: "image/svg+xml;charset=utf-8"}),
+                 safeName(entry.title) + "-" + stamp() + ".svg");
+}
+
+/* ------------------------------------------------------------------- PDF -- */
+
+/* Print-to-PDF. The print stylesheet in app.css unclips the scroll container,
+   hides the chrome and switches to ink-on-white; the browser shapes the Arabic,
+   which is the part a JS PDF library gets wrong. */
+function printReport(){
+  document.body.setAttribute("data-printing", "1");
+  const done = () => document.body.removeAttribute("data-printing");
+  window.addEventListener("afterprint", done, {once: true});
+  /* Let the print stylesheet apply and ECharts resize before the dialogue. */
+  setTimeout(() => {
+    try{ REGISTRY.forEach(c => c.inst && c.inst.resize()); }catch(e){}
+    window.print();
+    setTimeout(done, 1500);
+  }, 260);
+  return "افتح «حفظ كـ PDF» من نافذة الطباعة";
+}
+
+return {stamp, safeName, deliver, toCSV, downloadCSV, zip, workbook,
+        downloadXLSX, sheetXML, charts, chartPNGDataURL, downloadChartPNG,
+        downloadChartSVG, printReport};
+})();
 
 /* Abu Hashem mobile — module extracted verbatim from the standalone build.
    The App component (9 sections, filters, sheets) and the React bootstrap.
@@ -1993,6 +2391,9 @@ class App extends React.Component {
      a phone screen, so it starts collapsed behind the header button. */
 
   componentDidMount(){
+    /* Handle for the export tests in mobile/tools/, which drive the real page
+       rather than a mock so the shipped bundle is what gets verified. */
+    window.__app = this;
     try{
       const AG = G, C = window.__C;
       /* Several AR snapshots ship as inert JSON blocks; only the selected one is
@@ -2136,7 +2537,7 @@ class App extends React.Component {
       rs.map((r,i)=>React.createElement("div",{key:i,style:{display:"flex",alignItems:"center",gap:8}},
         React.createElement("span",{style:{width:92,flex:"none",fontSize:10.5,color:"#94a3b8",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}},r[0]),
         React.createElement("span",{style:{flex:1,height:9,borderRadius:99,background:"rgba(255,255,255,.05)",overflow:"hidden",display:"block"}},
-          React.createElement("span",{style:{display:"block",height:"100%",width:(r[1]/mx*100)+"%",borderRadius:99,background:r[2]||"#3b82f6"}})),
+          React.createElement("span",{"data-bar":"fill",style:{display:"block",height:"100%",width:(r[1]/mx*100)+"%",borderRadius:99,background:r[2]||"#3b82f6"}})),
         React.createElement("span",{style:{fontSize:10.5,color:"#cbd5e1",flex:"none",fontFamily:"'JetBrains Mono',monospace"}},fmt(r[1])))));
   }
   gauge(rate,T,label){
@@ -2214,7 +2615,8 @@ class App extends React.Component {
       React.createElement("b",{style:{color:"#f59e0b"}},"window.DASH غير موجود"),
       React.createElement("div",{style:{marginTop:6,lineHeight:1.9}},"الملفان المرفقان يشملان الأنماط والمنطق والمسميات، لكن حِزمة data.js غير مضمّنة، فلا توجد قيم لعرضها. لا شيء مُختلق: كل خانة تُعلَن «غير متاحة» حتى يُحمّل المصدر."));
     const filterBtnEl=React.createElement("span",{style:{width:34,height:34,flex:"none",borderRadius:10,background:"rgba(255,255,255,.02)",border:"1px solid rgba(255,255,255,.06)",display:"grid",placeItems:"center",color:"#475569",opacity:.6},dangerouslySetInnerHTML:{__html:'<svg viewBox="0 0 24 24" style="width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>'}});
-    return {bodyEl, navEl, chipsEl, filterBarEl:null, srcEl:null, filterBtnEl, sheetEl, statusEl, sectionListEl};
+    return {bodyEl, navEl, chipsEl, filterBarEl:null, srcEl:null, filterBtnEl,
+            exportBtnEl:null, sheetEl, statusEl, sectionListEl};
   }
 
   /* One tile grid for every KPI surface. Rows are [label, value, sub, colour].
@@ -2894,7 +3296,9 @@ class App extends React.Component {
       noData?[this.empty("لا توجد بيانات لهذا الشهر")]:body);
 
     let sheetEl=null;
-    if(st.sheet){
+    if(st.sheet==="export"){
+      sheetEl=this.exportSheet();
+    } else if(st.sheet){
       let inner;
       if(st.sheet==="nav"){
         inner=SEC.map(s=>React.createElement("div",{key:s.id,onClick:()=>this.setState({section:s.id,sheet:null}),style:{padding:"12px 13px",borderRadius:12,background:st.section===s.id?"rgba(59,130,246,.12)":"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.07)",fontSize:13,color:"#e2e8f0",cursor:"pointer"}},s.label));
@@ -2942,6 +3346,7 @@ class App extends React.Component {
 
     const stmtEl = st.stmt!=null ? this.statementSheet(st.stmt) : null;
     return {bodyEl:body, navEl, chipsEl, filterBarEl, srcEl, filterBtnEl,
+            exportBtnEl:this.exportBtn(),
             sheetEl:[sheetEl, stmtEl], statusEl, sectionListEl};
   }
 
@@ -3196,6 +3601,236 @@ class App extends React.Component {
     ];
   }
 
+  /* ---- استخراج التقارير والرسوم ------------------------------------------
+     The catalogue of tables the user can take away. Built from the dataset that
+     is currently selected, so what leaves the app is what the app is showing.
+
+     Filters are applied only on columns a row actually carries (rep, brand,
+     customer). Anything the row cannot be filtered on is exported whole rather
+     than half-filtered, and the sheet states the row count either way. */
+  exportTables(){
+    const st=this.state, num=v=>(v==null||v===""?null:Number(v));
+    const col=(label,key,fn)=>({label, get:fn||(r=>r[key])});
+    const out=[];
+
+    const mf=(rows,pred)=>rows.filter(pred);
+
+    if(st.src==="dash" && st.api){
+      const D=st.api.D, f=st.filters||{};
+      const inMonth=r=>!f.month||f.month==="all"||r.month===f.month;
+      const byRep=r=>!f.rep||r.rep===f.rep;
+      out.push(
+        {id:"invoices", label:"الفواتير",
+         rows:mf(D.invoices||[],r=>inMonth(r)&&byRep(r)), columns:[
+          col("رقم الفاتورة","invoice_no"), col("التاريخ","invoice_date"),
+          col("كود العميل","customer_code"), col("العميل","customer_name"),
+          col("المندوب","rep"), col("القيمة",null,r=>num(r.reported_total)),
+          col("المسدد",null,r=>num(r.paid)), col("المتبقي",null,r=>num(r.remaining)),
+          col("الكمية",null,r=>num(r.qty_total)), col("عدد البنود",null,r=>num(r.n_lines)),
+          col("الحالة","status")]},
+        {id:"lines", label:"بنود الفواتير",
+         rows:mf(D.lines||[],r=>inMonth(r)&&byRep(r)), columns:[
+          col("رقم الفاتورة","invoice_no"), col("التاريخ","invoice_date"),
+          col("العميل","customer_name"), col("المندوب","rep"),
+          col("كود الصنف","item_code"), col("الصنف","item_name"),
+          col("العلامة","brand"), col("الكمية",null,r=>num(r.qty)),
+          col("سعر الوحدة",null,r=>num(r.unit_price)),
+          col("الإجمالي",null,r=>num(r.line_total)),
+          col("كراتين",null,r=>num(r.boxes)), col("بونص",null,r=>r.is_bonus?"نعم":"لا")]},
+        {id:"receivables", label:"أرصدة المديونية",
+         rows:mf(((D.receivables||{}).rows)||[],byRep), columns:[
+          col("كود العميل","customer_code"), col("العميل","customer_name"),
+          col("المندوب","rep"), col("الرصيد",null,r=>num(r.balance!=null?r.balance:r.net_balance)),
+          col("متأخر",null,r=>num(r.overdue)), col("جاري",null,r=>num(r.current))]},
+        {id:"collections", label:"التحصيلات",
+         rows:((D.collections||{}).receipts)||[], columns:[
+          col("التاريخ","date"), col("كود العميل","customer_code"),
+          col("العميل","customer_name"), col("المندوب","rep"),
+          col("المبلغ",null,r=>num(r.amount)), col("الوسيلة","method")]},
+        {id:"returns", label:"المرتجعات",
+         rows:((D.collections||{}).returns_rows)||[], columns:[
+          col("التاريخ","date"), col("كود العميل","customer_code"),
+          col("العميل","customer_name"), col("القيمة",null,r=>num(r.amount))]},
+        {id:"monthly", label:"الملخص الشهري", rows:D.monthly||[], columns:[
+          col("الشهر","month"), col("صافي المبيعات",null,r=>num(r.net_sales)),
+          col("الفواتير",null,r=>num(r.invoices)), col("العملاء",null,r=>num(r.customers)),
+          col("الكمية",null,r=>num(r.qty))]});
+
+      try{
+        const rows=AG.agingRows(D);
+        out.push({id:"aging", label:"أعمار المديونية",
+          rows:mf(rows,byRep), columns:[
+            col("كود العميل","code"), col("العميل","name"), col("المندوب","rep"),
+            col("الرصيد",null,r=>num(r.balance))].concat(
+            AG.AGE_TIERS.map(t=>col(t.label,null,r=>num((r.tiers||{})[t.key]))))
+            .concat([col("رصيد افتتاحي",null,r=>num(r.opening))])});
+      }catch(e){}
+    }
+
+    const RD=st.RD;
+    if(st.src!=="dash" && RD){
+      const f=st.rf||{};
+      const okRep=r=>!f.rep||r.rep===f.rep;
+      const okBrand=r=>!f.brand||r.brand===f.brand;
+      const okCust=r=>!f.customerCode||String(r.customer_code)===String(f.customerCode);
+      out.push(
+        {id:"customers", label:"العملاء",
+         rows:mf(RD.dim_customers||[],r=>okRep(r)&&okCust(r)), columns:[
+          col("الكود","customer_code"), col("العميل","customer_name"),
+          col("المندوب","rep"), col("المدينة","city"),
+          col("الإيراد",null,r=>num(r.total_revenue)),
+          col("عدد الفواتير",null,r=>num(r.n_invoices)),
+          col("أول فاتورة","first_invoice_date"), col("آخر فاتورة","last_invoice_date")]},
+        {id:"ar", label:"أرصدة المديونية",
+         rows:mf(RD.ar_balances||[],r=>okRep(r)&&okCust(r)), columns:[
+          col("المندوب","rep"), col("الكود","customer_code"),
+          col("العميل","customer_name"), col("المدينة","city"),
+          col("مدين",null,r=>num(r.debit)), col("دائن",null,r=>num(r.credit)),
+          col("صافي الرصيد",null,r=>num(r.net_balance))]},
+        {id:"items", label:"الأصناف",
+         rows:mf(RD.item_asp_boxes||[],okBrand), columns:[
+          col("الكود","item_code"), col("الصنف","item_name"), col("العلامة","brand"),
+          col("الكمية",null,r=>num(r.total_qty)),
+          col("الإيراد",null,r=>num(r.total_revenue)),
+          col("متوسط السعر",null,r=>num(r.asp_egp)),
+          col("سعة الكرتونة","carton_capacity"),
+          col("كراتين",null,r=>num(r.qty_in_boxes))]},
+        {id:"brands", label:"العلامات التجارية",
+         rows:mf(RD.brand_summary||[],okBrand), columns:[
+          col("العلامة","brand"), col("الإيراد",null,r=>num(r.revenue)),
+          col("الكمية",null,r=>num(r.qty)), col("العملاء",null,r=>num(r.n_customers)),
+          col("الحصة %",null,r=>num(r.revenue_share_pct))]},
+        {id:"monthly", label:"الملخص الشهري", rows:RD.monthly_series||[], columns:[
+          col("الشهر","month"), col("الإيراد",null,r=>num(r.revenue)),
+          col("الكمية",null,r=>num(r.qty)), col("الفواتير",null,r=>num(r.n_invoices)),
+          col("العملاء",null,r=>num(r.n_customers)),
+          col("متوسط السعر",null,r=>num(r.avg_selling_price)),
+          col("نمو شهري %",null,r=>num(r.mom_growth_pct))]},
+        {id:"bonus", label:"البونص لكل عميل",
+         rows:mf(RD.customer_bonus_summary||[],r=>okRep(r)&&okCust(r)), columns:[
+          col("الكود","customer_code"), col("العميل","customer_name"),
+          col("المندوب","rep"), col("المبيعات",null,r=>num(r.total_sales_egp)),
+          col("كمية البونص",null,r=>num(r.bonus_qty)),
+          col("قيمة البونص",null,r=>num(r.bonus_estimated_value_egp)),
+          col("% من الكمية",null,r=>num(r.bonus_pct_of_qty))]});
+    }
+
+    /* Profitability travels with either dataset: it is company-level and does
+       not belong to one of them. Every label says تقديري where the figure is,
+       so the caveat survives leaving the app. */
+    if(M.has()){
+      const d=M.D(), win=M.windowLabel(d);
+      const mg=[col("هامش مجمل %",null,r=>num(r.gross_margin_pct)),
+                col("هامش تشغيلي %",null,r=>num(r.op_margin_pct))];
+      out.push(
+        {id:"m_item", label:"الربحية — الأصناف ("+win+")", rows:d.by_item||[], columns:[
+          col("الكود","item_code"), col("الصنف","item_name"), col("العلامة","brand"),
+          col("الإيراد المُسعَّر",null,r=>num(r.revenue_costed)),
+          col("مجمل الربح",null,r=>num(r.gross_profit)),
+          col("الربح التشغيلي",null,r=>num(r.op_profit))].concat(mg)},
+        {id:"m_cust", label:"الربحية — العملاء ("+win+")", rows:d.by_customer||[], columns:[
+          col("الكود","customer_code"), col("العميل","customer_name"),
+          col("المندوب","rep"), col("الإيراد",null,r=>num(r.revenue_total)),
+          col("الإيراد المُسعَّر",null,r=>num(r.revenue_costed)),
+          col("مجمل الربح",null,r=>num(r.gross_profit)),
+          col("الربح التشغيلي",null,r=>num(r.op_profit))].concat(mg)},
+        {id:"m_rep", label:"الربحية — المناديب ("+win+")", rows:d.by_rep||[], columns:[
+          col("المندوب","rep"), col("الإيراد",null,r=>num(r.revenue_total)),
+          col("الإيراد المُسعَّر",null,r=>num(r.revenue_costed)),
+          col("مجمل الربح",null,r=>num(r.gross_profit)),
+          col("الربح التشغيلي",null,r=>num(r.op_profit))].concat(mg)},
+        {id:"m_month", label:"الربحية — الشهور", rows:d.by_month||[], columns:[
+          col("الشهر","month"), col("الأساس",null,r=>r.basis==="measured"?"مقيس":"تقديري"),
+          col("الإيراد المُسعَّر",null,r=>num(r.revenue_costed)),
+          col("مجمل الربح",null,r=>num(r.gross_profit)),
+          col("الربح التشغيلي",null,r=>num(r.op_profit))].concat(mg).concat([
+          col("مؤشر الأسعار",null,r=>num(r.price_index)),
+          col("انحراف عن شهر التكلفة %",null,r=>num(r.cost_period_drift_pct)),
+          col("ضمن النافذة الموثوقة",null,r=>r.indicative_reliable?"نعم":"لا")])},
+        {id:"m_price", label:"فجوة التسعير", rows:d.pricing_gap||[], columns:[
+          col("الكود","item_code"), col("الصنف","cost_item_name"),
+          col("العلامة","cost_brand"),
+          col("السعر الفعلي",null,r=>num(r.june_avg_price)),
+          col("الموصى به",null,r=>num(r.rec_price)),
+          col("الحد الأدنى",null,r=>num(r.floor_price)),
+          col("الفجوة %",null,r=>num(r.gap_pct)),
+          col("فئة ABC","abc"), col("ملاحظة","flags")]});
+    }
+    return out.filter(t=>t.rows && t.rows.length);
+  }
+
+  exportSheet(){
+    const st=this.state, tables=this.exportTables(), chartList=X.charts();
+    const say=p=>Promise.resolve(p).then(m=>this.setState({xMsg:m}))
+                                   .catch(e=>this.setState({xMsg:"تعذّر التصدير: "+e.message}));
+    const H=(t,n)=>React.createElement("div",{key:"h"+t,style:{fontSize:11,fontWeight:700,
+        color:"#94a3b8",marginTop:4,display:"flex",justifyContent:"space-between"}},
+      React.createElement("span",null,t),
+      n!=null?React.createElement("span",{style:{color:"#475569",fontWeight:400}},n):null);
+    const btn=(lab,fn,accent)=>React.createElement("span",{key:lab,onClick:fn,
+      style:{flex:"none",padding:"6px 11px",borderRadius:9,fontSize:11,cursor:"pointer",
+        background:accent?"rgba(59,130,246,.16)":"rgba(255,255,255,.04)",
+        border:"1px solid "+(accent?"rgba(59,130,246,.42)":"rgba(255,255,255,.10)"),
+        color:accent?"#93c5fd":"#cbd5e1",whiteSpace:"nowrap"}},lab);
+    const row=(label,sub,actions)=>React.createElement("div",{key:label,
+      style:{display:"flex",alignItems:"center",gap:8,padding:"9px 10px",borderRadius:11,
+        background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.07)"}},
+      React.createElement("div",{style:{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:2}},
+        React.createElement("span",{style:{fontSize:12,color:"#e2e8f0",overflow:"hidden",
+          whiteSpace:"nowrap",textOverflow:"ellipsis"}},label),
+        sub?React.createElement("span",{style:{fontSize:9.5,color:"#64748b"}},sub):null),
+      React.createElement("div",{style:{display:"flex",gap:6,flex:"none"}},actions));
+
+    const inner=[];
+    inner.push(React.createElement("div",{key:"t",style:{fontSize:13.5,fontWeight:800,
+      color:"#e2e8f0"}},"استخراج التقارير والرسوم"));
+    inner.push(React.createElement("div",{key:"n",style:{fontSize:10.5,color:"#64748b",
+      lineHeight:1.75}},"كل التصدير يتم على الجهاز — لا يُرسل أي شيء عبر الإنترنت."));
+
+    if(st.xMsg) inner.push(React.createElement("div",{key:"msg",style:{padding:"8px 10px",
+      borderRadius:10,background:"rgba(16,185,129,.12)",border:"1px solid rgba(16,185,129,.3)",
+      fontSize:11,color:"#6ee7b7"}},st.xMsg));
+
+    inner.push(H("تقرير كامل"));
+    inner.push(row("كل الجداول في ملف Excel واحد",
+      tables.length+" ورقة",[btn("Excel",()=>say(X.downloadXLSX(tables,"أبوهاشم-تقرير")),true)]));
+    inner.push(row("التقرير المعروض كـ PDF","عبر نافذة الطباعة — العربية مُشكَّلة صحيحة",
+      [btn("PDF",()=>{this.setState({sheet:null});say(X.printReport());},true)]));
+
+    inner.push(H("الجداول",tables.length));
+    tables.forEach(t=>inner.push(row(t.label,t.rows.length+" صف · "+t.columns.length+" عمود",
+      [btn("CSV",()=>say(X.downloadCSV(t))),
+       btn("Excel",()=>say(X.downloadXLSX([t],t.label)))])));
+
+    inner.push(H("الرسوم البيانية",chartList.length));
+    if(!chartList.length)
+      inner.push(React.createElement("div",{key:"nc",style:{fontSize:11,color:"#64748b",
+        padding:"8px 2px"}},"افتح قسمًا يحتوي رسومًا ثم أعد فتح هذه النافذة."));
+    chartList.forEach(c=>inner.push(row(c.title,null,
+      [btn("PNG",()=>say(X.downloadChartPNG(c))),
+       btn("SVG",()=>say(X.downloadChartSVG(c)))])));
+
+    return React.createElement("div",{onClick:()=>this.setState({sheet:null,xMsg:null}),
+        style:{position:"absolute",inset:0,zIndex:9,background:"rgba(3,6,14,.7)",
+          display:"flex",alignItems:"flex-end"}},
+      React.createElement("div",{onClick:e=>e.stopPropagation(),
+        style:{width:"100%",maxHeight:"86%",overflow:"auto",background:"#111827",
+          borderTop:"1px solid rgba(255,255,255,.10)",borderRadius:"22px 22px 0 0",
+          padding:"14px 14px 26px",display:"flex",flexDirection:"column",gap:9}},
+        [React.createElement("div",{key:"g",style:{width:38,height:4,borderRadius:99,
+          background:"rgba(255,255,255,.2)",margin:"0 auto 6px",flex:"none"}})].concat(inner)));
+  }
+
+  exportBtn(){
+    return React.createElement("span",{onClick:()=>this.setState({sheet:"export",xMsg:null}),
+      style:{position:"relative",width:34,height:34,flex:"none",borderRadius:10,
+        background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.08)",
+        display:"grid",placeItems:"center",color:"#e2e8f0",cursor:"pointer"},
+      dangerouslySetInnerHTML:{__html:'<svg viewBox="0 0 24 24" style="width:17px;height:17px;'
+        +'fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">'
+        +'<path d="M12 3v12M8 11l4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>'}});
+  }
+
   repoQuality(R,RD){
     const dq=RD.data_quality;
     const missing=Object.entries(dq.missing_values||{}).map(([k,v])=>({field:k,...v}));
@@ -3338,7 +3973,9 @@ class App extends React.Component {
     body=head.concat(body);
 
     let sheetEl=null;
-    if(st.sheet==="rfilters"){
+    if(st.sheet==="export"){
+      sheetEl=this.exportSheet();
+    } else if(st.sheet==="rfilters"){
       const inner=this.rfSheet(R,RD);
       sheetEl=React.createElement("div",{onClick:()=>this.setState({sheet:null,rfPick:null,rfQ:""}),style:{position:"absolute",inset:0,zIndex:9,background:"rgba(3,6,14,.7)",display:"flex",alignItems:"flex-end"}},
         React.createElement("div",{onClick:e=>e.stopPropagation(),style:{width:"100%",maxHeight:"82%",overflow:"auto",background:"#111827",borderTop:"1px solid rgba(255,255,255,.10)",borderRadius:"22px 22px 0 0",padding:"14px 14px 26px",display:"flex",flexDirection:"column"}},
@@ -3369,26 +4006,28 @@ class App extends React.Component {
     const sectionListEl=React.createElement("div",{dir:"rtl",style:{display:"flex",flexWrap:"wrap",gap:6}},
       SEC.map(s=>React.createElement("span",{key:s.id,onClick:()=>this.setState({section:s.id}),style:{fontSize:11,padding:"5px 10px",borderRadius:99,cursor:"pointer",background:st.section===s.id?"rgba(59,130,246,.16)":"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.08)",color:"#cbd5e1"}},s.label)));
 
-    return {bodyEl:body, navEl, chipsEl, filterBarEl:null, srcEl, filterBtnEl, sheetEl, statusEl, sectionListEl};
+    return {bodyEl:body, navEl, chipsEl, filterBarEl:null, srcEl, filterBtnEl,
+            exportBtnEl:this.exportBtn(), sheetEl, statusEl, sectionListEl};
   }
 
   render(){
     const v=this.renderVals();
-    return React.createElement("div",{dir:"rtl",style:{height:"100dvh",width:"100%",maxWidth:480,margin:"0 auto",background:"#0a0e1a",color:"#e2e8f0",fontFamily:"'Cairo',system-ui,'Segoe UI',Tahoma,sans-serif",position:"relative",display:"flex",flexDirection:"column",overflow:"hidden"}},
-      React.createElement("div",{style:{position:"absolute",inset:0,background:"radial-gradient(600px 300px at 100% -10%,rgba(59,130,246,.10),transparent 60%),radial-gradient(500px 250px at -10% 8%,rgba(139,92,246,.10),transparent 55%)",pointerEvents:"none"}}),
+    return React.createElement("div",{dir:"rtl","data-print":"app",style:{height:"100dvh",width:"100%",maxWidth:480,margin:"0 auto",background:"#0a0e1a",color:"#e2e8f0",fontFamily:"'Cairo',system-ui,'Segoe UI',Tahoma,sans-serif",position:"relative",display:"flex",flexDirection:"column",overflow:"hidden"}},
+      React.createElement("div",{"data-print":"backdrop",style:{position:"absolute",inset:0,background:"radial-gradient(600px 300px at 100% -10%,rgba(59,130,246,.10),transparent 60%),radial-gradient(500px 250px at -10% 8%,rgba(139,92,246,.10),transparent 55%)",pointerEvents:"none"}}),
       React.createElement("div",{style:{flex:"none",position:"relative",display:"flex",alignItems:"center",gap:11,padding:"12px 14px 12px",borderBottom:"1px solid rgba(255,255,255,.08)",background:"rgba(17,24,39,.85)"}},
         React.createElement("span",{style:{width:40,height:40,flex:"none",borderRadius:12,background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",display:"grid",placeItems:"center",fontWeight:800,fontSize:14,color:"#fff"}},"أه"),
         React.createElement("div",{style:{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:2}},
           React.createElement("span",{style:{fontSize:13.5,fontWeight:800,color:"#e2e8f0",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},"أبو هاشم للحوم — Food Industries"),
           React.createElement("span",{style:{fontSize:11,color:"#94a3b8"}},"لوحة الأداء التنفيذي المالي")),
-        v.filterBtnEl),
+        React.createElement("div",{"data-print":"actions",style:{display:"flex",gap:7,flex:"none"}},
+          v.exportBtnEl||null, v.filterBtnEl)),
       v.srcEl,
       v.chipsEl,
       v.filterBarEl,
-      React.createElement("div",{style:{flex:1,minHeight:0,overflow:"auto",position:"relative",padding:"12px 13px 18px",display:"flex",flexDirection:"column",gap:11}},
+      React.createElement("div",{"data-print":"scroll",style:{flex:1,minHeight:0,overflow:"auto",position:"relative",padding:"12px 13px 18px",display:"flex",flexDirection:"column",gap:11}},
         v.bodyEl),
       v.sheetEl,
-      React.createElement("div",{style:{flex:"none",position:"relative",borderTop:"1px solid rgba(255,255,255,.08)",background:"rgba(13,18,32,.96)",padding:"7px 5px 20px"}},
+      React.createElement("div",{"data-print":"nav",style:{flex:"none",position:"relative",borderTop:"1px solid rgba(255,255,255,.08)",background:"rgba(13,18,32,.96)",padding:"7px 5px 20px"}},
         v.navEl));
   }
 }

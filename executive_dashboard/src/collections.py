@@ -309,7 +309,12 @@ def compute(collections_df: pl.DataFrame, returns_df: pl.DataFrame,
                            "rep": rep_map.get(c) or "غير محدد",
                            "collected": round(collected_by_code.get(c, 0.0), 2),
                            "returns": round(returns_by_code.get(c, 0.0), 2)}
-                          for c in codes), key=lambda x: x["collected"], reverse=True)
+                          for c in codes),
+                         # Sorting on "collected" alone leaves ties in the order
+                         # the set happened to iterate, which PYTHONHASHSEED
+                         # changes every run — so data.js differed between
+                         # identical builds. The code breaks the tie.
+                         key=lambda x: (-x["collected"], x["customer_code"]))
 
     reliable_codes = set(collected_by_code)      # codes with a unique-name receipt
 

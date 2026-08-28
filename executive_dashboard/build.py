@@ -158,7 +158,11 @@ def _customer_ar(dim_customers, final_balances, invoices_full, rep_map,
           dim_customers.with_columns(pl.col("customer_code").cast(pl.Utf8)).iter_rows(named=True)}
 
     out = {}
-    for code in set(billed_map) | set(final_balances) | set(dc):
+    # sorted(): iterating the set directly leaves the output at the mercy of
+    # PYTHONHASHSEED, so data.js came out key-ordered differently on every run.
+    # The content was identical, but the diff was not — which makes a rebuild
+    # pull request unreviewable.
+    for code in sorted(set(billed_map) | set(final_balances) | set(dc)):
         billed = billed_map.get(code, float((dc.get(code) or {}).get("total_revenue") or 0.0))
         has_ar = code in final_balances
         outstanding = float(final_balances[code]["balance"]) if has_ar else None

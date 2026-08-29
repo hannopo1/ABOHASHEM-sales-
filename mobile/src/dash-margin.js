@@ -8,14 +8,27 @@
               analysis/14_income_statements.py from the income statements.
               Cost of sales here is measured, month by month.
 
-     LEVEL 2  everything else — margin by item, customer, representative and
-              brand, from analysis/13_join_cost_margin.py. The statements carry
-              no per-SKU cost, so this level is still June 2026 only, behind the
-              price-drift gate, exactly as before.
+     LEVEL 2  by_item / by_customer / by_rep / by_brand — margin by item,
+              customer, representative and brand, from
+              analysis/13_join_cost_margin.py. The statements carry no per-SKU
+              cost, so this level is June 2026 only, behind the price-drift
+              gate, exactly as before.
 
-   Collapsing the two would be the easiest mistake to make here and the most
+     LEVEL 3  by_item_month / by_customer_month / by_rep_month — the same three
+              dimensions by month, twelve months, on the CALIBRATED basis: June
+              unit costs scaled per month until the totals reproduce that
+              month's income statement. Level one supplies the level, level two
+              supplies the mix.
+
+   Collapsing the levels would be the easiest mistake to make here and the most
    damaging: it would let a reader take a thirteen-month company margin as
    evidence about a brand or a representative, which no data supports.
+
+   And level three is the one most easily overread. It is not measured margin
+   per item. If a single item's cost moved against the rest of the basket
+   between June and the month shown, nothing in it can see that. Every surface
+   built from it — the divider, each table header, the exported column — has to
+   say so, which is why the basis travels on every row rather than in a footnote.
 
    TWO THINGS THIS MODULE REFUSES TO DO, because both would mislead:
 
@@ -36,8 +49,9 @@ const M = (function(){
 
 const SECTION = {
   id:"margin", label:"الربحية", title:"الربحية — التكلفة والهامش",
-  sub:"مستويان: هامش مقيس على مستوى الشركة من قوائم الدخل (13 شهرًا)، "+
-      "ثم تفصيل حسب الصنف والعلامة والمندوب من نموذج تكاليف يونيو 2026 وحده."
+  sub:"ثلاثة مستويات: هامش مقيس على مستوى الشركة من قوائم الدخل (13 شهرًا)، "+
+      "ثم تفصيل مقيس حسب الصنف والعلامة والمندوب لشهر يونيو 2026 وحده، "+
+      "ثم ربحية شهرية لكل صنف وعميل ومندوب معايَرة على قوائم الدخل (12 شهرًا)."
 };
 
 const OK = "#10b981", WARN = "#f59e0b", BAD = "#ef4444", MUTED = "#64748b";
@@ -288,7 +302,47 @@ const bars = (rows, keyName, R, ref) => rows
    Straight from the model's own pricing engine — not re-derived here. */
 const pricingGap = d => (d.pricing_gap||[]).slice(0, 12);
 
+/* --------------------------------------------- level 3 · monthly, per cut -- */
+
+/* Absent from any build made before the calibration landed, so — like level 1
+   — every use is guarded rather than assumed. */
+const hasCal = () => !!(has() && window.DASH_MARGIN.calibration);
+const CAL    = () => window.DASH_MARGIN.calibration;
+
+/* Months carrying a calibrated figure, newest first: the picker opens on the
+   most recent month, which is the one a reader is asking about. */
+const calMonths = () => (hasCal() ? (CAL().months||[]).slice().reverse() : []);
+
+/* What a single row's basis means, in words, wherever it is shown. The string
+   is identical in the app and in the exported workbook on purpose — a reader
+   comparing the two must not have to decide whether they mean the same thing. */
+function basisLabel(r){
+  if(!r) return "";
+  if(r.basis==="measured") return "مقيس";
+  return r.estimated ? "معايَر — تقديري (الربع الأول)" : "معايَر على قائمة الدخل";
+}
+
+/* One dimension's rows for one month, biggest revenue first. */
+function calRows(key, month){
+  if(!hasCal()) return [];
+  return (D()[key]||[]).filter(r=>r.month===month);
+}
+
+/* The extremes of a month, which is what the reader is actually scanning for.
+   Rows below a revenue floor are dropped: a customer with one small invoice
+   can post a 90% margin that says nothing about anything. */
+function calExtremes(key, month, nameOf, minRevenue){
+  const rows=calRows(key,month).filter(r=>r.gross_margin_pct!=null
+                                       && r.revenue>=(minRevenue||0));
+  if(rows.length<2) return null;
+  const s=rows.slice().sort((a,b)=>b.gross_margin_pct-a.gross_margin_pct);
+  return {top:s[0], bottom:s[s.length-1], n:rows.length,
+          topName:nameOf(s[0]), bottomName:nameOf(s[s.length-1])};
+}
+
 return {SECTION, has, D, hasStmt, S, kpisStatements, stmtTrend,
         kpisWindow, kpisMeasured, trend, itemScatter, bars,
-        pricingGap, windowLabel, arMonth, marginColour, OK, WARN, BAD, MUTED};
+        pricingGap, windowLabel, arMonth, marginColour,
+        hasCal, CAL, calMonths, calRows, calExtremes, basisLabel,
+        OK, WARN, BAD, MUTED};
 })();

@@ -6,8 +6,8 @@
 Loads the file over file:// exactly as a phone would. The app carries two
 independent datasets and switches between them, so both are exercised:
 
-  تفصيلي   window.DASH      — the AR snapshots (11 sections)
-  18 شهرًا  window.DASH_DATA — the repo's precomputed aggregates (10 sections)
+  تفصيلي   window.DASH      — the AR snapshots (12 sections)
+  18 شهرًا  window.DASH_DATA — the repo's precomputed aggregates (11 sections)
 
 Fails on any JS error, any section that renders empty, or any section missing
 from the nav — so a broken build cannot pass silently.
@@ -28,10 +28,10 @@ CHROMIUM = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"
 PATHS = {
     "تفصيلي": ["لوحة المعلومات", "المبيعات", "العملاء", "المنتجات", "المديونية",
                "التحصيل والتسويات", "الحوافز", "التحليلات المتقدمة",
-               "جودة البيانات", "أعمار العملاء", "حركة المديونية"],
+               "جودة البيانات", "أعمار العملاء", "حركة المديونية", "التقارير"],
     "18 شهرًا": ["المالية", "المبيعات", "العملاء", "المديونية", "العلامات",
                  "الأصناف", "الربحية", "التنبؤ", "جودة البيانات",
-                 "التحليل التفاعلي"],
+                 "التحليل التفاعلي", "التقارير"],
 }
 MIN_CHARS = 300          # below this a section is effectively blank
 

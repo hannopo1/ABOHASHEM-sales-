@@ -13,7 +13,12 @@ class App extends React.Component {
     /* Two independent extracts ship together; they cover different periods and
        customer counts, so they are switched between rather than merged. */
     src:"dash", AG:null, C:null, fq:"", loadMsg:null, barHidden:true,
-    snaps:[], snap:null, cmp:null, stmt:null, ins:{} };
+    snaps:[], snap:null, cmp:null, stmt:null, ins:{},
+    /* التقارير: which export table is on screen and the search inside it.
+       المستوى الثالث: which month the monthly profitability tables show. All
+       three default to null and are resolved on render, so a build whose data
+       lacks the table or the month falls back rather than showing nothing. */
+    repTable:null, repQ:"", calMonth:null };
   /* The bar is nine fields tall — open by default it pushes every chart off
      a phone screen, so it starts collapsed behind the header button. */
 
@@ -762,6 +767,7 @@ class App extends React.Component {
     const st=this.state, s=st.section, D=api.D, C=st.C, f=st.filters;
     if(s==="aging") return this.agingBody(X,T,api);
     if(s==="armove") return this.arMoveBody(X,T,api);
+    if(s==="reports") return this.reports();
 
     const bl=k=>(D.receivables&&D.receivables.bucket_labels)?D.receivables.bucket_labels[k]:k;
     /* Tap handlers: map a click on a category chart back onto a filter. */
@@ -1190,6 +1196,7 @@ class App extends React.Component {
     const d=M.D(), C=this.state.C, win=M.windowLabel(d);
     const ex=(d.meta.excluded_months||[]).length;
     const st=M.hasStmt()?M.S():null;
+    const cal=M.hasCal()?M.CAL():null;
 
     /* The banner used to open with "cost is measured for June only". Since the
        statements arrived that is true of the per-item detail and false of the
@@ -1197,12 +1204,20 @@ class App extends React.Component {
     const banner=React.createElement("div",{key:"mb",style:{padding:"11px 12px",borderRadius:12,
         background:"rgba(245,158,11,.10)",border:"1px solid rgba(245,158,11,.30)",
         fontSize:11,lineHeight:1.85,color:"#fcd9a0"}},
-      st?["تكلفة المبيعات مقيسة شهريًا على مستوى الشركة لـ"+st.totals.months+" شهرًا ("+
-          M.arMonth(st.totals.period_from)+" – "+M.arMonth(st.totals.period_to)+
-          ") من قوائم الدخل. أما التفصيل حسب الصنف والعلامة والمندوب فيبقى على شهر "+
-          M.arMonth(d.meta.cost_month)+" وحده: القوائم لا تعطي تكلفة لكل صنف.",
+      st?["المستوى الأول: تكلفة المبيعات مقيسة شهريًا على مستوى الشركة لـ"+
+          st.totals.months+" شهرًا ("+M.arMonth(st.totals.period_from)+" – "+
+          M.arMonth(st.totals.period_to)+") من قوائم الدخل.",
           React.createElement("br",{key:"b1"}),
-          "الشهور المستبعدة من التفصيل ("+ex+" شهرًا) كانت تُظهر هامشًا سالبًا عند تحميل تكلفة "+
+          "المستوى الثاني: تفصيل مقيس حسب الصنف والعلامة والمندوب لشهر "+
+          M.arMonth(d.meta.cost_month)+" وحده — وهو الشهر الوحيد الذي تُرصد فيه "+
+          "تكلفة كل صنف.",
+          cal?[React.createElement("br",{key:"b2"}),
+          "المستوى الثالث: ربحية شهرية لكل صنف وعميل ومندوب على مدى "+
+          this.arMonths(cal.months.length)+"، بتكلفة يونيو مضروبة في معامل شهري يجعل "+
+          "الإجمالي مطابقًا لقائمة دخل الشهر. تصحيح لمستوى التكلفة لا لتوزيعها "+
+          "بين الأصناف — فهي ليست تكلفة مقيسة لكل صنف."]:null,
+          React.createElement("br",{key:"b3"}),
+          "الشهور المستبعدة من المستوى الثاني ("+ex+" شهرًا) كانت تُظهر هامشًا سالبًا عند تحميل تكلفة "+
           "يونيو على أسعار أدنى بنحو 15%. القوائم تقيس تلك الشهور مباشرة ولا تُظهر أي هامش "+
           "سالب — فالأمر أثر منهجي مثبت الآن بقياس مستقل، لا خسارة فعلية."]
         :["التكلفة مقيسة لشهر "+M.arMonth(d.meta.cost_month)+" فقط. النافذة الموثوقة هي "+win+
@@ -1274,10 +1289,185 @@ class App extends React.Component {
       this.card("إيراد بلا بيانات تكلفة",
         this.barsH(uncosted,R.fmtEGPk),
         {k:"muc",sub:R.fmtPct(100-d.meta.coverage_pct)+" من الإيراد — لا تُحتسب له تكلفة صفرية"}),
-    ]);
+    ]).concat(cal?this.marginLevel3(R,cal):[]);
   }
 
-  /* A divider naming the scope of the cards that follow it. The two levels of
+  /* Level 3 — monthly profitability for each of the three dimensions the user
+     asked for, one month at a time.
+
+     Shown per month rather than as one long table because that is the question
+     being asked ("ربحية كل صنف في هذا الشهر"), and because a table mixing
+     twelve months of one item invites averaging rows whose bases differ.
+
+     The three Q1-2026 months carry the same margin percentages by construction
+     — the quarterly statement was split by magnitude, not by ratio — so the
+     note says so where those months are selected. Reading a flat Q1 as
+     evidence that margin did not move inside the quarter would be reading the
+     allocation method, not the business. */
+  marginLevel3(R,cal){
+    const st=this.state;
+    const months=M.calMonths();
+    const cur=(months.indexOf(st.calMonth)>=0)?st.calMonth:months[0];
+    const pick=m=>this.setState({calMonth:m});
+    const row=M.CAL().by_month.filter(r=>r.month===cur)[0]||{};
+    const isEst=!!row.estimated;
+
+    const money=v=>R.fmtEGPk(v), p=v=>R.fmtPct(v);
+    const cols=extra=>extra.concat([
+      ["الإيراد",r=>money(r.revenue)],
+      ["هامش مجمل",r=>p(r.gross_margin_pct)],
+      ["هامش تشغيلي",r=>p(r.op_margin_pct)],
+      ["مجمل الربح",r=>money(r.gross_profit)],
+      ["الربح التشغيلي",r=>money(r.op_profit)],
+      ["الأساس",r=>M.basisLabel(r)]]);
+
+    /* A top/bottom line above each table. Small accounts are excluded from it
+       (not from the table) because a single small invoice produces an extreme
+       percentage that names the wrong item. */
+    const extremes=(key,nameOf,floor,unit)=>{
+      const e=M.calExtremes(key,cur,nameOf,floor);
+      if(!e) return null;
+      return React.createElement("div",{style:{display:"flex",gap:8,
+          flexWrap:"wrap",fontSize:10.5,color:"#94a3b8",marginBottom:7}},
+        React.createElement("span",{style:{color:M.OK}},"أعلى: "+e.topName+" "+
+          p(e.top.gross_margin_pct)),
+        React.createElement("span",{style:{color:M.BAD}},"أدنى: "+e.bottomName+" "+
+          p(e.bottom.gross_margin_pct)),
+        React.createElement("span",{style:{color:"#475569"}},
+          floor?e.n+" "+unit+" إيرادها فوق "+money(floor):e.n+" "+unit));
+    };
+
+    const table=(title,key,nameOf,extra,floor,unit)=>{
+      const rows=M.calRows(key,cur);
+      return this.card(title,
+        React.createElement("div",null,
+          extremes(key,nameOf,floor,unit),
+          rows.length?this.rowsList(rows.slice(0,40),cols(extra))
+                     :this.empty("لا توجد بيانات لهذا الشهر.")),
+        {k:"c_"+key,approx:cur!==M.D().meta.cost_month,
+         sub:M.arMonth(cur)+" · "+M.basisLabel(row)+
+             (rows.length>40?" · أعلى 40 من "+rows.length:"")});
+    };
+
+    return [
+      this.levelHead("m_l3","المستوى الثالث · شهري لكل صنف وعميل ومندوب — معايَر",
+        this.arMonths(cal.months.length)+" · "+M.arMonth(cal.months[0])+" – "+
+        M.arMonth(cal.months[cal.months.length-1])),
+      React.createElement("div",{key:"c_note",
+        style:{padding:"10px 12px",borderRadius:12,fontSize:10.5,lineHeight:1.85,
+               color:"#94a3b8",background:"rgba(255,255,255,.03)",
+               border:"1px solid rgba(255,255,255,.07)"}},
+        "تكلفة الوحدة مقيسة في "+M.arMonth(M.D().meta.cost_month)+
+        " وحده. لكل شهر آخر تُضرب في معامل يجعل نسبة تكلفة المبيعات مطابقة "+
+        "لقائمة دخل ذلك الشهر، فيبقى الفارق بين صنف وآخر كما قيس في يونيو. "+
+        "المعايرة تصحّح المستوى لا التوزيع: لو تحرّكت تكلفة صنف بعينه عكس بقية "+
+        "الأصناف فلا شيء هنا يرصده."+
+        (isEst?" وهذا الشهر موزّع تناسبيًا من قائمة الربع الأول، فالأشهر الثلاثة "+
+               "تحمل النسب نفسها بحكم طريقة التوزيع لا بحكم حركة فعلية.":"")),
+      this.pickRow("c_m",months.map(m=>[m,M.arMonth(m)]),cur,pick),
+      table("ربحية كل صنف","by_item_month",r=>r.item_name||r.item_code,
+        [["الصنف",r=>r.item_name||r.item_code],["العلامة",r=>r.brand]],
+        50000,"صنفًا"),
+      table("ربحية كل عميل","by_customer_month",r=>r.customer_name||r.customer_code,
+        [["العميل",r=>r.customer_name||r.customer_code],["المندوب",r=>r.rep]],
+        50000,"عميلًا"),
+      table("ربحية كل مندوب","by_rep_month",r=>r.rep,
+        [["المندوب",r=>r.rep]],0,"مندوبًا"),
+    ];
+  }
+
+  /* ---- التقارير -----------------------------------------------------------
+     Every table the export sheet can produce, shown in the app.
+
+     Built from exportTables() — the same call the export sheet makes, not a
+     parallel list. That is the whole point of the section: the user was
+     reading figures in a downloaded workbook that had no counterpart on any
+     screen. Two definitions of a table would recreate that gap in a slower
+     way, so there is one, and a table added to the export appears here with no
+     further work.
+
+     Tables are shown one at a time. Eight to eleven tables of up to two
+     thousand rows cannot all be on screen at once on a phone, and a section
+     that renders them all would be unusable long before it was informative. */
+  reports(){
+    const st=this.state, tables=this.exportTables();
+    if(!tables.length) return [this.empty("لا توجد جداول في هذا المصدر.")];
+    const cur=tables.filter(t=>t.id===st.repTable)[0]||tables[0];
+    const q=(st.repQ||"").trim();
+    const LIMIT=60;
+
+    /* Search runs over the rendered cell text, not the raw row: the reader is
+       searching for what they can see. Numbers are matched as displayed too,
+       which is what someone copying a figure out of the sheet expects. */
+    const cells=r=>cur.columns.map(c=>{try{return c.get(r);}catch(e){return null;}});
+    const rows=q?cur.rows.filter(r=>cells(r).some(
+                   v=>v!=null&&String(v).indexOf(q)>=0))
+               :cur.rows;
+    const shown=rows.slice(0,LIMIT);
+    const fmt=(st.T&&st.T.num)||(v=>String(v));
+    const cols=cur.columns.map(c=>[c.label,r=>{
+      const v=c.get(r);
+      return v==null?"—":(typeof v==="number"?fmt(v):v);
+    }]);
+
+    const search=React.createElement("input",{key:"q",value:st.repQ||"",
+      onChange:e=>this.setState({repQ:e.target.value}),
+      placeholder:"بحث في الجدول…", dir:"rtl",
+      style:{width:"100%",boxSizing:"border-box",padding:"9px 11px",
+        borderRadius:11,fontSize:12,color:"#e2e8f0",fontFamily:"inherit",
+        background:"rgba(255,255,255,.03)",
+        border:"1px solid rgba(255,255,255,.09)",outline:"none"}});
+
+    const count=q
+      ? rows.length+" من "+cur.rows.length+" صف"
+      : cur.rows.length+" صف";
+
+    return [
+      React.createElement("div",{key:"n",style:{fontSize:10.5,color:"#64748b",
+        lineHeight:1.8}},
+        "هذه الجداول نفسها تخرج إلى Excel وCSV من زر الاستخراج — "+
+        "الأعمدة والصفوف واحدة. اضغط أي صف لعرض كل أعمدته."),
+      this.pickRow("rt",tables.map(t=>[t.id,t.label]),cur.id,
+        id=>this.setState({repTable:id,repQ:""})),
+      this.card(cur.label,
+        React.createElement("div",{style:{display:"flex",flexDirection:"column",
+            gap:9}},
+          search,
+          shown.length?this.rowsList(shown,cols)
+                      :this.empty("لا توجد نتائج مطابقة.")),
+        {k:"rep_"+cur.id,
+         sub:count+(rows.length>LIMIT?" · معروض أول "+LIMIT:"")}),
+      rows.length>LIMIT?React.createElement("div",{key:"more",
+        style:{fontSize:10.5,color:"#64748b",lineHeight:1.8,textAlign:"center"}},
+        "الجدول أطول من "+LIMIT+" صفًا. ابحث لتضييق النتائج، أو استخرجه كاملًا "+
+        "من زر الاستخراج — الملف يحمل كل الصفوف الـ"+rows.length+"."):null,
+    ];
+  }
+
+  /* Arabic counts a noun differently at 1, 2, 3–10 and 11+. "12 أشهر" is
+     wrong where "12 شهرًا" is right, and the section's own header says it. */
+  arMonths(n){
+    if(n===1) return "شهر واحد";
+    if(n===2) return "شهرين";
+    return n<11 ? n+" أشهر" : n+" شهرًا";
+  }
+
+  /* A horizontally scrolling row of chips — one selected. Used by the monthly
+     profitability tables and by the reports section; both need the same thing
+     and neither warrants its own control. `items` is [[value, label], …]. */
+  pickRow(k,items,current,onPick){
+    return React.createElement("div",{key:k,dir:"rtl",
+      style:{display:"flex",gap:6,overflowX:"auto",padding:"2px 0 4px"}},
+      items.map(([v,lab])=>{const on=v===current;
+        return React.createElement("span",{key:String(v),onClick:()=>onPick(v),
+          style:{flex:"none",fontSize:11,padding:"5px 11px",borderRadius:99,
+            cursor:"pointer",whiteSpace:"nowrap",
+            background:on?"rgba(59,130,246,.16)":"rgba(255,255,255,.03)",
+            border:"1px solid "+(on?"rgba(59,130,246,.42)":"rgba(255,255,255,.08)"),
+            color:on?"#93c5fd":"#cbd5e1",fontWeight:on?700:400}},lab);}));
+  }
+
+  /* A divider naming the scope of the cards that follow it. The three levels of
      الربحية are measured differently, and a reader who scrolls past the join
      without noticing would carry a company figure onto a single brand. */
   levelHead(k,title,sub){
@@ -1468,6 +1658,37 @@ class App extends React.Component {
           col("الحد الأدنى",null,r=>num(r.floor_price)),
           col("الفجوة %",null,r=>num(r.gap_pct)),
           col("فئة ABC","abc"), col("ملاحظة","flags")]});
+    }
+
+    /* Level 3 — the same three dimensions by month, on the calibrated basis.
+       The «الأساس» column is not decoration: once the workbook is open on
+       someone's laptop it is the only thing separating a measured June row
+       from an eleven-month estimate, and M.basisLabel() is the same function
+       the on-screen tables use so the two can never word it differently. */
+    if(M.hasCal()){
+      const d=M.D(), cal=M.CAL();
+      const win=M.arMonth(cal.months[0])+" – "+M.arMonth(cal.months[cal.months.length-1]);
+      const head=[col("الشهر",null,r=>M.arMonth(r.month)),
+                  col("الأساس",null,r=>M.basisLabel(r))];
+      const tail=[col("الإيراد",null,r=>num(r.revenue)),
+                  col("مجمل الربح",null,r=>num(r.gross_profit)),
+                  col("الربح التشغيلي",null,r=>num(r.op_profit)),
+                  col("هامش مجمل %",null,r=>num(r.gross_margin_pct)),
+                  col("هامش تشغيلي %",null,r=>num(r.op_margin_pct))];
+      out.push(
+        {id:"m_item_month", label:"الربحية الشهرية — الأصناف ("+win+")",
+         rows:d.by_item_month||[],
+         columns:head.concat([col("الكود","item_code"), col("الصنف","item_name"),
+                              col("العلامة","brand"),
+                              col("الكمية",null,r=>num(r.qty))]).concat(tail)},
+        {id:"m_cust_month", label:"الربحية الشهرية — العملاء ("+win+")",
+         rows:d.by_customer_month||[],
+         columns:head.concat([col("الكود","customer_code"),
+                              col("العميل","customer_name"),
+                              col("المندوب","rep")]).concat(tail)},
+        {id:"m_rep_month", label:"الربحية الشهرية — المناديب ("+win+")",
+         rows:d.by_rep_month||[],
+         columns:head.concat([col("المندوب","rep")]).concat(tail)});
     }
     return out.filter(t=>t.rows && t.rows.length);
   }
@@ -1677,6 +1898,7 @@ class App extends React.Component {
     else if(st.section==="forecast") body=this.repoForecast(R,RD);
     else if(st.section==="analysis") body=this.repoAnalysis(R,RD,f);
     else if(st.section==="margin") body=this.repoMargin(R,RD);
+    else if(st.section==="reports") body=this.reports();
     else body=this.repoQuality(R,RD);
 
     const head=[React.createElement("div",{key:"sub",style:{fontSize:11,color:"#64748b",lineHeight:1.7}},cur.sub)];

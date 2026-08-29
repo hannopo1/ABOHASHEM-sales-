@@ -1,10 +1,145 @@
 {
+  "calibration": {
+    "basis": "June-2026 unit costs scaled per month onto that month's income-statement cost and expense ratios",
+    "by_month": [
+      {
+        "basis": "calibrated",
+        "estimated": false,
+        "k_cogs": 0.8110347187274378,
+        "k_opex": 0.8543346898001608,
+        "month": "2025-07",
+        "statement_basis": "measured",
+        "statement_cogs_ratio": 50.81880494093449
+      },
+      {
+        "basis": "calibrated",
+        "estimated": false,
+        "k_cogs": 0.9138938195868678,
+        "k_opex": 0.6238755898400167,
+        "month": "2025-08",
+        "statement_basis": "measured",
+        "statement_cogs_ratio": 58.05336908859674
+      },
+      {
+        "basis": "calibrated",
+        "estimated": false,
+        "k_cogs": 1.1064283976234899,
+        "k_opex": 0.5112289841349623,
+        "month": "2025-09",
+        "statement_basis": "measured",
+        "statement_cogs_ratio": 68.39155540031864
+      },
+      {
+        "basis": "calibrated",
+        "estimated": false,
+        "k_cogs": 1.0055281826156481,
+        "k_opex": 0.4293896651344825,
+        "month": "2025-10",
+        "statement_basis": "measured",
+        "statement_cogs_ratio": 62.70593423258906
+      },
+      {
+        "basis": "calibrated",
+        "estimated": false,
+        "k_cogs": 0.899625213272276,
+        "k_opex": 0.6115638891370563,
+        "month": "2025-11",
+        "statement_basis": "measured",
+        "statement_cogs_ratio": 56.929137980983256
+      },
+      {
+        "basis": "calibrated",
+        "estimated": false,
+        "k_cogs": 0.9004072052516543,
+        "k_opex": 0.7146118643479037,
+        "month": "2025-12",
+        "statement_basis": "measured",
+        "statement_cogs_ratio": 56.6369671498846
+      },
+      {
+        "basis": "calibrated",
+        "estimated": true,
+        "k_cogs": 1.0722532682025658,
+        "k_opex": 0.6782622987138162,
+        "month": "2026-01",
+        "statement_basis": "allocated",
+        "statement_cogs_ratio": 68.72528203546443
+      },
+      {
+        "basis": "calibrated",
+        "estimated": true,
+        "k_cogs": 1.0924339862166845,
+        "k_opex": 0.6684265643675984,
+        "month": "2026-02",
+        "statement_basis": "allocated",
+        "statement_cogs_ratio": 68.72528253698496
+      },
+      {
+        "basis": "calibrated",
+        "estimated": true,
+        "k_cogs": 1.1432757776564955,
+        "k_opex": 0.7182468207135211,
+        "month": "2026-03",
+        "statement_basis": "allocated",
+        "statement_cogs_ratio": 68.72528198972563
+      },
+      {
+        "basis": "calibrated",
+        "estimated": false,
+        "k_cogs": 1.2265958872406617,
+        "k_opex": 0.9607703205872411,
+        "month": "2026-04",
+        "statement_basis": "measured",
+        "statement_cogs_ratio": 65.01956203193413
+      },
+      {
+        "basis": "calibrated",
+        "estimated": false,
+        "k_cogs": 0.8901275777623415,
+        "k_opex": 0.6692629126508316,
+        "month": "2026-05",
+        "statement_basis": "measured",
+        "statement_cogs_ratio": 48.149168174108375
+      },
+      {
+        "basis": "measured",
+        "estimated": false,
+        "k_cogs": 1.0,
+        "k_opex": 1.0,
+        "month": "2026-06",
+        "statement_basis": "measured",
+        "statement_cogs_ratio": 54.51783486540602
+      }
+    ],
+    "estimated_months": [
+      "2026-01",
+      "2026-02",
+      "2026-03"
+    ],
+    "months": [
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06"
+    ],
+    "n_months": 12
+  },
   "caveats": [
     "المقيس: يونيو 2026 فقط — تكلفة مرصودة، مطابقة لقائمة الدخل.",
     "بوابة انحراف الأسعار: تُستبعد الشهور التي تبعد أسعارها عن شهر التكلفة بأكثر من 10%. الأسعار كانت أدنى من يونيو 2026 بنحو 15% حتى فبراير 2026 ثم ارتفعت في مارس–أبريل 2026؛ احتساب تكلفة يونيو على أسعار ما قبل الزيادة يُظهر هامشًا تشغيليًا سالبًا طوال 2025 وهو أثر منهجي لا واقعة تاريخية. لذلك لا يمتد الهامش الموثوق قبل مارس 2026.",
     "التقديري: تكلفة وحدة يونيو 2026 مطبَّقة على كميات شهور أخرى. تقدير لا قياس.",
     "إيراد الشهور غير يونيو إجمالي (قبل المرتجعات)؛ لا توجد مرتجعات لكل صنف خارج يونيو. نسبة المرتجعات في يونيو 3.25% من الإجمالي، ولذلك الهامش التقديري أعلى من الواقع بهذا القدر تقريبًا.",
-    "الأصناف بلا تكلفة لا تُحتسب لها تكلفة صفرية؛ إيرادها يُعرض منفصلًا وكل نسبة هامش محسوبة على الإيراد المُسعَّر فقط."
+    "الأصناف بلا تكلفة لا تُحتسب لها تكلفة صفرية؛ إيرادها يُعرض منفصلًا وكل نسبة هامش محسوبة على الإيراد المُسعَّر فقط.",
+    "المعايَر: 12 شهرًا (2025-07 – 2026-06). تكلفة وحدة يونيو 2026 مضروبة في معامل شهري يجعل نسبتَي التكلفة والمصروفات مطابقتين لقائمة دخل الشهر نفسه. المعايرة تصحّح مستوى التكلفة لا توزيعها بين الأصناف: إن تحرّكت تكلفة صنف بعينه عكس بقية السلة بين يونيو وذلك الشهر فلا شيء هنا يرصده. فهي ليست ربحية مقيسة لكل صنف.",
+    "الأشهر المعايَرة ترث إجمالية الإيراد (قبل المرتجعات): النسبة المئوية مطابقة للقائمة، أما الربح بالجنيه فأعلى من الواقع بنحو نسبة المرتجعات نفسها."
   ],
   "cost_month": "2026-06",
   "cost_source": {

@@ -29,10 +29,43 @@ THE PRICE-DRIFT GATE
     only from months that pass the gate, and the rest are marked unreliable so
     no consumer can quote them as if they were comparable.
 
+A THIRD BASIS: CALIBRATED (the monthly per-dimension figures)
+    The gate above leaves "monthly margin per item / customer / rep" out of
+    reach: fourteen of the eighteen months fail it. The income statements close
+    that gap from the other side. They carry no per-SKU cost, but they do carry
+    a measured cost-of-sales *ratio* for each month at company level.
+
+    So the model supplies the mix and the statement supplies the level. For each
+    month with a statement, one factor per cost layer scales June's unit costs
+    until the month's overall ratios equal the statement's:
+
+        k_cogs = (stmt_cogs / stmt_net_sales) × Σ net_revenue / Σ cogs
+        k_opex = (stmt_expenses / stmt_net_sales) × Σ net_revenue / Σ (conv+opex)
+
+    By construction the calibrated total then reproduces the statement's ratio
+    for that month exactly, while the *relative* cost of one item against
+    another stays as it was measured in June.
+
+    That is the limit of the method, and it must be said wherever the figures
+    appear: calibration corrects the level, not the mix. If one item's cost
+    moved differently from the rest of the basket between June and the month in
+    question, nothing here can see it. These are not measured per-item margins.
+
+    Coverage is the intersection of the two windows — invoices run 2025-01 to
+    2026-06, statements 2025-07 to 2026-07, so twelve months are calibrated.
+    January–June 2025 have no statement and are emitted nowhere. June 2026 is
+    measured, and its factors must come out at 1.0 or the run aborts: the model
+    is built against that statement, so anything else means the tie has broken.
+    The three Q1-2026 months inherit estimated=true from the quarterly
+    allocation they were split out of.
+
 WHAT IS NOT DONE
     Revenue outside June is gross: the repository holds no per-SKU returns for
     other months, so indicative margin is overstated by roughly the return rate
-    (3.25% of gross in June). Reported in margin_summary.json, not hidden.
+    (3.25% of gross in June). Reported in margin_summary.json, not hidden. The
+    calibrated months inherit this: forcing a ratio onto a denominator that is
+    ~3% too big leaves the margin *percentage* tied to the statement and the
+    absolute EGP profit overstated by that same ~3%.
 
     Items with no cost row are never charged zero cost. Their revenue is carried
     as an explicit "uncosted" line so a margin percentage is always stated
@@ -40,16 +73,24 @@ WHAT IS NOT DONE
 
 Inputs   data/processed/sales_transactions.csv, dim_items.csv, dim_customers.csv
          data/cost/model_rows.json
+         data/cost/income_statements.json   (optional; absent = no calibration)
 Outputs  data/processed/margin_unit_costs.csv
          data/processed/margin_by_{item,customer,rep,brand,month}.csv
+         data/processed/margin_by_{item,customer,rep}_month.csv
          data/processed/margin_summary.json
          data/processed/margin_dashboard.json  (compact payload for the mobile app)
 """
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lib import statements as S            # noqa: E402
+
+S.set_caller("13_join_cost_margin")
 
 ROOT = Path(__file__).resolve().parent.parent
 P = ROOT / "data" / "processed"
@@ -60,6 +101,10 @@ RECON_TOL = 1.0                 # EGP; the model reconciles to the cent
 # Price gap vs the cost month beyond which an indicative margin stops being
 # comparable and is reported as unreliable rather than quoted.
 MAX_DRIFT_PCT = 10.0
+# How far the cost month's calibration factors may sit from 1.0. They are 1.0
+# by construction — the model is built against that statement — so this is a
+# tie-break tolerance for float arithmetic, not a modelling allowance.
+CAL_TOL = 0.005
 
 # The income statement the costing model is built against (model/README.md).
 STATEMENT = {"revenue_net": 3_741_772.00, "cogs": 2_039_933.08,
@@ -248,6 +293,133 @@ def build(tx: pd.DataFrame, u: pd.DataFrame, pidx: pd.DataFrame) -> pd.DataFrame
     return j
 
 
+# ------------------------------------------------------------- calibration --
+def calibrate(j: pd.DataFrame, ratios: dict | None) -> dict:
+    """Scale June unit costs per month onto that month's income statement.
+
+    Mutates j with cal_cogs / cal_full_cost / cal_gross_profit / cal_op_profit
+    and a `calibrated` flag, and returns the per-month metadata describing what
+    was done. Passing ratios=None (no vendored statements) leaves every row
+    uncalibrated, so a checkout without the extract keeps the earlier behaviour
+    instead of failing.
+
+    Factors are computed over COSTED lines only, because that is the population
+    the margin percentages are stated against everywhere else in this file.
+    """
+    j["calibrated"] = False
+    for c in ("k_cogs", "k_opex", "cal_cogs", "cal_full_cost",
+              "cal_gross_profit", "cal_op_profit"):
+        j[c] = np.nan
+    meta: dict[str, dict] = {}
+    if not ratios:
+        return meta
+
+    costed = j[j["is_costed"]]
+    for month, g in costed.groupby("month"):
+        r = ratios.get(month)
+        if r is None:
+            continue                        # no statement for this month
+        rev = float(g["net_revenue"].sum())
+        cogs = float(g["cogs"].sum())
+        conv = float((g["conv_cost"] + g["opex_cost"]).sum())
+        if rev <= 0 or cogs <= 0 or conv <= 0:
+            continue
+        k_cogs = r["cogs"] * rev / cogs
+        k_opex = r["opex"] * rev / conv
+
+        if month == COST_MONTH:
+            # The costing model IS this statement. Factors away from 1.0 mean
+            # the join has stopped reproducing it, and every calibrated month
+            # downstream would inherit the same error silently.
+            for name, k in (("cost", k_cogs), ("expense", k_opex)):
+                if abs(k - 1.0) > CAL_TOL:
+                    raise SystemExit(
+                        f"\n{COST_MONTH} {name} calibration factor is {k:.6f}, "
+                        f"not 1.0 — the join no longer reproduces the income "
+                        f"statement it is built on; refusing to calibrate")
+            k_cogs = k_opex = 1.0           # keep the measured month untouched
+
+        m = j["month"] == month
+        j.loc[m, "k_cogs"] = k_cogs
+        j.loc[m, "k_opex"] = k_opex
+        j.loc[m & j["is_costed"], "calibrated"] = True
+        meta[month] = {
+            "k_cogs": k_cogs, "k_opex": k_opex,
+            "basis": "measured" if month == COST_MONTH else "calibrated",
+            "estimated": bool(r["estimated"]),
+            "statement_basis": r["basis"],
+            "statement_cogs_ratio": r["cogs"] * 100,
+        }
+
+    j["cal_cogs"] = j["cogs"] * j["k_cogs"]
+    j["cal_full_cost"] = (j["cal_cogs"]
+                          + (j["conv_cost"] + j["opex_cost"]) * j["k_opex"])
+    j["cal_gross_profit"] = j["net_revenue"] - j["cal_cogs"]
+    j["cal_op_profit"] = j["net_revenue"] - j["cal_full_cost"]
+    return meta
+
+
+def agg_monthly(j: pd.DataFrame, keys: list[str], meta: dict) -> pd.DataFrame:
+    """One dimension by month, on the calibrated basis.
+
+    Only calibrated months appear. A month with no statement is absent from the
+    file rather than present with an unreliable figure, because the whole point
+    of these three files is that every row in them ties to a statement.
+    """
+    src = j[j["is_costed"] & j["calibrated"]]
+    if src.empty:
+        return pd.DataFrame()
+    g = (src.groupby(["month"] + keys, dropna=False).agg(
+            revenue=("net_revenue", "sum"), qty=("qty", "sum"),
+            cogs=("cal_cogs", "sum"), full_cost=("cal_full_cost", "sum"),
+            gross_profit=("cal_gross_profit", "sum"),
+            op_profit=("cal_op_profit", "sum"), n_lines=("qty", "size"))
+         .reset_index())
+    g["gross_margin_pct"] = g["gross_profit"] / g["revenue"] * 100
+    g["op_margin_pct"] = g["op_profit"] / g["revenue"] * 100
+    g["basis"] = g["month"].map(lambda m: meta[m]["basis"])
+    g["estimated"] = g["month"].map(lambda m: meta[m]["estimated"])
+    return g.sort_values(["month", "revenue"], ascending=[True, False])
+
+
+def verify_calibration(j: pd.DataFrame, meta: dict) -> None:
+    """Abort unless every calibrated month actually reproduces its statement.
+
+    Two independent things are asserted, because they fail differently:
+
+      * the ratio. If the arithmetic is right this holds to machine precision;
+        anything looser means a month was scaled by the wrong factor.
+      * dimension parity. Item, customer and representative are three cuts of
+        the same lines, so their monthly profit must agree. A join that
+        duplicated or dropped rows on one dimension would still produce a
+        plausible-looking file, and this is what catches it.
+    """
+    if not meta:
+        return
+    src = j[j["is_costed"] & j["calibrated"]]
+    for month, g in src.groupby("month"):
+        want = meta[month]["statement_cogs_ratio"] / 100.0
+        got = float(g["cal_cogs"].sum()) / float(g["net_revenue"].sum())
+        if abs(got - want) > 1e-9:
+            raise SystemExit(
+                f"\n{month}: calibrated cost ratio is {got:.9f} but the income "
+                f"statement says {want:.9f} — refusing to emit monthly margin")
+
+    cuts = [agg_monthly(j, k, meta)
+            for k in (["item_code"], ["customer_code"], ["rep"])]
+    ref = cuts[0].groupby("month")["gross_profit"].sum().round(2)
+    for c in cuts[1:]:
+        other = c.groupby("month")["gross_profit"].sum().round(2)
+        if not ref.equals(other):
+            bad = sorted(set(ref.index) ^ set(other.index)) or [
+                m for m in ref.index if ref[m] != other.get(m)]
+            raise SystemExit(
+                f"\nmonthly gross profit disagrees between dimensions at "
+                f"{bad[:5]} — the three cuts are not the same lines")
+    print(f"  PASS  calibrated_months_reproduce_their_statements "
+          f"({len(meta)} month(s))")
+
+
 def agg(j: pd.DataFrame, keys: list[str], reliable_only: bool = True) -> pd.DataFrame:
     """Aggregate, keeping costed and uncosted revenue apart throughout.
 
@@ -278,7 +450,43 @@ def agg(j: pd.DataFrame, keys: list[str], reliable_only: bool = True) -> pd.Data
     return out.sort_values("revenue_total", ascending=False)
 
 
-def dashboard_payload(summary: dict, outs: dict, u: pd.DataFrame) -> dict:
+def level3(monthly: dict, cal: dict, rows) -> dict:
+    """The calibrated monthly cuts, as payload keys — or nothing at all.
+
+    An empty dict rather than empty lists when there is no calibration, so the
+    app tests for the key instead of for length and a pre-calibration build
+    keeps the payload it had.
+    """
+    if not cal:
+        return {}
+    common = ["month", "basis", "estimated"]
+    tail = ["revenue", "gross_profit", "op_profit",
+            "gross_margin_pct", "op_margin_pct"]
+    return {
+        "calibration": {
+            "months": sorted(cal),
+            "cost_month": COST_MONTH,
+            "n_estimated_months": sum(1 for v in cal.values() if v["estimated"]),
+            "estimated_months": sorted(m for m, v in cal.items()
+                                       if v["estimated"]),
+            "by_month": [dict(cal[m], month=m) for m in sorted(cal)],
+            "method": "June-2026 unit costs scaled per month so the total cost "
+                      "and expense ratios equal that month's income statement. "
+                      "Corrects the level, not the mix.",
+        },
+        "by_item_month": rows(
+            monthly["margin_by_item_month.csv"],
+            common + ["item_code", "item_name", "brand", "qty"] + tail),
+        "by_customer_month": rows(
+            monthly["margin_by_customer_month.csv"],
+            common + ["customer_code", "customer_name", "rep"] + tail),
+        "by_rep_month": rows(
+            monthly["margin_by_rep_month.csv"], common + ["rep"] + tail),
+    }
+
+
+def dashboard_payload(summary: dict, outs: dict, u: pd.DataFrame,
+                      monthly: dict, cal: dict) -> dict:
     """Compact payload the mobile app inlines as window.DASH_MARGIN.
 
     Deliberately separate from dashboards/data.js: that file is the desktop
@@ -328,6 +536,10 @@ def dashboard_payload(summary: dict, outs: dict, u: pd.DataFrame) -> dict:
                             ["customer_code", "customer_name", "rep", "revenue_total",
                              "revenue_costed", "gross_profit", "op_profit",
                              "gross_margin_pct", "op_margin_pct"], n=60),
+        # Level three: monthly, per dimension, on the calibrated basis. Absent
+        # entirely — not present and empty — when there are no statements, so
+        # the app can decide whether the level exists by asking for the key.
+        **level3(monthly, cal, rows),
         "uncosted_items": summary["coverage"]["uncosted_items_top"],
         "pricing_gap": clean(pricing[["item_code", "cost_item_name", "cost_brand",
                                       "june_avg_price", "rec_price", "floor_price",
@@ -389,6 +601,11 @@ def main() -> None:
                 f"statement says {want:,.2f} — refusing to emit margin figures")
     print("  PASS  measured_month_reproduces_the_income_statement")
 
+    # The third basis. S.ratios() returns None when the vendored statements are
+    # absent, and everything below then behaves exactly as it did before them.
+    cal = calibrate(j, S.ratios())
+    verify_calibration(j, cal)
+
     by_month = (agg(j, ["month", "basis"], reliable_only=False)
                 .merge(pidx, on="month", how="left").sort_values("month"))
 
@@ -400,8 +617,16 @@ def main() -> None:
         "margin_by_brand.csv": agg(j, ["brand"]),
         "margin_by_month.csv": by_month,
     }
-    for name, df in outs.items():
-        df.round(4).to_csv(P / name, index=False)
+    monthly = {
+        "margin_by_item_month.csv":
+            agg_monthly(j, ["item_code", "item_name", "brand"], cal),
+        "margin_by_customer_month.csv":
+            agg_monthly(j, ["customer_code", "customer_name", "rep"], cal),
+        "margin_by_rep_month.csv": agg_monthly(j, ["rep"], cal),
+    }
+    for name, df in list(outs.items()) + list(monthly.items()):
+        if len(df):
+            df.round(4).to_csv(P / name, index=False)
 
     costed = j[j["is_costed"]]
     measured = costed[costed["basis"] == "measured"]
@@ -448,6 +673,14 @@ def main() -> None:
         "measured": block(measured),
         "indicative": block(indicative),
         "indicative_excluded": (block(excluded) if len(excluded) else None),
+        "calibration": ({
+            "months": sorted(cal),
+            "n_months": len(cal),
+            "estimated_months": sorted(m for m, v in cal.items() if v["estimated"]),
+            "by_month": [dict(cal[m], month=m) for m in sorted(cal)],
+            "basis": "June-2026 unit costs scaled per month onto that month's "
+                     "income-statement cost and expense ratios",
+        } if cal else None),
         "caveats": [
             "المقيس: يونيو 2026 فقط — تكلفة مرصودة، مطابقة لقائمة الدخل.",
             f"بوابة انحراف الأسعار: تُستبعد الشهور التي تبعد أسعارها عن شهر التكلفة "
@@ -461,13 +694,22 @@ def main() -> None:
             "من الإجمالي، ولذلك الهامش التقديري أعلى من الواقع بهذا القدر تقريبًا.",
             "الأصناف بلا تكلفة لا تُحتسب لها تكلفة صفرية؛ إيرادها يُعرض منفصلًا "
             "وكل نسبة هامش محسوبة على الإيراد المُسعَّر فقط.",
-        ],
+        ] + ([
+            f"المعايَر: {len(cal)} شهرًا ({min(cal)} – {max(cal)}). تكلفة وحدة "
+            "يونيو 2026 مضروبة في معامل شهري يجعل نسبتَي التكلفة والمصروفات "
+            "مطابقتين لقائمة دخل الشهر نفسه. المعايرة تصحّح مستوى التكلفة لا "
+            "توزيعها بين الأصناف: إن تحرّكت تكلفة صنف بعينه عكس بقية السلة بين "
+            "يونيو وذلك الشهر فلا شيء هنا يرصده. فهي ليست ربحية مقيسة لكل صنف.",
+            "الأشهر المعايَرة ترث إجمالية الإيراد (قبل المرتجعات): النسبة "
+            "المئوية مطابقة للقائمة، أما الربح بالجنيه فأعلى من الواقع بنحو "
+            "نسبة المرتجعات نفسها.",
+        ] if cal else []),
     }
     (P / "margin_summary.json").write_text(
         json.dumps(clean(summary), ensure_ascii=False, indent=2), encoding="utf-8")
 
     (P / "margin_dashboard.json").write_text(
-        json.dumps(clean(dashboard_payload(summary, outs, u)),
+        json.dumps(clean(dashboard_payload(summary, outs, u, monthly, cal)),
                    ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
     cov = summary["coverage"]
@@ -484,8 +726,18 @@ def main() -> None:
             continue
         print(f"  {label:28s} revenue {b['revenue_costed']:>13,.0f}  "
               f"gross {b['gross_margin_pct']:>6.2f}%  operating {b['op_margin_pct']:>7.2f}%")
+    if cal:
+        est = sorted(m for m, v in cal.items() if v["estimated"])
+        print(f"calibration  {len(cal)} month(s) {min(cal)}..{max(cal)} scaled "
+              f"onto their income statements; {len(est)} of them estimated "
+              f"({', '.join(est) or 'none'})")
+        rowsn = {k: len(v) for k, v in monthly.items()}
+        print(f"             rows {rowsn}")
+    else:
+        print("calibration  skipped — data/cost/income_statements.json absent")
     print(f"\nwrote margin_unit_costs.csv + {len(outs)} aggregates + "
-          "margin_summary.json + margin_dashboard.json")
+          f"{len(monthly)} monthly cuts + margin_summary.json + "
+          "margin_dashboard.json")
 
 
 if __name__ == "__main__":

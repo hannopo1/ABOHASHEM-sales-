@@ -47,8 +47,11 @@ def run(path: Path) -> int:
         page.goto(path.as_uri())
         page.wait_for_selector("#root > div", timeout=30_000)
         page.wait_for_timeout(1500)
-        # Switch to the 18-month dataset: it carries the widest catalogue.
-        page.locator("text='18 شهرًا'").first.click()
+        # The two datasets are merged, so there is no longer anything to switch
+        # to — exportTables() returns the union from wherever you stand. The
+        # reports section is opened because it renders that same catalogue, so
+        # a table that exports but cannot render still fails here.
+        page.evaluate("() => window.__app.go('r:reports')")
         page.wait_for_timeout(1200)
 
         cat = page.evaluate(
@@ -117,9 +120,10 @@ def run(path: Path) -> int:
         check("sheet opens right-to-left", ws.sheet_view.rightToLeft is True)
 
         # ---- charts -------------------------------------------------------
-        page.locator("text='المزيد'").first.click()
-        page.wait_for_timeout(400)
-        page.locator("text='الربحية'").first.click()
+        # Driven through go() rather than by clicking the label: several
+        # section labels appear twice in the merged nav, and a text click
+        # cannot say which one it meant.
+        page.evaluate("() => window.__app.go('r:margin')")
         page.wait_for_timeout(1800)
         n = page.evaluate("() => X.charts().length")
         check("charts are registered while mounted", n > 0, f"{n} live instances")

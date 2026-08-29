@@ -12,13 +12,17 @@ class App extends React.Component {
     rf:{rep:null,brand:null,customerCode:null,itemName:null}, rfOpts:null,
     /* Two independent extracts ship together; they cover different periods and
        customer counts, so they are switched between rather than merged. */
-    src:"dash", AG:null, C:null, fq:"", loadMsg:null, barHidden:true,
+    /* `src` is gone: which payload a section reads is a property of the
+       section now (see registry()), not a mode the user picks. */
+    AG:null, C:null, fq:"", loadMsg:null, barHidden:true,
     snaps:[], snap:null, cmp:null, stmt:null, ins:{},
     /* التقارير: which export table is on screen and the search inside it.
        المستوى الثالث: which month the monthly profitability tables show. All
        three default to null and are resolved on render, so a build whose data
        lacks the table or the month falls back rather than showing nothing. */
-    repTable:null, repQ:"", calMonth:null };
+    repTable:null, repQ:"", calMonth:null,
+    /* ترقيم الصفحات: صفحة لكل جدول بمفتاحه، وحجم صفحة واحد للتطبيق كله. */
+    pages:{}, pageSize:25 };
   /* The bar is nine fields tall — open by default it pushes every chart off
      a phone screen, so it starts collapsed behind the header button. */
 
@@ -86,7 +90,7 @@ class App extends React.Component {
     let D; try{ D = this.parseSnapshot(sn); }
     catch(e){ this.setState({loadMsg:"تعذّر قراءة اللقطة: "+e.message}); return; }
     this._optKey = null;                       // option lists are per-payload
-    this.setState({api:st.A.makeApi(D), snap:key, src:"dash", sheet:null, stmt:null,
+    this.setState({api:st.A.makeApi(D), snap:key, sheet:null, stmt:null, pages:{},
       filters:{...st.filters, month:D.meta.default_month||"all"},
       cmp:(st.cmp===key)?null:st.cmp});
   }
@@ -120,7 +124,7 @@ class App extends React.Component {
         if(!this.validDash(D)) throw new Error("المخطط غير مطابق لـ window.DASH");
         try{ localStorage.setItem("abh_dash", JSON.stringify(D)); }catch(e){}
         const api = this.state.A.makeApi(D);
-        this.setState({api, src:"dash", sheet:null,
+        this.setState({api, sheet:null, pages:{},
           filters:{...this.state.filters, month:D.meta.default_month||""},
           loadMsg:"تم تحميل "+(D.meta.period_label||"الملف")+" — لقطة "+D.meta.as_of});
       }catch(e){ this.setState({loadMsg:"تعذّر التحميل: "+e.message}); }
@@ -128,7 +132,7 @@ class App extends React.Component {
     rd.readAsText(file);
   }
 
-  set(k,v){ this.setState(s=>({filters:{...s.filters,[k]:v}, sheet:null})); }
+  set(k,v){ this.setState(s=>({filters:{...s.filters,[k]:v}, sheet:null, pages:{}})); }
   E(t,s,c){ return React.createElement(t,{style:s},c); }
 
   card(title,children,opt){
@@ -200,13 +204,184 @@ class App extends React.Component {
         this.lineChart(e[2],e[1]))));
   }
 
+  /* ---- الأقسام: سجل واحد للمصدرين -----------------------------------------
+     The app used to ship the two datasets behind a switcher, and half of it was
+     hidden at any moment. They never needed to be switched between: they
+     describe the SAME invoices — all eighteen monthly totals agree to the pound
+     — and their detail is complementary, not overlapping.
+
+       window.DASH       invoice-level detail (يناير – يوليو 2026), the AR
+                         snapshot, collections and returns
+       window.DASH_DATA  the precomputed analysis over eighteen months
+                         (يناير 2025 – يونيو 2026): dimensions, ABC/XYZ,
+                         forecasting, the cost join
+
+     So there was nothing to reconcile — only a control that hid work the user
+     had already paid for. This registry merges the two navigations into one.
+
+     What it deliberately does NOT merge is the arithmetic. Each entry still
+     names the payload it reads, and every section states its own window,
+     because coverage differs: invoice detail starts in January 2026 while the
+     aggregates start a year earlier. Merging the navigation is not merging the
+     periods, and a reader must never be left to assume it was.
+
+     Repo-side ids carry an "r:" prefix. Four ids — sales, customers, products,
+     quality — exist on both sides and mean different things there. */
+  registry(){
+    const st=this.state, T=st.T, R=st.R;
+    const dash=!!st.api, repo=!!(st.RD && st.R);
+    const dashLbl=id=>((T&&T.SECTION_LABELS)||[]).find(s=>s.id===id);
+    const repoLbl=id=>{
+      const list=(R?R.SECTIONS:[]).concat(M.has()?[M.SECTION]:[]);
+      return list.find(s=>s.id===id);
+    };
+    const out=[];
+    /* `as` renames an entry for the merged list. Only needed where two
+       sections would otherwise be indistinguishable inside one group: the two
+       data-quality sections read the same label and describe different
+       payloads, so the chip has to say which. Labels that collide across
+       different groups are left alone — the group heading disambiguates them
+       and a suffix on every one of them would be noise. */
+    const push=(group,src,id,fallback,as)=>{
+      if(src==="dash" && !dash) return;
+      if(src==="repo" && !repo) return;
+      const meta=src==="dash"?dashLbl(id):repoLbl(id);
+      if(!meta && !fallback) return;
+      const m=meta||fallback;
+      out.push({key:src==="repo"?"r:"+id:id, id, src, group,
+                label:as||m.label, h2:m.h2||m.title||m.label,
+                p:m.p||m.sub||""});
+    };
+
+    /* الفواتير: تفصيل على مستوى الفاتورة، يناير – يوليو 2026. */
+    push("الفواتير والمبيعات","dash","overview");
+    push("الفواتير والمبيعات","dash","sales");
+    push("الفواتير والمبيعات","dash","customers");
+    push("الفواتير والمبيعات","dash","products");
+
+    push("المديونية والتحصيل","dash","receivables");
+    push("المديونية والتحصيل","dash","aging",
+      {label:"أعمار العملاء", h2:"أعمار المديونية لكل عميل",
+       p:"العمر من تاريخ الفاتورة · FIFO بالتحصيلات والمرتجعات المؤرَّخة · يطابق رصيد اللقطة"});
+    /* حركة المديونية تقارن لقطتين؛ بلقطة واحدة لا يبقى لها ما تعرضه، فتُسقط من
+       التنقّل بدل أن تظهر فارغة دائمًا. */
+    if((st.snaps||[]).length>1)
+      push("المديونية والتحصيل","dash","armove",
+        {label:"حركة المديونية", h2:"حركة المديونية بين لقطتين",
+         p:"فرق رصيد كل عميل بين لقطتَي مديونية"});
+    push("المديونية والتحصيل","dash","collections");
+    push("المديونية والتحصيل","dash","bonus");
+
+    /* التحليل الشامل: تجميعات 18 شهرًا، يناير 2025 – يونيو 2026. */
+    push("التحليل — 18 شهرًا","repo","fin");
+    push("التحليل — 18 شهرًا","repo","sales");
+    push("التحليل — 18 شهرًا","repo","customers");
+    push("التحليل — 18 شهرًا","repo","brands");
+    push("التحليل — 18 شهرًا","repo","products");
+    push("التحليل — 18 شهرًا","repo","analysis");
+    push("التحليل — 18 شهرًا","repo","forecast");
+    push("التحليل — 18 شهرًا","repo","debt");
+
+    push("الربحية والتقارير","repo","margin");
+    push("الربحية والتقارير","repo","reports");
+
+    push("تحليلات وجودة البيانات","dash","analytics");
+    push("تحليلات وجودة البيانات","dash","quality",null,"جودة البيانات — الفواتير");
+    push("تحليلات وجودة البيانات","repo","quality",null,"جودة البيانات — 18 شهرًا");
+    return out;
+  }
+
+  /* One bottom bar for the whole app. The four fixed slots are the
+     invoice-level views, which is what gets opened daily; everything else —
+     including all eighteen-month analysis — lives behind «المزيد», grouped and
+     labelled by the window it covers. */
+  unifiedNav(){
+    const st=this.state, T=st.T, reg=this.registry();
+    const NAV=[["overview","لوحة","sales"],["sales","المبيعات","money"],
+               ["customers","العملاء","users"],["receivables","المديونية","warn"]]
+      .filter(([id])=>reg.some(s=>s.key===id));
+    const icon=n=>(T&&T.KPI_ICONS&&T.KPI_ICONS[n])||"";
+    const slot=(key,lab,ic,on,onClick)=>React.createElement("div",{key,onClick,
+      style:{display:"flex",flexDirection:"column",alignItems:"center",gap:4,
+        padding:"6px 0",borderRadius:12,cursor:"pointer",
+        background:on?"rgba(59,130,246,.12)":"transparent",
+        color:on?"#93c5fd":"#64748b"}},
+      ic===null
+        ? React.createElement("span",{style:{fontSize:17,lineHeight:"19px"}},"⋯")
+        : React.createElement("span",{style:{width:19,height:19,display:"block"},
+            dangerouslySetInnerHTML:{__html:'<svg viewBox="0 0 24 24" style="width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">'+icon(ic)+'</svg>'}}),
+      React.createElement("span",{style:{fontSize:9.5,fontWeight:on?700:400}},lab));
+
+    const inBar=NAV.some(([id])=>id===st.section);
+    return React.createElement("div",{style:{display:"grid",
+        gridTemplateColumns:"repeat("+(NAV.length+1)+",1fr)",gap:2}},
+      NAV.map(([id,lab,ic])=>slot(id,lab,ic,st.section===id,()=>this.go(id)))
+        .concat([slot("more","المزيد",null,!inBar,
+                      ()=>this.setState({sheet:"nav"}))]));
+  }
+
+  /* The «المزيد» sheet. Grouped, because a flat list of twenty-odd sections
+     hides the one thing the reader most needs to know — which of them describe
+     the invoice detail and which describe the eighteen-month aggregates. */
+  navSheet(){
+    const st=this.state, reg=this.registry();
+    const NOTE={
+      "الفواتير والمبيعات":"تفصيل على مستوى الفاتورة · يناير – يوليو 2026",
+      "المديونية والتحصيل":"لقطة أرصدة "+(st.api?this.ltr(st.api.D.meta.as_of):"")+
+                            " · التحصيلات والمرتجعات",
+      "التحليل — 18 شهرًا":"تجميعات مسبقة · يناير 2025 – يونيو 2026",
+      "الربحية والتقارير":"الربحية بثلاثة مستويات · وكل جدول قابل للتصدير",
+      "تحليلات وجودة البيانات":"Sunburst وSankey · والمطابقة والقيم الشاذّة",
+    };
+    const groups=[];
+    reg.forEach(s=>{
+      let g=groups.find(x=>x.name===s.group);
+      if(!g) groups.push(g={name:s.group,items:[]});
+      g.items.push(s);
+    });
+    const out=[];
+    groups.forEach(g=>{
+      out.push(React.createElement("div",{key:"h"+g.name,
+        style:{marginTop:4,display:"flex",flexDirection:"column",gap:2}},
+        React.createElement("span",{style:{fontSize:11.5,fontWeight:800,
+          color:"#e2e8f0"}},g.name),
+        NOTE[g.name]?React.createElement("span",{style:{fontSize:9.5,
+          color:"#64748b",lineHeight:1.6}},NOTE[g.name]):null));
+      out.push(React.createElement("div",{key:"g"+g.name,dir:"rtl",
+        style:{display:"flex",flexWrap:"wrap",gap:6}},
+        g.items.map(s=>React.createElement("span",{key:s.key,
+          onClick:()=>this.go(s.key),
+          style:{fontSize:11.5,padding:"7px 11px",borderRadius:10,cursor:"pointer",
+            background:st.section===s.key?"rgba(59,130,246,.16)":"rgba(255,255,255,.03)",
+            border:"1px solid "+(st.section===s.key?"rgba(59,130,246,.42)":"rgba(255,255,255,.08)"),
+            color:st.section===s.key?"#93c5fd":"#cbd5e1",
+            fontWeight:st.section===s.key?700:400}},s.label))));
+    });
+    return out;
+  }
+
+  /* The active entry, and the bare id the per-source renderers expect. */
+  entry(){
+    const reg=this.registry();
+    return reg.find(s=>s.key===this.state.section) || reg[0] || null;
+  }
+  sec(){ const e=this.entry(); return e?e.id:"overview"; }
+  secSrc(){ const e=this.entry(); return e?e.src:"dash"; }
+
+  go(key){
+    /* Section, sheet and the per-table page all reset together: landing on
+       page 7 of a table you have not opened yet is disorienting. */
+    this.setState({section:key, sheet:null, stmt:null, pages:{}});
+  }
+
   renderVals(){
     const st=this.state;
     if(!st.ready) return {bodyEl:[this.skel(80),this.skel(150),this.skel(120)], statusEl:"…"};
     if(st.err) return {bodyEl:this.empty("خطأ في التحميل: "+st.err), statusEl:"error"};
-    if(st.api && st.src!=="repo") return this.build();
-    if(st.RD && st.R) return this.buildRepo();
+    const src=this.secSrc();
+    if(src==="repo" && st.RD && st.R) return this.buildRepo();
     if(st.api) return this.build();
+    if(st.RD && st.R) return this.buildRepo();
     return this.noData();
   }
 
@@ -324,7 +499,7 @@ class App extends React.Component {
       this.chartCard("أكبر 12 حركة", C.arMovementChart(mv),
         {k:"m2",sub:"أحمر = ارتفاع الدين · أخضر = سداد",
          onPick:(p,o)=>{ const c=o._codes&&o._codes[p.dataIndex]; if(c!=null) this.setState({stmt:c}); }}),
-      this.card("حركة كل عميل",this.rowsList(mv.rows.filter(r=>r.kind!=="flat"),[
+      this.card("حركة كل عميل",this.pagedList("mvc",mv.rows.filter(r=>r.kind!=="flat"),[
         ["العميل",r=>r.name],
         ["الفرق",r=>(r.delta>=0?"+":"")+T.num(r.delta)],
         ["قبل",r=>T.num(r.from)],
@@ -418,7 +593,7 @@ class App extends React.Component {
         style:{display:"flex",flexDirection:"column",gap:6}},
       React.createElement("div",{style:{fontSize:12,fontWeight:700,color:"#e2e8f0",marginTop:4}},
         title+" ("+rows.length+")"),
-      rows.length?this.rowsList(rows.slice(0,40), cols):this.empty(emptyMsg));
+      rows.length?this.pagedList("mv:"+title,rows,cols):this.empty(emptyMsg));
     const stat = {paid:"محصّلة", unpaid:"غير محصّلة", zero:"صفرية"};
 
     return React.createElement("div",{key:"st",onClick:()=>this.setState({stmt:null}),
@@ -556,7 +731,7 @@ class App extends React.Component {
         C.donut(repRows.map((r,i)=>[r.rep,r.snapshot,T.PAL[i%T.PAL.length]]),T.egp),
         {k:"ag3",h:C.H.base,sub:repRows.length+" مندوب"}),
 
-      this.card("أعمار المديونية لكل عميل",this.rowsList(rows.slice(0,60),[
+      this.card("أعمار المديونية لكل عميل",this.pagedList("ag",rows,[
         ["العميل",r=>r.name],
         ["الرصيد",r=>T.num(r.snapshot)],
         ["أقل من شهر",r=>T.num(r.tiers.lt30)],
@@ -684,42 +859,50 @@ class App extends React.Component {
   /* Two extracts ship together and cover different ground, so switching is
      explicit and both spans are labelled — merging them would produce totals
      that belong to neither. */
+  /* The strip under the header. It used to carry the dataset switcher; with the
+     two merged there is nothing to switch, so it states the provenance of the
+     section actually on screen instead.
+
+     That line is not decoration. The two payloads cover different windows, and
+     with one navigation over both, the source line is what stops a reader from
+     carrying an eighteen-month figure onto a single invoice month. */
   srcSwitch(){
     const st=this.state;
     if(!st.api && !st.RD) return null;
-    const snaps=st.snaps||[];
+    const snaps=st.snaps||[], cur=snaps.find(x=>x.key===st.snap);
+    const onDash=this.secSrc()==="dash";
     const SEL={flex:1,minWidth:0,padding:"7px 9px",borderRadius:9,fontSize:11,fontFamily:"inherit",
-      background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.10)",
-      color:"#e2e8f0",appearance:"none",WebkitAppearance:"none",boxSizing:"border-box"};
+      background:"rgba(255,255,255,.03)",border:"1px solid rgba(42,120,214,.45)",
+      color:"#93c5fd",fontWeight:700,appearance:"none",WebkitAppearance:"none",
+      boxSizing:"border-box"};
     const OPT={background:"#111827",color:"#e2e8f0"};
-    const onDash = st.src==="dash";
 
-    /* Two snapshots can share an as_of and still disagree, so both dates are
-       shown -- the ledger date and the date the extract was generated. */
-    const snapSel = snaps.length ? React.createElement("select",{key:"s",value:st.snap||"",
-        disabled:!onDash, onChange:e=>this.pickSnapshot(e.target.value),
-        style:{...SEL, opacity:onDash?1:.45,
-               color:onDash?"#93c5fd":"#64748b", fontWeight:onDash?700:400,
-               borderColor:onDash?"rgba(42,120,214,.45)":"rgba(255,255,255,.10)"}},
-      snaps.map(o=>React.createElement("option",{key:o.key,value:o.key,style:OPT},o.label))) : null;
+    /* One snapshot ships now, so a dropdown of one is a control that cannot be
+       used. It becomes a label; the picker returns only if more are loaded. */
+    const snapEl = snaps.length>1
+      ? React.createElement("select",{key:"s",value:st.snap||"",
+          onChange:e=>this.pickSnapshot(e.target.value),style:SEL},
+          snaps.map(o=>React.createElement("option",{key:o.key,value:o.key,style:OPT},o.label)))
+      : (cur ? React.createElement("span",{key:"s",style:{flex:1,minWidth:0,
+            fontSize:11,fontWeight:700,color:"#93c5fd",overflow:"hidden",
+            whiteSpace:"nowrap",textOverflow:"ellipsis"}},cur.label) : null);
 
-    const tab=(id,lab)=>{const on=st.src===id;
-      return React.createElement("span",{key:id,onClick:()=>this.setState({src:id,sheet:null,stmt:null,
-          section:id==="dash"?"overview":"fin"}),
-        style:{flex:"none",padding:"7px 11px",borderRadius:9,cursor:"pointer",fontSize:11,
-          whiteSpace:"nowrap",fontWeight:on?700:400,
-          background:on?"rgba(42,120,214,.16)":"rgba(255,255,255,.03)",
-          border:"1px solid "+(on?"rgba(42,120,214,.42)":"rgba(255,255,255,.08)"),
-          color:on?"#93c5fd":"#94a3b8"}},lab);};
+    /* One badge, not two. A pair of them looked like the switcher that was
+       just removed, and a reader tapping the dim one to "go back" would find
+       nothing happens. This states the payload of the section on screen and
+       claims to do nothing else. */
+    const badge=lab=>React.createElement("span",{key:"bd",
+      style:{flex:"none",padding:"5px 9px",borderRadius:8,fontSize:10,
+        whiteSpace:"nowrap",fontWeight:700,
+        background:"rgba(42,120,214,.14)",
+        border:"1px solid rgba(42,120,214,.34)",
+        color:"#93c5fd"}},lab);
 
-    const cur = snaps.find(x=>x.key===st.snap);
     return React.createElement("div",{style:{flex:"none",position:"relative",
         background:"rgba(13,18,32,.75)",borderBottom:"1px solid rgba(255,255,255,.06)",
         padding:"7px 11px",display:"flex",flexDirection:"column",gap:6}},
       React.createElement("div",{key:"r",style:{display:"flex",gap:6,alignItems:"center"}},
-        st.api?tab("dash","تفصيلي"):null,
-        st.RD?tab("repo","18 شهرًا"):null,
-        snapSel,
+        badge(onDash?"الفواتير":"18 شهرًا"), snapEl,
         React.createElement("label",{key:"ld",style:{flex:"none",padding:"6px 8px",borderRadius:9,
             cursor:"pointer",fontSize:9.5,color:"#94a3b8",border:"1px solid rgba(255,255,255,.10)",
             whiteSpace:"nowrap"}},"data.js",
@@ -727,10 +910,13 @@ class App extends React.Component {
             style:{display:"none"},
             onChange:e=>{const f2=e.target.files&&e.target.files[0]; if(f2) this.loadDashFile(f2);}}))),
       React.createElement("div",{key:"m",style:{fontSize:9.5,color:"#64748b",lineHeight:1.6}},
-        onDash
-          ? (cur ? (cur.note+" · لقطة "+this.ltr(cur.as_of)+" · استُخرجت "+this.ltr(cur.generated))
-                 : (st.api?("لقطة "+this.ltr(st.api.D.meta.as_of)):""))
-          : (st.RD?("مجمّع 18 شهرًا · "+this.ltr(st.RD.financial.period.start+" → "+st.RD.financial.period.end)
+        this.sec()==="reports"
+          ? "هذا القسم يجمع جداول الحمولتين — كل جدول يحمل نافذته في عنوانه"
+          : onDash
+          ? "هذا القسم من تفصيل الفواتير · يناير – يوليو 2026"
+            +(cur?" · لقطة أرصدة "+this.ltr(cur.as_of)+" استُخرجت "+this.ltr(cur.generated):"")
+          : (st.RD?("هذا القسم من التجميعات المسبقة · "
+                    +this.ltr(st.RD.financial.period.start+" → "+st.RD.financial.period.end)
                     +" · "+st.RD.eda_summary.n_customers+" عميل"):"")),
       st.loadMsg?React.createElement("div",{key:"lm",onClick:()=>this.setState({loadMsg:null}),
         style:{fontSize:10.5,lineHeight:1.7,cursor:"pointer",
@@ -764,7 +950,7 @@ class App extends React.Component {
   }
 
   sectionBody(X,T,api){
-    const st=this.state, s=st.section, D=api.D, C=st.C, f=st.filters;
+    const st=this.state, s=this.sec(), D=api.D, C=st.C, f=st.filters;
     if(s==="aging") return this.agingBody(X,T,api);
     if(s==="armove") return this.arMoveBody(X,T,api);
     if(s==="reports") return this.reports();
@@ -797,7 +983,7 @@ class App extends React.Component {
       this.chartCard("جسر المبيعات حسب العلامة", C.salesWaterfall(X), {k:"s3"}),
       this.chartCard("أعلى 12 صنفًا", C.topProducts(X,12), {k:"s4",onPick:(p,o)=>{
         const c=o._codes&&o._codes[p.dataIndex]; if(c!=null) setF("item",c);}}),
-      this.card("بنود الفواتير",this.rowsList(X.lines.slice(0,40),[["الصنف",r=>r.item_name],["الفاتورة",r=>r.invoice_no],["العميل",r=>r.customer_name],["الإجمالي",r=>T.num(r.line_total)],["التاريخ",r=>this.ltr(r.invoice_date)],["المندوب",r=>r.rep],["العلامة",r=>r.brand],["الكمية",r=>T.int(r.qty)],["السعر",r=>T.num(r.unit_price)]]),{sub:X.lines.length+" بند",k:"s5"})];
+      this.card("بنود الفواتير",this.pagedList("s5",X.lines,[["الصنف",r=>r.item_name],["الفاتورة",r=>r.invoice_no],["العميل",r=>r.customer_name],["الإجمالي",r=>T.num(r.line_total)],["التاريخ",r=>this.ltr(r.invoice_date)],["المندوب",r=>r.rep],["العلامة",r=>r.brand],["الكمية",r=>T.int(r.qty)],["السعر",r=>T.num(r.unit_price)]]),{sub:X.lines.length+" بند",k:"s5"})];
 
     if(s==="customers") return [
       this.chartCard("أعلى 12 عميلًا", C.topCustomers(X,12),
@@ -806,7 +992,7 @@ class App extends React.Component {
       this.chartCard("مقارنة أعلى 5 عملاء (رادار)", C.radar(X), {k:"u3",h:C.H.tall}),
       this.chartCard("المبيعات مقابل المديونية", C.scatter(X),
         {k:"u4",sub:"حجم النقطة = المبيعات",onPick:drill}),
-      this.card("ترتيب العملاء",this.rowsList(X.customers.slice(0,40),[["العميل",r=>r.customer_name],["المبيعات",r=>T.num(r.sales)],["المندوب",r=>r.rep],["المديونية",r=>r.outstanding==null?"—":T.num(r.outstanding)],["#",r=>r.rank],["الفواتير",r=>r.n_invoices],["الأصناف",r=>r.n_items],["الكراتين",r=>T.int(r.boxes)],["متوسط الفاتورة",r=>T.num(r.avg_invoice_value)],["معدل التحصيل",r=>r.collection_rate==null?"—":T.pct(r.collection_rate)],["الحافز %",r=>T.pct(r.bonus_pct,0)],["أقدم فاتورة",r=>r.oldest_invoice_no||"—"],["أيام التأخر",r=>r.oldest_days_overdue==null?"—":r.oldest_days_overdue]],r=>this.setState({stmt:r.customer_code})),{sub:X.customers.length+" عميل · اضغط لكشف الحساب",k:"u5"})];
+      this.card("ترتيب العملاء",this.pagedList("u5",X.customers,[["العميل",r=>r.customer_name],["المبيعات",r=>T.num(r.sales)],["المندوب",r=>r.rep],["المديونية",r=>r.outstanding==null?"—":T.num(r.outstanding)],["#",r=>r.rank],["الفواتير",r=>r.n_invoices],["الأصناف",r=>r.n_items],["الكراتين",r=>T.int(r.boxes)],["متوسط الفاتورة",r=>T.num(r.avg_invoice_value)],["معدل التحصيل",r=>r.collection_rate==null?"—":T.pct(r.collection_rate)],["الحافز %",r=>T.pct(r.bonus_pct,0)],["أقدم فاتورة",r=>r.oldest_invoice_no||"—"],["أيام التأخر",r=>r.oldest_days_overdue==null?"—":r.oldest_days_overdue]],r=>this.setState({stmt:r.customer_code})),{sub:X.customers.length+" عميل · اضغط لكشف الحساب",k:"u5"})];
 
     if(s==="products") return [
       this.chartCard("أعلى 12 صنفًا", C.topProducts(X,12), {k:"p1",insight:"top_products"}),
@@ -814,7 +1000,7 @@ class App extends React.Component {
       this.chartCard("تشتت سعر البيع لأعلى الأصناف", C.priceBox(X), {k:"p3"}),
       this.chartCard("توزيع الإيراد حسب العلامة", C.donut(brandPairs()),
         {k:"p4",h:C.H.short,onPick:pickName("brand")}),
-      this.card("أداء المنتجات",this.rowsList(X.products.slice(0,40),[["الصنف",r=>r.item_name],["المبيعات",r=>T.num(r.sales)],["العلامة",r=>r.brand],["المساهمة",r=>r.contribution_pct.toFixed(1)+"%"],["#",r=>r.rank],["الكمية",r=>T.int(r.qty)],["الكراتين",r=>T.int(r.boxes)],["م. السعر",r=>T.num(r.asp)],["أعلى سعر",r=>r.max_price==null?"—":T.num(r.max_price)],["أدنى سعر",r=>r.min_price==null?"—":T.num(r.min_price)],["العملاء",r=>r.n_customers]]),{k:"p5"})];
+      this.card("أداء المنتجات",this.pagedList("p5",X.products,[["الصنف",r=>r.item_name],["المبيعات",r=>T.num(r.sales)],["العلامة",r=>r.brand],["المساهمة",r=>r.contribution_pct.toFixed(1)+"%"],["#",r=>r.rank],["الكمية",r=>T.int(r.qty)],["الكراتين",r=>T.int(r.boxes)],["م. السعر",r=>T.num(r.asp)],["أعلى سعر",r=>r.max_price==null?"—":T.num(r.max_price)],["أدنى سعر",r=>r.min_price==null?"—":T.num(r.min_price)],["العملاء",r=>r.n_customers]]),{k:"p5"})];
 
     if(s==="receivables") return [
       this.chartCard("أعمار الديون", C.agingBar(X,D),
@@ -825,7 +1011,7 @@ class App extends React.Component {
       this.chartCard("جاري مقابل متأخرات",
         C.donut([["جاري",T.sum(X.recv,"current"),"#10b981"],["متأخرات",T.sum(X.recv,"overdue"),"#ef4444"]]),
         {k:"r4",h:C.H.short}),
-      this.card("المديونية حسب العميل",this.rowsList(X.recv.slice(0,40),[["العميل",r=>r.customer_name],["الرصيد",r=>T.num(r.outstanding)],["متأخرات",r=>T.num(r.overdue)],["الفئة",r=>bl(r.bucket)],["المندوب",r=>r.rep],["جاري",r=>T.num(r.current)],["أيام التأخر",r=>r.days_overdue],["آخر نشاط",r=>this.ltr(r.last_invoice_date)]],r=>this.setState({stmt:r.customer_code})),{approx:true,k:"r5",sub:"اضغط لكشف الحساب"})];
+      this.card("المديونية حسب العميل",this.pagedList("r5",X.recv,[["العميل",r=>r.customer_name],["الرصيد",r=>T.num(r.outstanding)],["متأخرات",r=>T.num(r.overdue)],["الفئة",r=>bl(r.bucket)],["المندوب",r=>r.rep],["جاري",r=>T.num(r.current)],["أيام التأخر",r=>r.days_overdue],["آخر نشاط",r=>this.ltr(r.last_invoice_date)]],r=>this.setState({stmt:r.customer_code})),{approx:true,k:"r5",sub:"اضغط لكشف الحساب"})];
 
     if(s==="collections"){
       const Co=D.collections||{};
@@ -850,8 +1036,8 @@ class App extends React.Component {
         this.chartCard("التحصيل والمرتجعات حسب المندوب", C.collectionsByRep(D,f),
           {k:"o5",onPick:pickCat("rep")}),
         this.chartCard("أدنى 15 عميلًا في معدل التحصيل", C.worstCollectors(X), {k:"o6",onPick:drill}),
-        this.card("سجل السدادات",this.rowsList((Co.receipts||[]).slice(0,40),[["العميل",r=>r.customer_name],["المبلغ",r=>T.num(r.amount)],["التاريخ",r=>this.ltr(r.date)],["طريقة الدفع",r=>r.method],["المندوب",r=>r.rep],["سند",r=>r.doc_ref||"—"],["إيصال",r=>r.receipt_no||"—"]]),{k:"o7"}),
-        this.card("سجل المرتجعات",this.rowsList((Co.returns_rows||[]).slice(0,40),[["العميل",r=>r.customer_name],["القيمة",r=>T.num(r.value)],["التاريخ",r=>this.ltr(r.date)],["مرجع الفاتورة",r=>r.invoice_ref||"—"],["المندوب",r=>r.rep]]),{k:"o8"})];
+        this.card("سجل السدادات",this.pagedList("o7",Co.receipts||[],[["العميل",r=>r.customer_name],["المبلغ",r=>T.num(r.amount)],["التاريخ",r=>this.ltr(r.date)],["طريقة الدفع",r=>r.method],["المندوب",r=>r.rep],["سند",r=>r.doc_ref||"—"],["إيصال",r=>r.receipt_no||"—"]]),{k:"o7"}),
+        this.card("سجل المرتجعات",this.pagedList("o8",Co.returns_rows||[],[["العميل",r=>r.customer_name],["القيمة",r=>T.num(r.value)],["التاريخ",r=>this.ltr(r.date)],["مرجع الفاتورة",r=>r.invoice_ref||"—"],["المندوب",r=>r.rep]]),{k:"o8"})];
     }
 
     if(s==="bonus"){
@@ -864,7 +1050,7 @@ class App extends React.Component {
             React.createElement("b",{style:{color:"#e2e8f0"}},r[1]))).concat([
             React.createElement("div",{key:"t",style:{marginTop:9,fontSize:12,color:"#94a3b8"}},"إجمالي الحافز المستحق: ",
               React.createElement("b",{style:{color:"#10b981",fontFamily:"'JetBrains Mono',monospace"}},T.egp(tot)))])),{k:"b2"}),
-        this.card("تقرير الحوافز",this.rowsList(X.customers.filter(c=>c.has_ar).slice(0,40),[["العميل",r=>r.customer_name],["قيمة الحافز",r=>T.num(r.bonus_value)],["الحافز %",r=>T.pct(r.bonus_pct,0)],["معدل التحصيل",r=>r.collection_rate==null?"—":T.pct(r.collection_rate)],["المندوب",r=>r.rep],["مبيعات الشهر",r=>T.num(r.sales)],["إجمالي مُفوتر",r=>T.num(r.total_billed)],["المديونية",r=>r.outstanding==null?"—":T.num(r.outstanding)]],r=>this.setState({stmt:r.customer_code})),{k:"b3",sub:"اضغط لكشف الحساب"})];
+        this.card("تقرير الحوافز",this.pagedList("b3",X.customers.filter(c=>c.has_ar),[["العميل",r=>r.customer_name],["قيمة الحافز",r=>T.num(r.bonus_value)],["الحافز %",r=>T.pct(r.bonus_pct,0)],["معدل التحصيل",r=>r.collection_rate==null?"—":T.pct(r.collection_rate)],["المندوب",r=>r.rep],["مبيعات الشهر",r=>T.num(r.sales)],["إجمالي مُفوتر",r=>T.num(r.total_billed)],["المديونية",r=>r.outstanding==null?"—":T.num(r.outstanding)]],r=>this.setState({stmt:r.customer_code})),{k:"b3",sub:"اضغط لكشف الحساب"})];
     }
 
     if(s==="analytics") return [
@@ -882,31 +1068,15 @@ class App extends React.Component {
       this.chartCard("نسبة المطابقة", C.gauge(q.reconciliation_rate,"مطابقة"),
         {k:"q1",h:C.H.short,insight:"data_quality"}),
       this.chartCard("توزيع قيم الفواتير", C.histogram(X), {k:"q2"}),
-      this.card("الفواتير صفرية القيمة",this.rowsList((D.zero_invoices||[]).slice(0,40),[["العميل",r=>r.customer_name],["الفاتورة",r=>r.invoice_no],["التاريخ",r=>this.ltr(r.invoice_date)],["الكمية",r=>T.int(r.qty_total)],["كود العميل",r=>r.customer_code],["بونص",r=>r.is_bonus?"نعم":"—"]]),{sub:"بونص / عيّنات",k:"q3",insight:"zero_invoices"})];
+      this.card("الفواتير صفرية القيمة",this.pagedList("q3",D.zero_invoices||[],[["العميل",r=>r.customer_name],["الفاتورة",r=>r.invoice_no],["التاريخ",r=>this.ltr(r.invoice_date)],["الكمية",r=>T.int(r.qty_total)],["كود العميل",r=>r.customer_code],["بونص",r=>r.is_bonus?"نعم":"—"]]),{sub:"بونص / عيّنات",k:"q3",insight:"zero_invoices"})];
   }
 
   build(){
     const st=this.state, T=st.T, api=st.api, D=api.D, f=st.filters;
-    /* SECTION_LABELS is kept verbatim from the source dashboard; the aging
-       section is an addition, so it is appended here rather than edited in. */
-    const SEC=T.SECTION_LABELS.concat([
-      {id:"aging", label:"أعمار العملاء", h2:"أعمار المديونية لكل عميل",
-       p:"العمر من تاريخ الفاتورة · FIFO بالتحصيلات والمرتجعات المؤرَّخة · يطابق رصيد اللقطة"},
-      {id:"armove", label:"حركة المديونية", h2:"حركة المديونية بين لقطتين",
-       p:"فرق رصيد كل عميل بين لقطتَي مديونية — تحليل غير متاح في لوحة الحاسوب"}]);
-    const cur=SEC.find(s=>s.id===st.section)||SEC[0];
+    const cur=this.entry()||{h2:"",p:"",label:""};
     const X=api.buildContext(f);
     const noData=!api.monthHasData(f.month);
-    const NAV=[["overview","لوحة"],["sales","المبيعات"],["customers","العملاء"],["receivables","المديونية"]];
-
-    const navEl=React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:2}},
-      NAV.map(([id,lab])=>{const on=st.section===id;
-        return React.createElement("div",{key:id,onClick:()=>this.setState({section:id,sheet:null}),style:{display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:"6px 0",borderRadius:12,cursor:"pointer",background:on?"rgba(59,130,246,.12)":"transparent",color:on?"#93c5fd":"#64748b"}},
-          React.createElement("span",{style:{width:19,height:19,display:"block"},dangerouslySetInnerHTML:{__html:'<svg viewBox="0 0 24 24" style="width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">'+T.KPI_ICONS[id==="overview"?"sales":id==="sales"?"money":id==="customers"?"users":"warn"]+'</svg>'}}),
-          React.createElement("span",{style:{fontSize:9.5,fontWeight:on?700:400}},lab));})
-      .concat([React.createElement("div",{key:"more",onClick:()=>this.setState({sheet:"nav"}),style:{display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:"6px 0",borderRadius:12,cursor:"pointer",color:["products","collections","bonus","analytics","quality","aging","armove"].includes(st.section)?"#93c5fd":"#64748b"}},
-        React.createElement("span",{style:{fontSize:17,lineHeight:"19px"}},"⋯"),
-        React.createElement("span",{style:{fontSize:9.5}},"المزيد"))]));
+    const navEl=this.unifiedNav();
 
     /* The bar is open by default (it is the dashboard's primary control, as on
        the desktop); the header button collapses it to reclaim screen height. */
@@ -934,7 +1104,7 @@ class App extends React.Component {
     } else if(st.sheet){
       let inner;
       if(st.sheet==="nav"){
-        inner=SEC.map(s=>React.createElement("div",{key:s.id,onClick:()=>this.setState({section:s.id,sheet:null}),style:{padding:"12px 13px",borderRadius:12,background:st.section===s.id?"rgba(59,130,246,.12)":"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.07)",fontSize:13,color:"#e2e8f0",cursor:"pointer"}},s.label));
+        inner=this.navSheet();
       } else if(st.sheet==="month"){
         inner=[{v:"all",l:api.ALL_LABEL}].concat(D.meta.available_months||[]).map(m=>React.createElement("div",{key:m.v,onClick:()=>this.set("month",m.v==="all"?"all":m.v),style:{padding:"11px 13px",borderRadius:12,background:f.month===m.v?"rgba(59,130,246,.12)":"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.07)",fontSize:12.5,color:api.monthHasData(m.v)?"#e2e8f0":"#64748b",cursor:"pointer"}},m.l+(api.monthHasData(m.v)?"":" — لا توجد بيانات")));
       } else if(st.sheet==="filters"){
@@ -974,8 +1144,7 @@ class App extends React.Component {
         React.createElement("br"),
         "lines: "+(D.lines||[]).length+" · invoices: "+(D.invoices||[]).length+" · بعد الفلترة: "+X.lines.length+" / "+X.invoices.length));
 
-    const sectionListEl=React.createElement("div",{dir:"rtl",style:{display:"flex",flexWrap:"wrap",gap:6}},
-      SEC.map(s=>React.createElement("span",{key:s.id,onClick:()=>this.setState({section:s.id}),style:{fontSize:11,padding:"5px 10px",borderRadius:99,cursor:"pointer",background:st.section===s.id?"rgba(59,130,246,.16)":"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.08)",color:"#cbd5e1"}},s.label)));
+    const sectionListEl=React.createElement("div",{dir:"rtl",style:{display:"flex",flexDirection:"column",gap:8}},this.navSheet());
 
     const stmtEl = st.stmt!=null ? this.statementSheet(st.stmt) : null;
     return {bodyEl:body, navEl, chipsEl, filterBarEl, srcEl, filterBtnEl,
@@ -1048,8 +1217,8 @@ class App extends React.Component {
     return [
       R.isEmptyFilters(f)?this.kpiGridRepo(R.kpisCust(RD)):this.sliceKpis(R,RD,f),
       this.card("توزيع العملاء حسب فئة ABC",this.barsH([["فئة A",abcCounts.A||0,R.C.blue],["فئة B",abcCounts.B||0,R.C.amber],["فئة C",abcCounts.C||0,R.C.grey]],R.fmt0),{k:"u1",sub:R.isEmptyFilters(f)?null:"داخل التقسيم"}),
-      this.card(R.isEmptyFilters(f)?"أعلى 25 عميلاً — التفصيل الكامل":"العملاء في التقسيم",this.rowsList(rows.slice(0,25),[["العميل",r=>r.c.customer_name],["الإيراد",r=>R.fmt0(r.c.line_total)],["% تراكمي",r=>R.fmt1(r.cum)+"%"],["ABC",r=>r.c.abc_class],["XYZ",r=>r.c.xyz_class||"—"],["المندوب",r=>(dimByCode[r.c.customer_code]||{}).rep||"—"],["رصيد المديونية",r=>{const b=(dimByCode[r.c.customer_code]||{}).ar_net_balance;return b==null?"—":R.fmt0(b);}]]),{k:"u2",sub:rows.length+" عميل"}),
-      this.card("مبيعات كل عميل ونسبة البونص",this.rowsList(bonus,[["العميل",r=>r.customer_name],["إجمالي المبيعات",r=>R.fmt0(r.total_sales_egp)],["كمية البونص",r=>R.fmt0(r.bonus_qty)],["قيمة البونص",r=>R.fmt0(r.bonus_estimated_value_egp)],["% البونص",r=>R.fmt2(r.bonus_pct_of_sales_value)+"%"],["المندوب",r=>r.rep||"—"],["الفواتير",r=>R.fmt0(r.n_invoices)]]),{k:"u3",sub:bonus.length+" عميل"})];
+      this.card(R.isEmptyFilters(f)?"كل العملاء — التفصيل الكامل":"العملاء في التقسيم",this.pagedList("u2",rows,[["العميل",r=>r.c.customer_name],["الإيراد",r=>R.fmt0(r.c.line_total)],["% تراكمي",r=>R.fmt1(r.cum)+"%"],["ABC",r=>r.c.abc_class],["XYZ",r=>r.c.xyz_class||"—"],["المندوب",r=>(dimByCode[r.c.customer_code]||{}).rep||"—"],["رصيد المديونية",r=>{const b=(dimByCode[r.c.customer_code]||{}).ar_net_balance;return b==null?"—":R.fmt0(b);}]]),{k:"u2",sub:rows.length+" عميل"}),
+      this.card("مبيعات كل عميل ونسبة البونص",this.pagedList("u3",bonus,[["العميل",r=>r.customer_name],["إجمالي المبيعات",r=>R.fmt0(r.total_sales_egp)],["كمية البونص",r=>R.fmt0(r.bonus_qty)],["قيمة البونص",r=>R.fmt0(r.bonus_estimated_value_egp)],["% البونص",r=>R.fmt2(r.bonus_pct_of_sales_value)+"%"],["المندوب",r=>r.rep||"—"],["الفواتير",r=>R.fmt0(r.n_invoices)]]),{k:"u3",sub:bonus.length+" عميل"})];
   }
 
   repoDebt(R,RD,f){
@@ -1072,7 +1241,7 @@ class App extends React.Component {
     return [
       this.kpiGridRepo(kpis),
       this.card("رصيد المديونية حسب المندوب",repBars.length?this.barsH(repBars,R.fmtEGPk):this.empty("لا توجد بيانات"),{k:"d1",sub:"لقطة 2026/7/4"}),
-      this.card("أرصدة العملاء",balances.length?this.rowsList(balances,[["العميل",r=>r.customer_name],["الرصيد الصافي",r=>R.fmt0(r.net_balance)],["مدين",r=>R.fmt0(r.debit)],["دائن",r=>R.fmt0(r.credit)],["المندوب",r=>r.rep||"—"],["الهاتف",r=>r.phone||"—"]]):this.empty("لا توجد بيانات"),{k:"d2",sub:balances.length+" عميل"})];
+      this.card("أرصدة العملاء",balances.length?this.pagedList("d2",balances,[["العميل",r=>r.customer_name],["الرصيد الصافي",r=>R.fmt0(r.net_balance)],["مدين",r=>R.fmt0(r.debit)],["دائن",r=>R.fmt0(r.credit)],["المندوب",r=>r.rep||"—"],["الهاتف",r=>r.phone||"—"]]):this.empty("لا توجد بيانات"),{k:"d2",sub:balances.length+" عميل"})];
   }
 
   repoBrands(R,RD,f){
@@ -1124,7 +1293,7 @@ class App extends React.Component {
     return [
       R.isEmptyFilters(f)?this.kpiGridRepo(R.kpisProducts(RD)):this.sliceKpis(R,RD,f),
       this.card("أعلى 20 صنفًا بالإيراد",this.barsH(rows.slice(0,20).map(r=>[r.name,r.sales,R.C.green]),R.fmtEGPk),{k:"pr1",sub:R.isEmptyFilters(f)?null:"داخل التقسيم"}),
-      this.card("أداء الأصناف — التفصيل",this.rowsList(rows.slice(0,30),[["الصنف",r=>r.name],["الإيراد",r=>R.fmt0(r.sales)],["% تراكمي",r=>R.fmt1(r.cum)+"%"],["ABC",r=>r.abc],["XYZ",r=>r.xyz],["العلامة",r=>r.brand]]),{k:"pr2",sub:rows.length+" صنف"})];
+      this.card("أداء الأصناف — التفصيل",this.pagedList("pr2",rows,[["الصنف",r=>r.name],["الإيراد",r=>R.fmt0(r.sales)],["% تراكمي",r=>R.fmt1(r.cum)+"%"],["ABC",r=>r.abc],["XYZ",r=>r.xyz],["العلامة",r=>r.brand]]),{k:"pr2",sub:rows.length+" صنف"})];
   }
 
   /* The interactive slice-and-dice section. */
@@ -1310,7 +1479,7 @@ class App extends React.Component {
     const st=this.state;
     const months=M.calMonths();
     const cur=(months.indexOf(st.calMonth)>=0)?st.calMonth:months[0];
-    const pick=m=>this.setState({calMonth:m});
+    const pick=m=>this.setState({calMonth:m,pages:{}});
     const row=M.CAL().by_month.filter(r=>r.month===cur)[0]||{};
     const isEst=!!row.estimated;
 
@@ -1344,11 +1513,10 @@ class App extends React.Component {
       return this.card(title,
         React.createElement("div",null,
           extremes(key,nameOf,floor,unit),
-          rows.length?this.rowsList(rows.slice(0,40),cols(extra))
+          rows.length?this.pagedList("cal:"+key+":"+cur,rows,cols(extra))
                      :this.empty("لا توجد بيانات لهذا الشهر.")),
         {k:"c_"+key,approx:cur!==M.D().meta.cost_month,
-         sub:M.arMonth(cur)+" · "+M.basisLabel(row)+
-             (rows.length>40?" · أعلى 40 من "+rows.length:"")});
+         sub:M.arMonth(cur)+" · "+M.basisLabel(row)+" · "+rows.length+" صف"});
     };
 
     return [
@@ -1396,7 +1564,6 @@ class App extends React.Component {
     if(!tables.length) return [this.empty("لا توجد جداول في هذا المصدر.")];
     const cur=tables.filter(t=>t.id===st.repTable)[0]||tables[0];
     const q=(st.repQ||"").trim();
-    const LIMIT=60;
 
     /* Search runs over the rendered cell text, not the raw row: the reader is
        searching for what they can see. Numbers are matched as displayed too,
@@ -1405,7 +1572,6 @@ class App extends React.Component {
     const rows=q?cur.rows.filter(r=>cells(r).some(
                    v=>v!=null&&String(v).indexOf(q)>=0))
                :cur.rows;
-    const shown=rows.slice(0,LIMIT);
     const fmt=(st.T&&st.T.num)||(v=>String(v));
     const cols=cur.columns.map(c=>[c.label,r=>{
       const v=c.get(r);
@@ -1423,26 +1589,25 @@ class App extends React.Component {
     const count=q
       ? rows.length+" من "+cur.rows.length+" صف"
       : cur.rows.length+" صف";
+    /* The page key carries the query, so editing the search box lands the
+       reader on page 1 of the new result rather than on page 9 of nothing. */
+    const pkey="rep:"+cur.id+":"+q;
 
     return [
       React.createElement("div",{key:"n",style:{fontSize:10.5,color:"#64748b",
         lineHeight:1.8}},
-        "هذه الجداول نفسها تخرج إلى Excel وCSV من زر الاستخراج — "+
-        "الأعمدة والصفوف واحدة. اضغط أي صف لعرض كل أعمدته."),
+        "كل جدول هنا هو نفسه الذي يخرج إلى Excel وCSV من زر الاستخراج — "+
+        "الأعمدة والصفوف واحدة، وكل الصفوف معروضة صفحةً صفحة. "+
+        "اضغط أي صف لعرض كل أعمدته."),
       this.pickRow("rt",tables.map(t=>[t.id,t.label]),cur.id,
-        id=>this.setState({repTable:id,repQ:""})),
+        id=>this.setState({repTable:id,repQ:"",pages:{}})),
       this.card(cur.label,
         React.createElement("div",{style:{display:"flex",flexDirection:"column",
             gap:9}},
           search,
-          shown.length?this.rowsList(shown,cols)
-                      :this.empty("لا توجد نتائج مطابقة.")),
-        {k:"rep_"+cur.id,
-         sub:count+(rows.length>LIMIT?" · معروض أول "+LIMIT:"")}),
-      rows.length>LIMIT?React.createElement("div",{key:"more",
-        style:{fontSize:10.5,color:"#64748b",lineHeight:1.8,textAlign:"center"}},
-        "الجدول أطول من "+LIMIT+" صفًا. ابحث لتضييق النتائج، أو استخرجه كاملًا "+
-        "من زر الاستخراج — الملف يحمل كل الصفوف الـ"+rows.length+"."):null,
+          rows.length?this.pagedList(pkey,rows,cols)
+                     :this.empty("لا توجد نتائج مطابقة.")),
+        {k:"rep_"+cur.id, sub:count}),
     ];
   }
 
@@ -1452,6 +1617,99 @@ class App extends React.Component {
     if(n===1) return "شهر واحد";
     if(n===2) return "شهرين";
     return n<11 ? n+" أشهر" : n+" شهرًا";
+  }
+
+  /* ---- ترقيم الصفحات ------------------------------------------------------
+     Long tables used to be truncated: the first 40 or 60 rows, then a sentence
+     suggesting the reader search or export the rest. For a 1,032-row table that
+     is not a table, it is a preview — the other 972 rows existed only in the
+     exported workbook.
+
+     `pagedRows` cuts a table into real pages and `pager` draws the control.
+     Page numbers are windowed around the current page so a 42-page table still
+     fits one line on a phone; first and last are always reachable so the end of
+     a table is one tap away rather than forty.
+
+     Page state is per table key, so paging the item table does not move the
+     customer table, and it resets on a section change (see `go`). */
+  pageSize(){ return this.state.pageSize || 25; }
+  curPage(key,total){
+    const n=Math.max(1,Math.ceil(total/this.pageSize()));
+    return Math.min(Math.max(1,(this.state.pages||{})[key]||1),n);
+  }
+  setPage(key,n){
+    this.setState(s=>({pages:{...(s.pages||{}),[key]:n}}));
+  }
+  pagedRows(key,rows){
+    const size=this.pageSize(), page=this.curPage(key,rows.length);
+    return rows.slice((page-1)*size,page*size);
+  }
+
+  pager(key,total){
+    const size=this.pageSize(), pages=Math.max(1,Math.ceil(total/size));
+    const page=this.curPage(key,total);
+    const from=total?(page-1)*size+1:0, to=Math.min(page*size,total);
+    const fmt=n=>Number(n).toLocaleString("en");
+
+    const btn=(lab,to2,on,disabled)=>React.createElement("span",{key:"b"+lab+to2,
+      onClick:disabled?null:()=>this.setPage(key,to2),
+      style:{flex:"none",minWidth:30,textAlign:"center",padding:"6px 9px",
+        borderRadius:9,fontSize:11.5,
+        cursor:disabled?"default":"pointer",
+        fontWeight:on?800:500,
+        background:on?"rgba(59,130,246,.20)":"rgba(255,255,255,.03)",
+        border:"1px solid "+(on?"rgba(59,130,246,.55)":"rgba(255,255,255,.09)"),
+        color:disabled?"#3f4a5f":(on?"#93c5fd":"#cbd5e1"),
+        opacity:disabled?.55:1}},lab);
+    const gap=k=>React.createElement("span",{key:"g"+k,
+      style:{flex:"none",padding:"6px 2px",fontSize:11.5,color:"#475569"}},"…");
+
+    /* Which page numbers to draw: always 1 and the last, plus a window of one
+       either side of the current page, with ellipses for the jumps. */
+    const want=new Set([1,pages,page,page-1,page+1]);
+    if(page<=3) [2,3,4].forEach(n=>want.add(n));
+    if(page>=pages-2) [pages-1,pages-2,pages-3].forEach(n=>want.add(n));
+    const nums=[...want].filter(n=>n>=1&&n<=pages).sort((a,b)=>a-b);
+
+    const row=[btn("‹ السابق",Math.max(1,page-1),false,page===1)];
+    nums.forEach((n,i)=>{
+      if(i && n-nums[i-1]>1) row.push(gap(n));
+      row.push(btn(fmt(n),n,n===page,false));
+    });
+    row.push(btn("التالي ›",Math.min(pages,page+1),false,page===pages));
+
+    const sizeChip=n=>React.createElement("span",{key:"s"+n,
+      onClick:()=>this.setState({pageSize:n,pages:{}}),
+      style:{flex:"none",padding:"4px 9px",borderRadius:99,fontSize:10,
+        cursor:"pointer",fontWeight:size===n?700:400,
+        background:size===n?"rgba(59,130,246,.16)":"rgba(255,255,255,.03)",
+        border:"1px solid "+(size===n?"rgba(59,130,246,.42)":"rgba(255,255,255,.08)"),
+        color:size===n?"#93c5fd":"#94a3b8"}},String(n));
+
+    return React.createElement("div",{key:"pg"+key,
+      style:{display:"flex",flexDirection:"column",gap:7,marginTop:2}},
+      React.createElement("div",{key:"n",dir:"rtl",
+        style:{display:"flex",gap:5,overflowX:"auto",paddingBottom:2}},row),
+      React.createElement("div",{key:"i",
+        style:{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",
+               fontSize:10,color:"#64748b"}},
+        React.createElement("span",{key:"t"},
+          "الصفوف "+fmt(from)+"–"+fmt(to)+" من "+fmt(total)+
+          " · صفحة "+fmt(page)+" من "+fmt(pages)),
+        React.createElement("span",{key:"l",style:{marginInlineStart:"auto",
+          display:"flex",alignItems:"center",gap:5}},
+          React.createElement("span",{key:"lb"},"لكل صفحة"),
+          sizeChip(25),sizeChip(50),sizeChip(100))));
+  }
+
+  /* A table plus its pager. Below one page the pager is omitted — a control
+     that can only ever say "1 من 1" is noise. */
+  pagedList(key,rows,cols,onPick){
+    if(!rows.length) return this.empty("لا توجد بيانات");
+    const body=this.rowsList(this.pagedRows(key,rows),cols,onPick);
+    if(rows.length<=this.pageSize()) return body;
+    return React.createElement("div",{style:{display:"flex",
+      flexDirection:"column",gap:9}},body,this.pager(key,rows.length));
   }
 
   /* A horizontally scrolling row of chips — one selected. Used by the monthly
@@ -1495,7 +1753,11 @@ class App extends React.Component {
 
     const mf=(rows,pred)=>rows.filter(pred);
 
-    if(st.src==="dash" && st.api){
+    /* Both payloads now contribute at once. The switcher used to make each
+       export show half of what the app holds; with the datasets merged the
+       catalogue is the union, and the two «الملخص الشهري» sheets are named
+       apart because they come from different extracts of the same months. */
+    if(st.api){
       const D=st.api.D, f=st.filters||{};
       const inMonth=r=>!f.month||f.month==="all"||r.month===f.month;
       const byRep=r=>!f.rep||r.rep===f.rep;
@@ -1517,7 +1779,7 @@ class App extends React.Component {
           col("سعر الوحدة",null,r=>num(r.unit_price)),
           col("الإجمالي",null,r=>num(r.line_total)),
           col("كراتين",null,r=>num(r.boxes)), col("بونص",null,r=>r.is_bonus?"نعم":"لا")]},
-        {id:"receivables", label:"أرصدة المديونية",
+        {id:"receivables", label:"أرصدة المديونية — اللقطة",
          rows:mf(((D.receivables||{}).rows)||[],byRep), columns:[
           col("كود العميل","customer_code"), col("العميل","customer_name"),
           col("المندوب","rep"), col("الرصيد",null,r=>num(r.balance!=null?r.balance:r.net_balance)),
@@ -1531,24 +1793,36 @@ class App extends React.Component {
          rows:((D.collections||{}).returns_rows)||[], columns:[
           col("التاريخ","date"), col("كود العميل","customer_code"),
           col("العميل","customer_name"), col("القيمة",null,r=>num(r.amount))]},
-        {id:"monthly", label:"الملخص الشهري", rows:D.monthly||[], columns:[
+        {id:"monthly", label:"الملخص الشهري — من الفواتير", rows:D.monthly||[], columns:[
           col("الشهر","month"), col("صافي المبيعات",null,r=>num(r.net_sales)),
           col("الفواتير",null,r=>num(r.invoices)), col("العملاء",null,r=>num(r.customers)),
           col("الكمية",null,r=>num(r.qty))]});
 
-      try{
-        const rows=AG.agingRows(D);
-        out.push({id:"aging", label:"أعمار المديونية",
-          rows:mf(rows,byRep), columns:[
-            col("كود العميل","code"), col("العميل","name"), col("المندوب","rep"),
-            col("الرصيد",null,r=>num(r.balance))].concat(
-            AG.AGE_TIERS.map(t=>col(t.label,null,r=>num((r.tiers||{})[t.key]))))
-            .concat([col("رصيد افتتاحي",null,r=>num(r.opening))])});
-      }catch(e){}
+      /* The aging namespace is `G`, reached everywhere else in this file as
+         this.state.AG. A bare `AG` here was a ReferenceError that the empty
+         catch below swallowed, so this sheet was silently absent from every
+         export the app has ever produced. The guard is now on the namespace
+         being loaded, and a genuine failure inside agingRows is reported as a
+         one-row sheet rather than vanishing. */
+      const AGx=st.AG;
+      if(AGx && AGx.agingRows){
+        try{
+          const rows=AGx.agingRows(D);
+          out.push({id:"aging", label:"أعمار المديونية",
+            rows:mf(rows,byRep), columns:[
+              col("كود العميل","code"), col("العميل","name"), col("المندوب","rep"),
+              col("الرصيد",null,r=>num(r.balance))].concat(
+              AGx.AGE_TIERS.map(t=>col(t.label,null,r=>num((r.tiers||{})[t.key]))))
+              .concat([col("رصيد افتتاحي",null,r=>num(r.opening))])});
+        }catch(e){
+          out.push({id:"aging", label:"أعمار المديونية — تعذّر الاحتساب",
+            rows:[{err:e.message}], columns:[col("الخطأ","err")]});
+        }
+      }
     }
 
     const RD=st.RD;
-    if(st.src!=="dash" && RD){
+    if(RD){
       const f=st.rf||{};
       const okRep=r=>!f.rep||r.rep===f.rep;
       const okBrand=r=>!f.brand||r.brand===f.brand;
@@ -1561,7 +1835,7 @@ class App extends React.Component {
           col("الإيراد",null,r=>num(r.total_revenue)),
           col("عدد الفواتير",null,r=>num(r.n_invoices)),
           col("أول فاتورة","first_invoice_date"), col("آخر فاتورة","last_invoice_date")]},
-        {id:"ar", label:"أرصدة المديونية",
+        {id:"ar", label:"أرصدة المديونية — 18 شهرًا",
          rows:mf(RD.ar_balances||[],r=>okRep(r)&&okCust(r)), columns:[
           col("المندوب","rep"), col("الكود","customer_code"),
           col("العميل","customer_name"), col("المدينة","city"),
@@ -1580,7 +1854,7 @@ class App extends React.Component {
           col("العلامة","brand"), col("الإيراد",null,r=>num(r.revenue)),
           col("الكمية",null,r=>num(r.qty)), col("العملاء",null,r=>num(r.n_customers)),
           col("الحصة %",null,r=>num(r.revenue_share_pct))]},
-        {id:"monthly", label:"الملخص الشهري", rows:RD.monthly_series||[], columns:[
+        {id:"r_monthly", label:"الملخص الشهري — من التجميعات", rows:RD.monthly_series||[], columns:[
           col("الشهر","month"), col("الإيراد",null,r=>num(r.revenue)),
           col("الكمية",null,r=>num(r.qty)), col("الفواتير",null,r=>num(r.n_invoices)),
           col("العملاء",null,r=>num(r.n_customers)),
@@ -1773,7 +2047,7 @@ class App extends React.Component {
     return [
       this.kpiGridRepo(R.kpisQuality(RD)),
       this.card("القيم المفقودة حسب الحقل",this.rowsList(missing,[["الحقل",r=>r.field],["عدد المفقود",r=>R.fmt0(r.n_missing)],["%",r=>R.fmt2(r.pct_missing)+"%"]]),{k:"q1"}),
-      this.card("عملاء لديهم رصيد مديونية بدون فواتير مطابقة",this.rowsList(RD.ar_zero_invoice_customers||[],[["العميل",r=>r.customer_name],["المندوب",r=>r.rep],["صافي الرصيد",r=>R.fmt0(r.net_balance)]]),{k:"q2",sub:(RD.ar_zero_invoice_customers||[]).length+" عميل"})];
+      this.card("عملاء لديهم رصيد مديونية بدون فواتير مطابقة",this.pagedList("q2",RD.ar_zero_invoice_customers||[],[["العميل",r=>r.customer_name],["المندوب",r=>r.rep],["صافي الرصيد",r=>R.fmt0(r.net_balance)]]),{k:"q2",sub:(RD.ar_zero_invoice_customers||[]).length+" عميل"})];
   }
 
   /* Two-level filter sheet: dimension list, then a searchable option picker —
@@ -1786,7 +2060,7 @@ class App extends React.Component {
                 ["customerCode","العميل","customers",true],
                 ["itemName","الصنف","items",false]];
 
-    const pick=(key,useCode,val)=>this.setState(p=>({rf:{...p.rf,[key]:val}, sheet:"rfilters", rfPick:null, rfQ:""}));
+    const pick=(key,useCode,val)=>this.setState(p=>({rf:{...p.rf,[key]:val}, sheet:"rfilters", rfPick:null, rfQ:"", pages:{}}));
 
     // level 2 — options for one dimension
     if(st.rfPick){
@@ -1823,7 +2097,7 @@ class App extends React.Component {
     return [
       React.createElement("div",{key:"h",style:{display:"flex",alignItems:"center",marginBottom:10}},
         React.createElement("b",{style:{fontSize:14,color:"#e2e8f0"}},"تصفية البيانات"),
-        R.isEmptyFilters(st.rf)?null:React.createElement("span",{onClick:()=>this.setState({rf:{...R.EMPTY_FILTERS}}),
+        R.isEmptyFilters(st.rf)?null:React.createElement("span",{onClick:()=>this.setState({rf:{...R.EMPTY_FILTERS},pages:{}}),
           style:{marginInlineStart:"auto",fontSize:11.5,color:"#e34948",cursor:"pointer"}},"مسح الكل")),
       React.createElement("div",{key:"d"},DIMS.map(([key,lab,listKey,useCode])=>{
         const v=label(key,listKey,useCode), on=v!=="الكل";
@@ -1840,19 +2114,9 @@ class App extends React.Component {
 
   buildRepo(){
     const st=this.state, R=st.R, RD=st.RD, T=st.T;
-    const SEC=R.SECTIONS.concat(M.has()?[M.SECTION]:[]);
-    const cur=SEC.find(s=>s.id===st.section)||SEC[0];
-    const NAV=[["fin","المالية"],["sales","المبيعات"],["customers","العملاء"],["debt","المديونية"]];
-    const moreIds=["brands","products","margin","forecast","quality","analysis"];
-
-    const navEl=React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:2}},
-      NAV.map(([id,lab])=>{const on=st.section===id;
-        return React.createElement("div",{key:id,onClick:()=>this.setState({section:id,sheet:null}),style:{display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:"6px 0",borderRadius:12,cursor:"pointer",background:on?"rgba(59,130,246,.12)":"transparent",color:on?"#93c5fd":"#64748b"}},
-          React.createElement("span",{style:{width:19,height:19,display:"block"},dangerouslySetInnerHTML:{__html:'<svg viewBox="0 0 24 24" style="width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">'+T.KPI_ICONS[id==="fin"?"money":id==="sales"?"sales":id==="customers"?"users":"warn"]+'</svg>'}}),
-          React.createElement("span",{style:{fontSize:9.5,fontWeight:on?700:400}},lab));})
-      .concat([React.createElement("div",{key:"more",onClick:()=>this.setState({sheet:"nav"}),style:{display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:"6px 0",borderRadius:12,cursor:"pointer",color:moreIds.includes(st.section)?"#93c5fd":"#64748b"}},
-        React.createElement("span",{style:{fontSize:17,lineHeight:"19px"}},"⋯"),
-        React.createElement("span",{style:{fontSize:9.5}},"المزيد"))]));
+    const cur=this.entry()||{h2:"",p:"",label:""};
+    const rsec=this.sec();
+    const navEl=this.unifiedNav();
 
     const srcEl = this.srcSwitch();
     const nActive=R.activeFilterCount(st.rf);
@@ -1871,14 +2135,15 @@ class App extends React.Component {
     if(st.rf.itemName) chipDefs.push(["itemName","الصنف",st.rf.itemName]);
 
     const chipsEl=React.createElement("div",{style:{flex:"none",position:"relative",display:"flex",alignItems:"center",gap:6,padding:"8px 13px",overflowX:"auto",borderBottom:"1px solid rgba(255,255,255,.06)"}},
-      [React.createElement("span",{key:"h2",style:{fontSize:12,fontWeight:700,color:"#e2e8f0",flex:"none",whiteSpace:"nowrap"}},cur.title),
+      [React.createElement("span",{key:"h2",style:{fontSize:12,fontWeight:700,color:"#e2e8f0",flex:"none",whiteSpace:"nowrap"}},cur.h2),
        React.createElement("span",{key:"p",style:{flex:"none",fontSize:10.5,padding:"4px 9px",borderRadius:99,background:"rgba(59,130,246,.14)",border:"1px solid rgba(59,130,246,.3)",color:"#93c5fd",whiteSpace:"nowrap"}},
          /* الربحية covers only the months that pass the price-drift gate, so it
             must not wear the dataset-wide period chip. */
-         st.section==="margin"&&M.has() ? M.windowLabel(M.D())
+         rsec==="margin"&&M.has() ? M.windowLabel(M.D())
+         : rsec==="reports" ? "كل النوافذ — انظر عنوان كل جدول"
                                         : RD.financial.period.start+" — "+RD.financial.period.end)]
       .concat(chipDefs.map(([k,lab,val])=>React.createElement("span",{key:k,
-        onClick:()=>this.setState(p=>({rf:{...p.rf,[k]:null}})),
+        onClick:()=>this.setState(p=>({rf:{...p.rf,[k]:null},pages:{}})),
         style:{flex:"none",fontSize:10.5,padding:"4px 9px",borderRadius:99,background:"rgba(227,73,72,.14)",border:"1px solid rgba(227,73,72,.28)",color:"#fca5a5",cursor:"pointer",whiteSpace:"nowrap",maxWidth:190,overflow:"hidden",textOverflow:"ellipsis"}},
         lab+": "+val+"  ✕"))));
 
@@ -1891,19 +2156,19 @@ class App extends React.Component {
     const f=unfilterable?R.EMPTY_FILTERS:st.rf;
 
     let body;
-    if(st.section==="fin") body=this.repoFin(R,RD);
-    else if(st.section==="sales") body=this.repoSales(R,RD);
-    else if(st.section==="customers") body=this.repoCustomers(R,RD,f);
-    else if(st.section==="debt") body=this.repoDebt(R,RD,f);
-    else if(st.section==="brands") body=this.repoBrands(R,RD,f);
-    else if(st.section==="products") body=this.repoProducts(R,RD,f);
-    else if(st.section==="forecast") body=this.repoForecast(R,RD);
-    else if(st.section==="analysis") body=this.repoAnalysis(R,RD,f);
-    else if(st.section==="margin") body=this.repoMargin(R,RD);
-    else if(st.section==="reports") body=this.reports();
+    if(rsec==="fin") body=this.repoFin(R,RD);
+    else if(rsec==="sales") body=this.repoSales(R,RD);
+    else if(rsec==="customers") body=this.repoCustomers(R,RD,f);
+    else if(rsec==="debt") body=this.repoDebt(R,RD,f);
+    else if(rsec==="brands") body=this.repoBrands(R,RD,f);
+    else if(rsec==="products") body=this.repoProducts(R,RD,f);
+    else if(rsec==="forecast") body=this.repoForecast(R,RD);
+    else if(rsec==="analysis") body=this.repoAnalysis(R,RD,f);
+    else if(rsec==="margin") body=this.repoMargin(R,RD);
+    else if(rsec==="reports") body=this.reports();
     else body=this.repoQuality(R,RD);
 
-    const head=[React.createElement("div",{key:"sub",style:{fontSize:11,color:"#64748b",lineHeight:1.7}},cur.sub)];
+    const head=[React.createElement("div",{key:"sub",style:{fontSize:11,color:"#64748b",lineHeight:1.7}},cur.p)];
     if(unfilterable && !R.isEmptyFilters(st.rf))
       head.push(React.createElement("div",{key:"nf",style:{padding:"10px 12px",borderRadius:12,background:"rgba(237,161,0,.10)",border:"1px solid rgba(237,161,0,.30)",fontSize:11,lineHeight:1.7,color:"#fcd34d"}},
         "الفلاتر لا تنطبق على هذا القسم — أرقامه محسوبة مسبقًا على مستوى الشركة ولا يمكن إعادة اشتقاقها لتقسيم جزئي. الأرقام أدناه للفترة كاملة."));
@@ -1921,7 +2186,7 @@ class App extends React.Component {
       sheetEl=React.createElement("div",{onClick:()=>this.setState({sheet:null}),style:{position:"absolute",inset:0,zIndex:9,background:"rgba(3,6,14,.7)",display:"flex",alignItems:"flex-end"}},
         React.createElement("div",{onClick:e=>e.stopPropagation(),style:{width:"100%",maxHeight:"78%",overflow:"auto",background:"#111827",borderTop:"1px solid rgba(255,255,255,.10)",borderRadius:"22px 22px 0 0",padding:"14px 14px 26px",display:"flex",flexDirection:"column",gap:9}},
           [React.createElement("div",{key:"g",style:{width:38,height:4,borderRadius:99,background:"rgba(255,255,255,.2)",margin:"0 auto 6px"}})]
-          .concat(SEC.map(s=>React.createElement("div",{key:s.id,onClick:()=>this.setState({section:s.id,sheet:null}),style:{padding:"12px 13px",borderRadius:12,background:st.section===s.id?"rgba(59,130,246,.12)":"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.07)",fontSize:13,color:"#e2e8f0",cursor:"pointer"}},s.label)))));
+          .concat(this.navSheet())));
     } else if(st.sheet){
       const inner=[React.createElement("div",{key:"d",style:{display:"flex",flexDirection:"column"}},
         st.sheet.cols.map((c,i)=>React.createElement("div",{key:i,style:{display:"flex",justifyContent:"space-between",gap:12,padding:"8px 0",borderBottom:"1px solid rgba(255,255,255,.06)",fontSize:12}},
@@ -1940,8 +2205,7 @@ class App extends React.Component {
         React.createElement("br"),
         "فواتير: "+R.fmt0(dq.n_invoices)+" · بنود: "+R.fmt0(dq.n_rows)+" · عملاء: "+R.fmt0(RD.eda_summary.n_customers)+" · علامات: "+R.fmt0(RD.eda_summary.n_brands)));
 
-    const sectionListEl=React.createElement("div",{dir:"rtl",style:{display:"flex",flexWrap:"wrap",gap:6}},
-      SEC.map(s=>React.createElement("span",{key:s.id,onClick:()=>this.setState({section:s.id}),style:{fontSize:11,padding:"5px 10px",borderRadius:99,cursor:"pointer",background:st.section===s.id?"rgba(59,130,246,.16)":"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.08)",color:"#cbd5e1"}},s.label)));
+    const sectionListEl=React.createElement("div",{dir:"rtl",style:{display:"flex",flexDirection:"column",gap:8}},this.navSheet());
 
     return {bodyEl:body, navEl, chipsEl, filterBarEl:null, srcEl, filterBtnEl,
             exportBtnEl:this.exportBtn(), sheetEl, statusEl, sectionListEl};

@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
-"""Headless smoke test: boot the bundle and walk every section of both datasets.
+"""Headless smoke test: boot the bundle and walk every section.
 
     python3 mobile/tools/smoke_test.py [path-to-html]
 
-Loads the file over file:// exactly as a phone would. The app carries two
-independent datasets and switches between them, so both are exercised:
+Loads the file over file:// exactly as a phone would.
 
-  تفصيلي   window.DASH      — the AR snapshots (12 sections)
-  18 شهرًا  window.DASH_DATA — the repo's precomputed aggregates (11 sections)
+The two datasets used to sit behind a switcher and this test walked each in
+turn. They are merged now: one navigation over both payloads, so the walk is a
+single pass over the unified registry. A section that vanishes from that
+registry, renders empty, or throws still fails the run.
 
-Fails on any JS error, any section that renders empty, or any section missing
-from the nav — so a broken build cannot pass silently.
+Sections are driven through the app's own `go()` rather than by clicking the
+label, because several labels appear twice in the merged list (المبيعات and
+العملاء exist on both the invoice and the eighteen-month side) and a text click
+cannot say which one it meant. The nav itself is still exercised: the five
+bottom slots and the «المزيد» sheet are clicked before the walk.
 """
 from __future__ import annotations
 
@@ -24,37 +28,17 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT = ROOT / "mobile" / "dist" / "Abu_Hashem_Mobile_standalone.html"
 CHROMIUM = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"
 
-# Section labels per dataset, kept here so one silently vanishing fails the test.
-PATHS = {
-    "تفصيلي": ["لوحة المعلومات", "المبيعات", "العملاء", "المنتجات", "المديونية",
-               "التحصيل والتسويات", "الحوافز", "التحليلات المتقدمة",
-               "جودة البيانات", "أعمار العملاء", "حركة المديونية", "التقارير"],
-    "18 شهرًا": ["المالية", "المبيعات", "العملاء", "المديونية", "العلامات",
-                 "الأصناف", "الربحية", "التنبؤ", "جودة البيانات",
-                 "التحليل التفاعلي", "التقارير"],
-}
+# Every section key the merged registry must still carry. Listed here so one
+# silently disappearing fails the test rather than quietly shrinking the app.
+EXPECTED = [
+    "overview", "sales", "customers", "products",
+    "receivables", "aging", "collections", "bonus",
+    "r:fin", "r:sales", "r:customers", "r:brands", "r:products",
+    "r:analysis", "r:forecast", "r:debt",
+    "r:margin", "r:reports",
+    "analytics", "quality", "r:quality",
+]
 MIN_CHARS = 300          # below this a section is effectively blank
-
-
-def walk(page, labels, problems, key):
-    out = {}
-    for label in labels:
-        try:
-            page.locator(f"text='{label}'").first.click(timeout=2500)
-        except Exception:
-            try:                                  # not on the five-slot bar
-                page.locator("text='المزيد'").first.click(timeout=4000)
-                page.wait_for_timeout(350)
-                page.locator(f"text='{label}'").first.click(timeout=4000)
-            except Exception:
-                problems.append(f"{key}: section not reachable — {label}")
-                continue
-        page.wait_for_timeout(750)
-        body = page.inner_text("#root")
-        out[label] = {"chars": len(body), "charts": page.locator("svg").count()}
-        if len(body) < MIN_CHARS:
-            problems.append(f"{key}: section rendered empty — {label}")
-    return out
 
 
 def run(path: Path) -> int:
@@ -73,10 +57,45 @@ def run(path: Path) -> int:
         page.wait_for_timeout(1500)
         result["title"] = page.title()
 
-        for tab, labels in PATHS.items():
-            page.locator(f"text='{tab}'").first.click(timeout=5000)
-            page.wait_for_timeout(900)
-            result[tab] = walk(page, labels, problems, tab)
+        registry = page.evaluate("() => window.__app.registry().map(s => s.key)")
+        result["sections"] = len(registry)
+        for key in EXPECTED:
+            if key not in registry:
+                problems.append(f"section missing from the registry — {key}")
+
+        # The nav itself: the bottom slots, then the grouped «المزيد» sheet.
+        # Scoped to the nav container — every one of these labels also appears
+        # as a row or a heading inside the page body, and an unscoped text
+        # match opens a detail sheet that then covers the bar.
+        nav = page.locator('[data-print="nav"]')
+        for label in ["المبيعات", "العملاء", "المديونية", "لوحة"]:
+            try:
+                nav.locator(f"text='{label}'").first.click(timeout=4000)
+                page.wait_for_timeout(300)
+            except Exception:
+                problems.append(f"bottom nav slot not clickable — {label}")
+        try:
+            nav.locator("text='المزيد'").first.click(timeout=4000)
+            page.wait_for_timeout(500)
+            sheet = page.inner_text("#root")
+            for group in ["الفواتير والمبيعات", "التحليل — 18 شهرًا",
+                          "الربحية والتقارير"]:
+                if group not in sheet:
+                    problems.append(f"nav sheet missing its group — {group}")
+            page.evaluate("() => window.__app.setState({sheet: null})")
+            page.wait_for_timeout(300)
+        except Exception as exc:
+            problems.append(f"«المزيد» sheet did not open — {exc}")
+
+        walked = {}
+        for key in registry:
+            page.evaluate("k => window.__app.go(k)", key)
+            page.wait_for_timeout(700)
+            body = page.inner_text("#root")
+            walked[key] = {"chars": len(body), "charts": page.locator("svg").count()}
+            if len(body) < MIN_CHARS:
+                problems.append(f"section rendered empty — {key}")
+        result["walk"] = walked
         browser.close()
 
     print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -89,8 +108,8 @@ def run(path: Path) -> int:
     if errors or problems:
         print(f"\nFAILED — {len(set(errors))} JS error(s), {len(problems)} problem(s)")
         return 1
-    n = sum(len(v) for k, v in result.items() if k in PATHS)
-    print(f"\nboot OK — {n} sections across both datasets, no JS errors")
+    print(f"\nboot OK — {len(result['walk'])} sections in one merged navigation, "
+          "no JS errors")
     return 0
 
 

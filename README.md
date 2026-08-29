@@ -32,9 +32,6 @@ reports/         3 تقارير Markdown: جودة البيانات، التقر
 ## إعادة توليد التحليل بالكامل
 
 ```bash
-cd /path/to/repo                          # قبل pip: المسار التالي نسبي
-pip install -r analysis/requirements.txt
-
 # كل شيء داخل قوس فرعي واحد يحمل set -e، فيتوقف عند أول خطوة تفشل،
 # ولا يسري set -e على صدفتك. بدونه تُعيد الحلقة حالة آخر تكرار فقط:
 # يفشل نص مبكر، وتبقى مخرجاته القديمة على القرص، فتُبنى اللوحات من
@@ -42,8 +39,14 @@ pip install -r analysis/requirements.txt
 #
 # ولا تضع `&&` بعد القوس: ذلك يجعله في سياق مُختبَر فيُعطَّل set -e
 # بداخله، وتستمر الحلقة رغم الفشل — وهذا مُختبَر لا مُفترَض.
+#
+# والتهيئة داخله كذلك: `cd` و`pip install` خارج القوس كانا يمرّان عند الفشل
+# فتُشغَّل الخطوات على تبعيات ناقصة أو في المجلد الخطأ. وبقاؤهما بالداخل يترك
+# صدفتك في مكانها أيضًا.
 (
   set -e
+  cd /path/to/repo
+  pip install -r analysis/requirements.txt
   for f in analysis/0*.py analysis/1*.py; do python3 "$f"; done
   python3 executive_dashboard/build.py    # يُجهض عند فشل أي فحص مطابقة
   python3 mobile/build_standalone.py      # تطبيق الجوال بملف واحد

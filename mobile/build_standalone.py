@@ -158,7 +158,31 @@ def build() -> Path:
               "run analysis/13_join_cost_margin.py first")
 
     # --- AR snapshots as inert JSON blocks, parsed on demand by the app ----
+    # The newest snapshot IS the payload the executive build just validated, so
+    # it has to still equal it. It is a copied file, and a copied file goes stale
+    # silently: after the overdue rule changed, the app went on serving the old
+    # arrears total (1,052,918) while every check in build.py passed against the
+    # new one (1,060,738), because nothing compared the two. Now something does.
     index = json.loads(read(SNAPS / "index.json"))
+    if index:
+        newest = SNAPS / index[0]["file"]
+        live_raw = read(ROOT / "executive_dashboard" / "data.js")
+        live = json.loads(live_raw[live_raw.index("{"):live_raw.rindex("}") + 1])
+        shipped = json.loads(read(newest))
+        if shipped != live:
+            def _brief(d):
+                r = (d or {}).get("receivables", {})
+                return (f"as_of={(d or {}).get('meta', {}).get('as_of')} "
+                        f"outstanding={r.get('total_outstanding')} "
+                        f"overdue={r.get('total_overdue')}")
+            raise SystemExit(
+                f"[build_standalone] {newest.name} is not the payload "
+                f"executive_dashboard/build.py just produced — the app would ship "
+                f"numbers no check has validated.\n"
+                f"  shipped : {_brief(shipped)}\n"
+                f"  data.js : {_brief(live)}\n"
+                f"  fix     : re-run executive_dashboard/build.py, then refresh "
+                f"the snapshot from its data.js.")
     parts.append('<script type="application/json" id="snap-index">'
                  + json.dumps(index, ensure_ascii=False) + "</script>")
     for entry in index:

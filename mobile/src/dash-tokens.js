@@ -33,7 +33,8 @@ const SECTION_LABELS = [
   {id:"sales",       label:"المبيعات",           h2:"تحليل المبيعات",           p:"الاتجاهات والمقارنات والتفاصيل"},
   {id:"customers",   label:"العملاء",            h2:"تحليل العملاء",            p:"الترتيب، التركّز، والأداء متعدد الأبعاد"},
   {id:"products",    label:"المنتجات",           h2:"تحليل المنتجات",           p:"المساهمة، تشتت الأسعار، والأداء"},
-  {id:"receivables", label:"المديونية",          h2:"المديونية وتحليل الأعمار", p:"الأعمار تقديرية — لا تواريخ استحقاق بالمصدر"},
+  {id:"receivables", label:"المديونية",          h2:"المديونية وتحليل الأعمار", p:D=>"لقطة أرصدة "+arDate(asOfOf(D))+" — لا تتأثر بفلتر الشهر"},
+  {id:"overdue",     label:"المستحق",            h2:"المستحق والمتأخرات",       p:D=>"الاستحقاق بعد "+termsOf(D)+" يومًا من تاريخ الفاتورة — سياسة الشركة لا حقل بالمصدر"},
   {id:"collections", label:"التحصيل والتسويات",  h2:"التحصيل والتسويات",        p:"التحصيل النقدي الفعلي والمرتجعات وتسوية الأرصدة"},
   {id:"bonus",       label:"الحوافز",            h2:"حوافز التحصيل",            p:"تُحتسب آليًا من معدل التحصيل وفق سلّم قابل للضبط من متغيّر واحد"},
   {id:"analytics",   label:"التحليلات المتقدمة", h2:"التحليلات المتقدمة",       p:"Sunburst · Sankey · Heatmap · التوزيعات"},
@@ -64,7 +65,7 @@ const KPI_DEFS = [
   {icon:"money", key:"net_sales",            label:"صافي المبيعات",         accent:"#8b5cf6", fmt:"egpK"},
   {icon:"money", key:"collections_at_issue", label:"التحصيل عند الإصدار",   accent:"#06b6d4", fmt:"egpK", sub:"بيع آجل", subCls:"na"},
   {icon:"money", key:"outstanding",          label:"المديونية القائمة",     accent:"#f59e0b", fmt:"egpK", subAsOf:true, subCls:"na"},
-  {icon:"warn",  key:"overdue",              label:"المتأخرات",             accent:"#ef4444", fmt:"egpK", sub:"تقديري", subCls:"na"},
+  {icon:"warn",  key:"overdue",              label:"المتأخرات",             accent:"#ef4444", fmt:"egpK", overdueSub:true, subCls:"na"},
   {icon:"pct",   key:"collection_rate",      label:"معدل التحصيل التراكمي", accent:"#10b981", fmt:"pct", subCls:"up"},
   {icon:"money", key:"asp",                  label:"متوسط سعر البيع/وحدة", accent:"#c4b5fd", fmt:"egp"},
   {icon:"box",   key:"qty",                  label:"إجمالي الكمية",         accent:"#34d399", fmt:"int"},
@@ -154,6 +155,14 @@ const arDate = d => {
   return parseInt(p[2],10) + " " + (AR_MONTH_NAMES[parseInt(p[1],10)-1] || "") + " " + p[0];
 };
 const snapshotDate = D => (D && D.meta && D.meta.snapshot_date) || "";
+
+/* The date the receivables were STRUCK (meta.as_of), and the credit terms the
+   due date is derived from. Both come off the payload so a new snapshot or a
+   change of terms re-labels every screen without a string being retyped. */
+const asOfOf = D => (D && D.meta && D.meta.as_of) || "";
+const termsOf = D => (D && D.meta && D.meta.net_terms_days) || 30;
+/* Latest invoice date still within terms — derived server-side, shown as-is. */
+const overdueCutoff = D => (D && D.meta && D.meta.overdue_cutoff) || "";
 const snapshotLabel = D => {
   const d = snapshotDate(D);
   return d ? "لقطة " + arDate(d) : "";
@@ -161,5 +170,5 @@ const snapshotLabel = D => {
 
 const FMT = {egp, egpK, num, int, pct:(x)=>pct(x)};
 
-return {PAL,AGING_KEYS,AGING_COLORS,egp,egpK,num,int,pct,round2,sum,groupSum,SECTION_LABELS,BONUS_RULES,FILTER_DEFS,KPI_DEFS,KPI_ICONS,FMT,arMonth,arMonths,monthSpan,invWindow,aggWindow,aggMonths,arDate,snapshotDate,snapshotLabel};
+return {PAL,AGING_KEYS,AGING_COLORS,egp,egpK,num,int,pct,round2,sum,groupSum,SECTION_LABELS,BONUS_RULES,FILTER_DEFS,KPI_DEFS,KPI_ICONS,FMT,arMonth,arMonths,monthSpan,invWindow,aggWindow,aggMonths,arDate,snapshotDate,snapshotLabel,asOfOf,termsOf,overdueCutoff};
 })();

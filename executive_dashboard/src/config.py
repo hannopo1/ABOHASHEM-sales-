@@ -7,6 +7,7 @@ numbers stay traceable to a single, reviewable place.
 from __future__ import annotations
 
 import re
+from datetime import date, timedelta
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -127,9 +128,12 @@ AS_OF_DATE = "2026-09-03"
 # 3 September and re-dating them to the 4th would claim a count nobody made.
 # One is when the app was built, the other is when the money was counted.
 SNAPSHOT_DATE = "2026-09-04"
-# Invoices dated on/before this are classified OVERDUE when still unpaid.
-# One month before the snapshot date, matching NET_TERMS_DAYS.
-OVERDUE_CUTOFF = "2026-07-31"
+# The overdue threshold is DERIVED from the terms below, never typed. An invoice
+# is overdue once its due date (invoice date + NET_TERMS_DAYS) has passed, so the
+# last still-current invoice date is AS_OF_DATE - NET_TERMS_DAYS. Written by hand
+# it goes stale the moment a newer snapshot arrives: the literal that lived here
+# said 2026-07-31 against an as-of of 2026-09-03, which is 34 days of credit, not
+# the 30 the company grants. See overdue_cutoff() below.
 
 # Arabic month names (used to label the month selector).
 MONTHS_AR = {
@@ -150,9 +154,28 @@ def month_label_ar(ym: str) -> str:
 # ---------------------------------------------------------------------------
 # Business rules (all configurable in one place)
 # ---------------------------------------------------------------------------
-# Assumed credit terms (source invoices carry NO due date) — used only to label
-# an invoice "overdue" and to compute an approximate days-overdue figure.
+# Credit terms. The source invoices carry no due date of their own, so the due
+# date is COMPANY POLICY applied here: an invoice falls due NET_TERMS_DAYS after
+# the day it was issued. This is the one rule that decides whether a balance is
+# current or overdue, how far past due it is, and which aging band it lands in.
 NET_TERMS_DAYS = 30
+
+
+def due_date(invoice_date: "date") -> "date":
+    """The day an invoice falls due: its own date plus the credit terms."""
+    return invoice_date + timedelta(days=NET_TERMS_DAYS)
+
+
+def overdue_cutoff(as_of_str: str = None) -> "date":
+    """Latest invoice date that is still CURRENT at ``as_of``.
+
+    An invoice is overdue once ``due_date(d) < as_of``, i.e. once
+    ``d < as_of - NET_TERMS_DAYS``. So everything dated on or after this cutoff
+    is still within terms. Derived, never typed, so it cannot drift from
+    AS_OF_DATE the way the hand-written literal did.
+    """
+    as_of = date.fromisoformat(as_of_str or AS_OF_DATE)
+    return as_of - timedelta(days=NET_TERMS_DAYS)
 
 # Bonus ladder driven by collection rate. Single source of truth: a customer's
 # bonus % is the value of the first tier whose upper bound they fall under.
@@ -198,14 +221,18 @@ PAYMENT_METHOD_DEFAULT = "أخرى"
 PRICE_ABNORMAL_MAX = 5000.0     # EGP per unit above this is worth a human look
 QTY_ABNORMAL_MAX = 5000.0       # units on a single line above this is unusual
 
-# Aging buckets (days). Approximate — see receivables.py for the honest caveat.
+# Aging buckets, measured in DAYS PAST THE DUE DATE — not in days since the
+# invoice was issued. Ageing from the invoice date left "1–30" structurally
+# empty: with 30 days of terms the youngest possible overdue invoice is already
+# 31 days old, so nothing could ever land in the first band and the freshest
+# arrears were reported as if they were a month worse than they are.
 AGING_BUCKETS = [
-    ("current", "جاري (غير مستحق)", 0, 0),
-    ("d1_30", "1–30 يوم", 1, 30),
-    ("d31_60", "31–60 يوم", 31, 60),
-    ("d61_90", "61–90 يوم", 61, 90),
-    ("d91_120", "91–120 يوم", 91, 120),
-    ("d120p", "أكثر من 120 يوم", 121, 10_000),
+    ("current", "جاري (لم يحن استحقاقه)", 0, 0),
+    ("d1_30", "متأخر 1–30 يومًا", 1, 30),
+    ("d31_60", "متأخر 31–60 يومًا", 31, 60),
+    ("d61_90", "متأخر 61–90 يومًا", 61, 90),
+    ("d91_120", "متأخر 91–120 يومًا", 91, 120),
+    ("d120p", "متأخر أكثر من 120 يومًا", 121, 10_000),
 ]
 
 

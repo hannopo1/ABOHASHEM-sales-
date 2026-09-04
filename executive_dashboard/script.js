@@ -63,10 +63,11 @@ function buildContext() {
     ((!f.brand && !f.item) || invSet.has(v.invoice_no)));
   if (f.status) { const s = new Set(invoices.map(v => v.invoice_no)); lines = lines.filter(l => s.has(l.invoice_no)); }
 
-  // Receivables is a fixed AR snapshot; narrow it to the month's active cohort.
-  const active = new Set(invoices.map(v => v.customer_code));
+  // Receivables is a fixed AR snapshot — a stock struck on one date, not a
+  // monthly flow — so the month filter deliberately does NOT touch it. Narrowing
+  // it to the month's active cohort dropped every debtor who had a balance but
+  // no invoice that month, and those are precisely the overdue ones.
   const recv = D.receivables.rows.filter(r =>
-    (mAll || active.has(r.customer_code)) &&
     (!f.customer || r.customer_code === f.customer) &&
     (!f.rep      || r.rep === f.rep) &&
     (!f.aging    || r.bucket === f.aging));
@@ -659,7 +660,7 @@ const SECTIONS = {
 
   receivables:{ label:"المديونية",
     dom:()=>`<div class="section-head"><div><h2>المديونية وتحليل الأعمار</h2>
-        <p>لقطة ${D.meta.as_of} <span class="tag-approx">الأعمار تقديرية — لا تواريخ استحقاق بالمصدر</span></p></div></div>
+        <p>لقطة ${D.meta.as_of} <span class="tag-approx">الاستحقاق بعد ${D.meta.net_terms_days} يومًا من تاريخ الفاتورة — سياسة لا حقل بالمصدر</span></p></div></div>
       <div class="grid g-2">
         ${card({id:"r_aging",title:"أعمار الديون",approx:true,insightKey:"aging"})}
         ${card({id:"r_water",title:"تراكم الأعمار (Waterfall)",approx:true})}
@@ -1032,7 +1033,7 @@ function boot(){
   const span=dm.length?`${monthName(dm[0]).split(" ")[0]}–${monthName(dm[dm.length-1]).split(" ")[0]}`:"";
   document.getElementById("dataNote").innerHTML=
     `المصدر: فواتير 2026 (${span}) · لقطة مديونية ${D.meta.as_of}.<br>`+
-    `قيود: لا تكلفة (لا هامش)، لا موازنة، الأعمار تقديرية.`;
+    `قيود: لا تكلفة (لا هامش)، لا موازنة، والاستحقاق سياسة (${D.meta.net_terms_days} يومًا) لا حقل بالمصدر.`;
   fillFilters();wireSearch();
   document.querySelectorAll(".nav-item").forEach(n=>n.addEventListener("click",()=>showSection(n.dataset.section)));
   document.getElementById("btnTheme").onclick=toggleTheme;

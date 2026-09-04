@@ -253,9 +253,14 @@ class App extends React.Component {
          typing it: «المالية» announced an AR snapshot dated 2026/7/4 for two
          months after the balances moved, because the sentence was a literal. */
       const sub=m.p||m.sub||"";
+      /* A function sub-line is handed ITS OWN payload first — window.DASH_DATA
+         for a repo section, window.DASH for a dash one — so each reads the
+         object it actually describes. Both are passed after it for the rare
+         line that spans the two. */
+      const own=src==="repo"?st.RD:(st.api&&st.api.D);
       out.push({key:src==="repo"?"r:"+id:id, id, src, group,
                 label:as||m.label, h2:m.h2||m.title||m.label,
-                p:typeof sub==="function"?sub(st.RD,st.api&&st.api.D):sub});
+                p:typeof sub==="function"?sub(own,st.RD,st.api&&st.api.D):sub});
     };
 
     /* الفواتير: تفصيل على مستوى الفاتورة — النافذة تُشتقّ من meta.data_months. */
@@ -265,6 +270,7 @@ class App extends React.Component {
     push("الفواتير والمبيعات","dash","products");
 
     push("المديونية والتحصيل","dash","receivables");
+    push("المديونية والتحصيل","dash","overdue");
     push("المديونية والتحصيل","dash","aging",
       {label:"أعمار العملاء", h2:"أعمار المديونية لكل عميل",
        p:"العمر من تاريخ الفاتورة · FIFO بالتحصيلات والمرتجعات المؤرَّخة · يطابق رصيد اللقطة"});
@@ -730,7 +736,8 @@ class App extends React.Component {
         "، لكن المديونية أقدم من ذلك. ما لا تستطيع الحركات المؤرَّخة تفسيره ("
         +T.egpK(t.opening)+"، أي "+t.openingShare.toFixed(1)
         +"% من الرصيد) يُعرض هنا كرصيد افتتاحي بعمر غير معروف بدلًا من إدراجه في شريحة عمرية. "
-        +"لوحة المصدر توزّع الرصيد النهائي بالكامل على فواتير 2026، فيظهر هذا الجزء لديها ضمن «جاري (غير مستحق)» "
+        +"لوحة المصدر توزّع الرصيد النهائي على تاريخ الفواتير كاملًا، فيظهر هذا الجزء لديها ضمن «"
+        +(((D.receivables||{}).bucket_labels)||{}).current+"» "
         +"("+T.egpK(src.current)+"). الطريقتان تعطيان نفس الإجمالي وتختلفان في التوزيع فقط."]),
         {k:"ag2",approx:true}),
 
@@ -760,12 +767,132 @@ class App extends React.Component {
           React.createElement("b",{style:{color:"#e2e8f0",fontFamily:"'JetBrains Mono',monospace"}},r[1])))
         .concat([React.createElement("div",{key:"n",style:{marginTop:9,fontSize:10.5,lineHeight:1.8,color:"#64748b"}},
           "سندات التحصيل والمرتجعات في المصدر غير مرتبطة بأرقام فواتير (لا يطابق أي منها رقم فاتورة حقيقيًا)، "
-          +"لذلك يُطبَّق FIFO على مستوى العميل بالتاريخ لا فاتورةً بفاتورة — وهو نفس القيد الذي تصف به اللوحة الأصلية أعمارها بأنها «تقديرية».")])),
+          +"لذلك يُطبَّق FIFO على مستوى العميل بالتاريخ لا فاتورةً بفاتورة. هذا القيد يخصّ توزيع المبلغ "
+          +"على الفواتير، لا تصنيفها: الاستحقاق نفسه قاعدة صريحة — تاريخ الفاتورة + "
+          +T.termsOf(D)+" يومًا.")])),
         {k:"ag5",approx:true}),
 
       this.chartCard("أعمار المصدر (أساس تاريخ الاستحقاق)",
         C.agingBar({buckets:src},D),
         {k:"ag6",approx:true,h:C.H.base,sub:"مهلة سداد "+D.meta.net_terms_days+" يومًا"})];
+  }
+
+  /* ---- المستحق والمتأخرات -------------------------------------------------
+     One row per still-open invoice whose due date has passed. The due date is
+     company policy — invoice date + meta.net_terms_days — applied server-side in
+     overdue.py, so this section renders the list rather than recomputing it and
+     the screen cannot drift from the totals the build validates.
+
+     Like the aging section it is a point-in-time snapshot: month, item, brand
+     and status filters are ignored (they slice sales), customer and rep are
+     honoured (they slice the ledger). Stated on the card, not assumed. */
+  overdueBody(X, T, api){
+    const C = this.state.C, D = api.D, f = this.state.filters;
+    const R = (D.receivables)||{};
+    const all = R.overdue_invoices||[];
+    if(!all.length) return [this.card("المستحق والمتأخرات",
+      this.empty("لا توجد فواتير تجاوزت تاريخ استحقاقها"),{k:"od0"})];
+
+    const cohort = this.agingCohort(D, f);
+    const rows = cohort ? all.filter(o=>cohort.has(String(o.customer_code))) : all;
+    const scoped = !!(f.customer || f.rep);
+    if(!rows.length) return [this.card("المستحق والمتأخرات",
+      this.empty("لا توجد فواتير مستحقة في هذا التقسيم"),{k:"od0"})];
+
+    const terms = T.termsOf(D), labels = R.bucket_labels||{};
+    const total = rows.reduce((a,o)=>a+(o.amount_open||0),0);
+    const custs = new Set(rows.map(o=>String(o.customer_code)));
+    const worst = rows.reduce((a,o)=>Math.max(a,o.days_past_due||0),0);
+    /* The opening balance is company-wide and cannot be split per customer here,
+       so it is shown only on the unscoped view rather than misattributed. */
+    const opening = scoped ? null : (R.opening_balance||0);
+
+    const bucketSum = {};
+    for(const o of rows) bucketSum[o.bucket] = (bucketSum[o.bucket]||0) + (o.amount_open||0);
+    const bars = T.AGING_KEYS.filter(k=>k!=="current")
+      .map(k=>[labels[k]||k, bucketSum[k]||0, T.AGING_COLORS[k]]);
+
+    const kpis = [
+      ["إجمالي المستحق على فواتير", T.egpK(total), rows.length+" فاتورة", "#ef4444"],
+      ["عملاء عليهم مستحقات", T.int(custs.size), scoped?"في هذا التقسيم":"من "+(R.rows||[]).length+" مدين", "#f59e0b"],
+      ["أقصى تأخر", T.int(worst)+" يومًا", "عن تاريخ الاستحقاق", "#8b5cf6"],
+    ].concat(opening==null ? [] : [[
+      "رصيد افتتاحي بلا فاتورة", T.egpK(opening), "مستحق ولا يمكن تأريخه", "#64748b"]]);
+
+    const kpiEl = React.createElement("div",{key:"odk",style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}},
+      kpis.map((d,i)=>React.createElement("div",{key:i,style:{padding:"11px 11px 9px",borderRadius:14,
+          background:"rgba(17,24,39,.85)",border:"1px solid rgba(255,255,255,.08)",
+          borderInlineStart:"3px solid "+d[3],display:"flex",flexDirection:"column",gap:3}},
+        React.createElement("span",{style:{fontSize:15,fontWeight:800,color:"#f1f5f9",fontFamily:"'JetBrains Mono',monospace"}},d[1]),
+        React.createElement("span",{style:{fontSize:10.5,color:"#94a3b8",lineHeight:1.5}},d[0]),
+        d[2]?React.createElement("span",{style:{fontSize:9.5,color:"#64748b"}},d[2]):null)));
+
+    /* Per-customer roll-up of the same rows — no second source, so the two
+       tables can never disagree. */
+    const byCust = new Map();
+    for(const o of rows){
+      const k = String(o.customer_code);
+      let c = byCust.get(k);
+      if(!c){ c={code:k, name:o.customer_name, rep:o.rep, amount:0, n:0, oldestDue:null, worst:0}; byCust.set(k,c); }
+      c.amount += o.amount_open||0; c.n++;
+      c.worst = Math.max(c.worst, o.days_past_due||0);
+      if(!c.oldestDue || o.due_date < c.oldestDue) c.oldestDue = o.due_date;
+    }
+    const custRows = [...byCust.values()].sort((a,b)=>b.amount-a.amount);
+
+    return [
+      React.createElement("div",{key:"note",style:{padding:"11px 12px",borderRadius:12,
+          background:"rgba(239,68,68,.09)",border:"1px solid rgba(239,68,68,.26)",
+          fontSize:11,lineHeight:1.85,color:"#fecaca"}},
+        ["تُستحقّ كل فاتورة بعد "+terms+" يومًا من تاريخها. المصدر لا يحمل تاريخ استحقاق، "
+         +"فهذه سياسة الشركة مطبَّقة في اللوحة لا حقلٌ مقروء. الفاتورة متأخرة متى مضى استحقاقها قبل ",
+         this.dateEl(D.meta.as_of,"asof"),
+         " — أي كل فاتورة مؤرَّخة قبل ",
+         this.dateEl(R.overdue_cutoff||D.meta.overdue_cutoff||"",  "cut"),
+         ". المبلغ المفتوح لكل فاتورة من توزيع FIFO الذي يطابق رصيد اللقطة بالضبط."
+         +(scoped?" · التقسيم الحالي: "+(f.customer?"عميل واحد":"مندوب واحد")+"."
+                 :"")
+         +" هذا القسم لقطة عند تاريخها ولا يتأثر بفلتر الشهر."]),
+
+      kpiEl,
+
+      /* These bars total the INVOICE rows only. The opening balance sits in the
+         oldest band of D.receivables.buckets but has no invoice, so folding it
+         in here would make a bar that no row in the table below adds up to. */
+      this.card("المستحق حسب مدة التأخر", this.barsH(bars, T.egp),
+        {k:"od1",sub:"مقاسة من تاريخ الاستحقاق"
+          +(opening?" · على الفواتير فقط — الرصيد الافتتاحي "+T.egpK(opening)+" معروض على حدة":"")}),
+
+      this.card("الفواتير المستحقة", this.pagedList("od2",rows,[
+        ["رقم الفاتورة",r=>r.invoice_no],
+        ["العميل",r=>r.customer_name],
+        ["المبلغ المفتوح",r=>T.num(r.amount_open)],
+        ["أيام التأخر",r=>r.days_past_due],
+        ["تاريخ الفاتورة",r=>this.ltr(r.invoice_date)],
+        ["الاستحقاق",r=>this.ltr(r.due_date)],
+        ["الفئة",r=>labels[r.bucket]||r.bucket],
+        ["المندوب",r=>r.rep]],
+        r=>this.setState({stmt:r.customer_code})),
+        {k:"od2",sub:rows.length+" فاتورة — الأقدم استحقاقًا أولًا · اضغط لكشف الحساب"}),
+
+      this.card("المستحق حسب العميل", this.pagedList("od3",custRows,[
+        ["العميل",r=>r.name],
+        ["المستحق",r=>T.num(r.amount)],
+        ["فواتير",r=>r.n],
+        ["أقصى تأخر",r=>r.worst],
+        ["أقدم استحقاق",r=>this.ltr(r.oldestDue)],
+        ["المندوب",r=>r.rep]],
+        r=>this.setState({stmt:r.code})),
+        {k:"od3",sub:custRows.length+" عميل — اضغط لكشف الحساب"}),
+
+      opening==null ? null : this.card("رصيد افتتاحي بلا تاريخ استحقاق",
+        React.createElement("div",{style:{fontSize:11.5,lineHeight:1.95,color:"#cbd5e1"}},
+          T.egp(opening)+" من المتأخرات لا تقابله فاتورة في المصدر — دَينٌ يسبق أقدم فاتورة "
+          +"مسجَّلة. لا فاتورة له فلا تاريخ استحقاق، ولذلك لا يظهر في جدول الفواتير أعلاه "
+          +"ولا يُمنح تاريخًا مُفترضًا. وهو محسوب ضمن إجمالي المتأخرات "
+          +T.egp((R.total_overdue)||0)+" ومُدرج في أقدم فئة."),
+        {k:"od4",approx:true})
+    ].filter(Boolean);
   }
 
   fOpts(api, month){
@@ -959,6 +1086,7 @@ class App extends React.Component {
   sectionBody(X,T,api){
     const st=this.state, s=this.sec(), D=api.D, C=st.C, f=st.filters;
     if(s==="aging") return this.agingBody(X,T,api);
+    if(s==="overdue") return this.overdueBody(X,T,api);
     if(s==="armove") return this.arMoveBody(X,T,api);
     if(s==="reports") return this.reports();
 
@@ -1010,6 +1138,17 @@ class App extends React.Component {
       this.card("أداء المنتجات",this.pagedList("p5",X.products,[["الصنف",r=>r.item_name],["المبيعات",r=>T.num(r.sales)],["العلامة",r=>r.brand],["المساهمة",r=>r.contribution_pct.toFixed(1)+"%"],["#",r=>r.rank],["الكمية",r=>T.int(r.qty)],["الكراتين",r=>T.int(r.boxes)],["م. السعر",r=>T.num(r.asp)],["أعلى سعر",r=>r.max_price==null?"—":T.num(r.max_price)],["أدنى سعر",r=>r.min_price==null?"—":T.num(r.min_price)],["العملاء",r=>r.n_customers]]),{k:"p5"})];
 
     if(s==="receivables") return [
+      /* The balances here are a stock struck on one date. The month filter used
+         to narrow them to "customers invoiced that month", which reported
+         2,275,995 of 2,942,822 under August and hid 666,827 that was overdue to
+         the last pound. It no longer does — and the section says so, because a
+         filter that is on screen and inert has to be explained. */
+      React.createElement("div",{key:"scope",style:{padding:"9px 12px",borderRadius:12,
+          background:"rgba(42,120,214,.09)",border:"1px solid rgba(42,120,214,.26)",
+          fontSize:11,lineHeight:1.8,color:"#bfdbfe"}},
+        ["لقطة أرصدة بتاريخ ", this.dateEl(D.meta.as_of,"asof"),
+         " — رصيد عند تاريخ لا حركة شهرية، فلا يتأثر بفلتر الشهر. "
+         +"فلاتر العميل والمندوب وفئة العمر تُضيّقه لأنها تقسّم الدفتر نفسه."]),
       this.chartCard("أعمار الديون", C.agingBar(X,D),
         {k:"r1",approx:true,insight:"aging",onPick:pickCat("aging")}),
       this.chartCard("تراكم الأعمار (Waterfall)", C.agingWaterfall(X,D), {k:"r2",approx:true}),
@@ -1782,6 +1921,17 @@ class App extends React.Component {
       const D=st.api.D, f=st.filters||{};
       const inMonth=r=>!f.month||f.month==="all"||r.month===f.month;
       const byRep=r=>!f.rep||r.rep===f.rep;
+      /* Per-customer arrears rolled up from the very rows the invoice sheet
+         exports, so the two can never disagree. */
+      const odBy=new Map();
+      for(const o of mf(((D.receivables||{}).overdue_invoices)||[],byRep)){
+        const k=String(o.customer_code); let c=odBy.get(k);
+        if(!c){ c={code:k,name:o.customer_name,rep:o.rep,amount:0,n:0,oldestDue:null,worst:0}; odBy.set(k,c); }
+        c.amount+=o.amount_open||0; c.n++;
+        c.worst=Math.max(c.worst,o.days_past_due||0);
+        if(!c.oldestDue||o.due_date<c.oldestDue) c.oldestDue=o.due_date;
+      }
+      const odCust=[...odBy.values()].sort((a,b)=>b.amount-a.amount);
       out.push(
         {id:"invoices", label:"الفواتير",
          rows:mf(D.invoices||[],r=>inMonth(r)&&byRep(r)), columns:[
@@ -1800,11 +1950,32 @@ class App extends React.Component {
           col("سعر الوحدة",null,r=>num(r.unit_price)),
           col("الإجمالي",null,r=>num(r.line_total)),
           col("كراتين",null,r=>num(r.boxes)), col("بونص",null,r=>r.is_bonus?"نعم":"لا")]},
+        /* «الرصيد» read r.balance / r.net_balance — keys these rows have never
+           carried (the field is `outstanding`), so the column exported blank in
+           every workbook the app has produced. */
         {id:"receivables", label:"أرصدة المديونية — اللقطة",
          rows:mf(((D.receivables||{}).rows)||[],byRep), columns:[
           col("كود العميل","customer_code"), col("العميل","customer_name"),
-          col("المندوب","rep"), col("الرصيد",null,r=>num(r.balance!=null?r.balance:r.net_balance)),
-          col("متأخر",null,r=>num(r.overdue)), col("جاري",null,r=>num(r.current))]},
+          col("المندوب","rep"), col("الرصيد",null,r=>num(r.outstanding)),
+          col("متأخر",null,r=>num(r.overdue)), col("جاري",null,r=>num(r.current)),
+          col("أيام التأخر",null,r=>num(r.days_overdue))]},
+        /* Two sheets off the same server-side list the «المستحق» section reads,
+           so a workbook and the screen can never quote different arrears. Not
+           month-filtered: a balance is a stock at a date. */
+        {id:"overdue_invoices", label:"الفواتير المستحقة",
+         rows:mf(((D.receivables||{}).overdue_invoices)||[],byRep), columns:[
+          col("رقم الفاتورة","invoice_no"), col("تاريخ الفاتورة","invoice_date"),
+          col("تاريخ الاستحقاق","due_date"),
+          col("أيام التأخر",null,r=>num(r.days_past_due)),
+          col("المبلغ المفتوح",null,r=>num(r.amount_open)),
+          col("الفئة",null,r=>(((D.receivables||{}).bucket_labels)||{})[r.bucket]||r.bucket),
+          col("كود العميل","customer_code"), col("العميل","customer_name"),
+          col("المندوب","rep")]},
+        {id:"overdue_customers", label:"المستحق حسب العميل",
+         rows:odCust, columns:[
+          col("كود العميل","code"), col("العميل","name"), col("المندوب","rep"),
+          col("المستحق",null,r=>num(r.amount)), col("عدد الفواتير",null,r=>num(r.n)),
+          col("أقصى تأخر (يوم)",null,r=>num(r.worst)), col("أقدم استحقاق","oldestDue")]},
         {id:"collections", label:"التحصيلات",
          rows:((D.collections||{}).receipts)||[], columns:[
           col("التاريخ","date"), col("كود العميل","customer_code"),
@@ -1832,7 +2003,9 @@ class App extends React.Component {
           out.push({id:"aging", label:"أعمار المديونية",
             rows:mf(rows,byRep), columns:[
               col("كود العميل","code"), col("العميل","name"), col("المندوب","rep"),
-              col("الرصيد",null,r=>num(r.balance))].concat(
+              /* agingRows emits `snapshot`, not `balance` — the same empty-column
+                 bug as the receivables sheet above. */
+              col("الرصيد",null,r=>num(r.snapshot))].concat(
               AGx.AGE_TIERS.map(t=>col(t.label,null,r=>num((r.tiers||{})[t.key]))))
               .concat([col("رصيد افتتاحي",null,r=>num(r.opening))])});
         }catch(e){

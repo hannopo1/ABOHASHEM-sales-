@@ -32,7 +32,7 @@ CHROMIUM = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"
 # silently disappearing fails the test rather than quietly shrinking the app.
 EXPECTED = [
     "overview", "sales", "customers", "products",
-    "receivables", "aging", "collections", "bonus",
+    "receivables", "overdue", "aging", "collections", "bonus",
     "r:fin", "r:sales", "r:customers", "r:brands", "r:products",
     "r:analysis", "r:forecast", "r:debt",
     "r:margin", "r:reports",
@@ -120,8 +120,12 @@ def run(path: Path) -> int:
         # Matched as the LABEL, not as a bare date: "2026/7/4" is also a real
         # invoice date for a real customer, and a customer's own dates must not
         # trip a check about the app's chrome.
+        # The last two are the pre-due-date wording: the app now applies a real
+        # 30-day term, so calling its aging "تقديرية" or claiming the source has
+        # no due dates would understate a rule it actually enforces.
         STALE = ["18 شهرًا", "لقطة 2026/7/4", "بتاريخ 2026/7/4",
-                 "يناير – يوليو 2026", "يناير 2025 – يونيو 2026"]
+                 "يناير – يوليو 2026", "يناير 2025 – يونيو 2026",
+                 "الأعمار تقديرية", "لا تواريخ استحقاق بالمصدر"]
         for bad in STALE:
             hits = sorted(k for k, v in seen.items() if bad in v)
             if hits:
@@ -140,6 +144,30 @@ def run(path: Path) -> int:
         for want in ["لقطة 4 سبتمبر 2026", "يناير – أغسطس 2026"]:
             if want not in all_text:
                 problems.append(f"derived label missing everywhere — «{want}»")
+
+        # The debt is a stock struck on one date. It used to be re-totalled over
+        # "customers invoiced in the selected month", so the August view read
+        # 2,275,995 against a real 2,942,822 and hid 666,827 that was overdue to
+        # the last pound. Read the KPI through the app's own aggregator under two
+        # different months: the number must not move.
+        debt = page.evaluate("""() => {
+            const api = window.__app.state.api; if(!api) return null;
+            const at = m => api.buildContext({month: m}).kpis;
+            const a = at('all'), b = at('2026-08'), c = at('2026-01');
+            return {all: a.outstanding, aug: b.outstanding, jan: c.outstanding,
+                    overdue_all: a.overdue, overdue_aug: b.overdue};
+        }""")
+        if not debt:
+            problems.append("could not read the receivables KPI")
+        else:
+            result["debt"] = debt
+            if not (abs(debt["all"] - debt["aug"]) < 0.02
+                    and abs(debt["all"] - debt["jan"]) < 0.02):
+                problems.append(
+                    "receivables move with the month filter: "
+                    f"all={debt['all']:,.2f} aug={debt['aug']:,.2f} jan={debt['jan']:,.2f}")
+            if abs(debt["overdue_all"] - debt["overdue_aug"]) >= 0.02:
+                problems.append("overdue moves with the month filter")
 
         browser.close()
 

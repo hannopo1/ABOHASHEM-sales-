@@ -103,6 +103,57 @@ test("detailed dashboard API composes brand and status filters", () => {
   assert.equal(paid.customers[0].avg_invoice_value, 50);
 });
 
+test("receivables are a stock: the month filter does not move the debt", () => {
+  const {A} = load(["dash-tokens.js", "dash-agg.js"], ["A"]);
+  const api = A.makeApi(detailedPayload());
+
+  /* C2 was invoiced in 2026-04 and C1 was not. Narrowing the snapshot to the
+     month's active customers dropped C1's 90 entirely — which is how the real
+     app reported 2,275,995 of 2,942,822 under August and hid 666,827 that was
+     overdue to the last pound. The balance is struck on one date; the sales
+     month must not re-total it. */
+  const all = api.buildContext({month: "all"});
+  const apr = api.buildContext({month: "2026-04"});
+  const may = api.buildContext({month: "2026-05"});   // a month with no invoices
+
+  assert.equal(all.kpis.outstanding, 210);
+  assert.equal(apr.kpis.outstanding, 210);
+  assert.equal(may.kpis.outstanding, 210);           // even with nothing sold
+  assert.equal(apr.kpis.overdue, all.kpis.overdue);
+  assert.equal(apr.recv.length, 2);
+  // and the aging buckets travel with the same rows
+  assert.equal(apr.buckets.d1_30, all.buckets.d1_30);
+  assert.equal(apr.buckets.current, all.buckets.current);
+
+  // the sales side still narrows normally — this is not a blanket un-filtering
+  assert.equal(may.kpis.total_sales, 0);
+  assert.equal(apr.invoices.length, 2);
+  assert.equal(apr.kpis.total_sales, 170);
+});
+
+test("customer, rep and aging filters still narrow the receivables", () => {
+  const {A} = load(["dash-tokens.js", "dash-agg.js"], ["A"]);
+  const api = A.makeApi(detailedPayload());
+
+  /* Those three slice the same ledger rather than re-dating it, so they must
+     keep working — lifting the month filter must not lift them too. */
+  const c1 = api.buildContext({month: "all", customer: "C1"});
+  assert.equal(c1.recv.length, 1);
+  assert.equal(c1.kpis.outstanding, 90);
+
+  const r2 = api.buildContext({month: "all", rep: "R2"});
+  assert.equal(r2.recv.length, 1);
+  assert.equal(r2.kpis.outstanding, 120);
+
+  const aged = api.buildContext({month: "all", aging: "d1_30"});
+  assert.equal(aged.recv.length, 1);
+  assert.equal(aged.kpis.outstanding, 90);
+
+  // and they still narrow under a month filter, not just under "all"
+  const both = api.buildContext({month: "2026-04", rep: "R2"});
+  assert.equal(both.kpis.outstanding, 120);
+});
+
 test("detailed dashboard API reports unavailable months and safe empty aggregates", () => {
   const {A} = load(["dash-tokens.js", "dash-agg.js"], ["A"]);
   const api = A.makeApi(detailedPayload());

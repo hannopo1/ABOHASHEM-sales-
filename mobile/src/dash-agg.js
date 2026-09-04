@@ -129,9 +129,15 @@ function makeApi(D){
       (!f.rep || v.rep===f.rep) && (!f.status || v.status===f.status) &&
       ((!f.brand && !f.item) || invSet.has(v.invoice_no)));
     if(f.status){ const s=new Set(invoices.map(v=>v.invoice_no)); lines=lines.filter(l=>s.has(l.invoice_no)); }
-    const active = new Set(invoices.map(v=>v.customer_code));
+    /* The AR snapshot is a STOCK struck on one date, so the month filter must not
+       touch it. Narrowing it to "customers invoiced this month" made the August
+       view read 2,275,995 of 2,942,822 — it dropped 104 debtors with a balance
+       and no August invoice, and all 666,827 of the difference was overdue,
+       because the customer who stopped buying is the one who still owes you.
+       Customer, rep and aging band still narrow it: those slice the same stock,
+       they do not re-date it. */
     const recv = ((D.receivables&&D.receivables.rows)||[]).filter(r =>
-      (mAll || active.has(r.customer_code)) && (!f.customer || r.customer_code===f.customer) &&
+      (!f.customer || r.customer_code===f.customer) &&
       (!f.rep || r.rep===f.rep) && (!f.aging || r.bucket===f.aging));
     const customers = aggCustomers(lines, invoices);
     return {lines, invoices, recv, customers, products:aggProducts(lines),

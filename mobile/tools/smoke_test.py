@@ -78,7 +78,7 @@ def run(path: Path) -> int:
             nav.locator("text='المزيد'").first.click(timeout=4000)
             page.wait_for_timeout(500)
             sheet = page.inner_text("#root")
-            for group in ["الفواتير والمبيعات", "التحليل — 18 شهرًا",
+            for group in ["الفواتير والمبيعات", "التحليل — ",
                           "الربحية والتقارير"]:
                 if group not in sheet:
                     problems.append(f"nav sheet missing its group — {group}")
@@ -96,6 +96,51 @@ def run(path: Path) -> int:
             if len(body) < MIN_CHARS:
                 problems.append(f"section rendered empty — {key}")
         result["walk"] = walked
+
+        # --- the labels must be DERIVED, not written -------------------------
+        # Every one of these was a literal typed into the string that displayed
+        # it, and every one of them went on asserting a window that had moved:
+        # the nav said «يناير – يوليو 2026» after August landed, the badge said
+        # «18 شهرًا» after the series reached twenty, and «المالية» announced an
+        # AR snapshot dated 2026/7/4 two months after the balances were re-struck.
+        # A grep over the rendered app is the only check that catches the next one.
+        page.evaluate("() => window.__app.go('overview')")
+        page.wait_for_timeout(400)
+        seen = {}
+        for key in registry:
+            page.evaluate("k => window.__app.go(k)", key)
+            page.wait_for_timeout(250)
+            seen[key] = page.inner_text("#root")
+        page.evaluate("() => window.__app.setState({sheet: 'nav'})")
+        page.wait_for_timeout(400)
+        seen["__nav"] = page.inner_text("#root")
+        page.evaluate("() => window.__app.setState({sheet: null})")
+        all_text = "\n".join(seen.values())
+
+        # Matched as the LABEL, not as a bare date: "2026/7/4" is also a real
+        # invoice date for a real customer, and a customer's own dates must not
+        # trip a check about the app's chrome.
+        STALE = ["18 شهرًا", "لقطة 2026/7/4", "بتاريخ 2026/7/4",
+                 "يناير – يوليو 2026", "يناير 2025 – يونيو 2026"]
+        for bad in STALE:
+            hits = sorted(k for k, v in seen.items() if bad in v)
+            if hits:
+                problems.append(f"stale hard-coded label «{bad}» in: {hits[:6]}")
+
+        # and the derived ones must actually appear
+        meta = page.evaluate("() => (window.__app.state.api||{}).D "
+                             "? window.__app.state.api.D.meta : null")
+        if not meta or not meta.get("snapshot_date"):
+            problems.append("payload carries no meta.snapshot_date")
+        else:
+            result["snapshot_date"] = meta["snapshot_date"]
+            result["as_of"] = meta.get("as_of")
+            if meta["snapshot_date"] == meta.get("as_of"):
+                problems.append("snapshot_date must not be re-dated to as_of")
+        for want in ["لقطة 4 سبتمبر 2026", "يناير – أغسطس 2026"]:
+            if want not in all_text:
+                problems.append(f"derived label missing everywhere — «{want}»")
+
         browser.close()
 
     print(json.dumps(result, ensure_ascii=False, indent=2))

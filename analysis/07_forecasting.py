@@ -222,7 +222,7 @@ def main():
         historical_revenue=y.tolist(),
         method_note=(f"يعتمد اختيار النموذج على التحقق المتدحرج (Rolling-origin, expanding window, one-step-ahead) "
                       f"عبر آخر {len(next(iter(cv_errors.values())))} أشهر، باختيار النموذج الأقل خطأ (RMSE) خارج "
-                      "العيّنة؛ ثم تتم إعادة معايرة هذا النموذج على كامل تاريخ الـ18 شهرًا لإنتاج توقع 7 أشهر مقبلة "
+                      f"العيّنة؛ ثم تتم إعادة معايرة هذا النموذج على كامل تاريخ الـ{len(months)} شهرًا لإنتاج توقع 7 أشهر مقبلة "
                       "مع فترة ثقة 95% مبنية على تقريب التوزيع الطبيعي."),
     )
     with open(OUT, "w", encoding="utf-8") as f:

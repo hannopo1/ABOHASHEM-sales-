@@ -1,5 +1,6 @@
 {
   "total_revenue_egp": 66247274.71,
+  "n_months": 20,
   "period": {
     "start": "2025-01-01",
     "end": "2026-08-31",
@@ -48,73 +49,67 @@
   "top10_item_share_pct": 74.32836715253913,
   "avg_revenue_per_active_month_per_customer_egp": 17745.854260775563,
   "median_revenue_per_active_month_per_customer_egp": 5747.2,
-  "ar_total_net_balance_egp": 3368959.3200000008,
-  "ar_total_debit_egp": 3378516.87,
-  "ar_total_credit_egp": 9557.550000000001,
-  "ar_n_customers_with_debit_balance": 187,
-  "ar_n_customers_with_credit_balance": 55,
+  "ar_total_net_balance_egp": 2936534.17,
+  "ar_total_debit_egp": 2942822.5,
+  "ar_total_credit_egp": 6288.329999999999,
+  "ar_n_customers_with_debit_balance": 167,
+  "ar_n_customers_with_credit_balance": 51,
   "ar_by_rep": [
     {
       "rep": "ايمن فارس",
-      "net_balance": 506621.2999999999,
-      "n_customers": 37.0,
-      "debit": 506804.27999999997,
-      "credit": 182.98000000000002
+      "net_balance": 437112.24999999994,
+      "n_customers": 42.0,
+      "debit": 437294.62999999995,
+      "credit": 182.38
     },
     {
       "rep": "حسام حسن",
-      "net_balance": 344932.24999999994,
-      "n_customers": 33.0,
-      "debit": 345862.92,
-      "credit": 930.67
+      "net_balance": 195693.56,
+      "n_customers": 35.0,
+      "debit": 196101.18000000002,
+      "credit": 407.62
     },
     {
       "rep": "شعبان",
-      "net_balance": 15206.37,
-      "n_customers": 5.0,
-      "debit": 15210.87,
-      "credit": 4.5
-    },
-    {
-      "rep": "محمد امام",
-      "net_balance": 447758.80999999994,
-      "n_customers": 52.0,
-      "debit": 448365.51,
-      "credit": 606.7
+      "net_balance": 19504.74,
+      "n_customers": 6.0,
+      "debit": 19507.87,
+      "credit": 3.13
     },
     {
       "rep": "محمد امام الصعيد",
-      "net_balance": 1293494.6800000002,
-      "n_customers": 18.0,
-      "debit": 1298995.9300000002,
-      "credit": 5501.25
+      "net_balance": 1366404.96,
+      "n_customers": 21.0,
+      "debit": 1371904.96,
+      "credit": 5500.0
     },
     {
       "rep": "محمد بشرى",
-      "net_balance": 452026.05000000005,
+      "net_balance": 383362.94999999995,
       "n_customers": 60.0,
-      "debit": 454354.30000000005,
-      "credit": 2328.25
+      "debit": 383548.44999999995,
+      "credit": 185.49999999999997
     },
     {
       "rep": "محمد خليل",
-      "net_balance": 54844.82,
-      "n_customers": 17.0,
-      "debit": 54847.82,
-      "credit": 3.0
+      "net_balance": 296116.47000000003,
+      "n_customers": 35.0,
+      "debit": 296125.97,
+      "credit": 9.5
     },
     {
       "rep": "هانى",
-      "net_balance": 254075.04,
-      "n_customers": 20.0,
-      "debit": 254075.24000000002,
+      "net_balance": 238339.23999999996,
+      "n_customers": 19.0,
+      "debit": 238339.43999999997,
       "credit": 0.2
     }
   ],
-  "dso_proxy_days": 27.6755157831778,
-  "dso_proxy_method_note": "طريقة الاحتساب التقريبية = صافي رصيد المديونية (2026/7/4) ÷ (إيراد آخر 12 شهرًا ÷ 365). هذا تقدير تقريبي وليس مؤشر DSO رسميًا محسوبًا من كشف حركة مديونية متسلسل زمنيًا، نظرًا لتوفر لقطة واحدة فقط لرصيد المديونية في نقطة زمنية محددة (بلا رصيد افتتاحي، وبلا تصنيف أعمار الديون حسب تاريخ كل فاتورة).",
-  "ar_top10_debtor_share_pct": 58.95733177144088,
-  "ar_hhi_debtors": 423.9320202536295,
+  "dso_proxy_days": 24.12320543237545,
+  "ar_as_of": "2026-09-03",
+  "dso_proxy_method_note": "طريقة الاحتساب التقريبية = صافي رصيد المديونية (2026-09-03) ÷ (إيراد آخر 12 شهرًا ÷ 365). هذا تقدير تقريبي وليس مؤشر DSO رسميًا محسوبًا من كشف حركة مديونية متسلسل زمنيًا، نظرًا لتوفر لقطة واحدة فقط لرصيد المديونية في نقطة زمنية محددة (بلا رصيد افتتاحي، وبلا تصنيف أعمار الديون حسب تاريخ كل فاتورة).",
+  "ar_top10_debtor_share_pct": 56.998463210064486,
+  "ar_hhi_debtors": 447.8540552128571,
   "not_computable_due_to_missing_cost_data": [
     "COGS (تكلفة البضاعة المباعة)",
     "Gross Profit / إجمالي الربح",

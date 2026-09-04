@@ -22,7 +22,7 @@ P = ROOT / "data" / "processed"
 tx = pd.read_csv(P / "sales_transactions_enriched.csv", dtype={"customer_code": str})
 dim_items = pd.read_csv(P / "dim_items.csv")
 dim_customers = pd.read_csv(P / "dim_customers.csv", dtype={"customer_code": str})
-ar = pd.read_csv(P / "ar_customer_balances_2026-07-04.csv", dtype={"customer_code": str})
+ar = pd.read_csv(P / "ar_customer_balances_current.csv", dtype={"customer_code": str})
 ar["net_balance"] = ar["debit"] - ar["credit"]
 clog = json.load(open(P / "customer_dim_log.json", encoding="utf-8"))
 

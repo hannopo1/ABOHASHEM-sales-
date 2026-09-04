@@ -81,7 +81,7 @@ def main():
     dim_customers = rd_csv("dim_customers.csv")
     data["dim_customers"] = json.loads(dim_customers.to_json(orient="records"))
 
-    ar = rd_csv("ar_customer_balances_2026-07-04.csv")
+    ar = rd_csv("ar_customer_balances_current.csv")
     ar["net_balance"] = ar["debit"] - ar["credit"]
     data["ar_balances"] = json.loads(ar.to_json(orient="records"))
 

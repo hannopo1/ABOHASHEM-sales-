@@ -210,10 +210,10 @@ class App extends React.Component {
      describe the SAME invoices — all eighteen monthly totals agree to the pound
      — and their detail is complementary, not overlapping.
 
-       window.DASH       invoice-level detail (يناير – يوليو 2026), the AR
+       window.DASH       invoice-level detail (Jan 2026 onwards), the AR
                          snapshot, collections and returns
        window.DASH_DATA  the precomputed analysis over eighteen months
-                         (يناير 2025 – يونيو 2026): dimensions, ABC/XYZ,
+                         (Jan 2025 onwards): dimensions, ABC/XYZ,
                          forecasting, the cost join
 
      So there was nothing to reconcile — only a control that hid work the user
@@ -248,12 +248,17 @@ class App extends React.Component {
       const meta=src==="dash"?dashLbl(id):repoLbl(id);
       if(!meta && !fallback) return;
       const m=meta||fallback;
+      /* A sub-line may be a function of the payload rather than a string. That
+         is how a section states a window or a snapshot date without anyone
+         typing it: «المالية» announced an AR snapshot dated 2026/7/4 for two
+         months after the balances moved, because the sentence was a literal. */
+      const sub=m.p||m.sub||"";
       out.push({key:src==="repo"?"r:"+id:id, id, src, group,
                 label:as||m.label, h2:m.h2||m.title||m.label,
-                p:m.p||m.sub||""});
+                p:typeof sub==="function"?sub(st.RD,st.api&&st.api.D):sub});
     };
 
-    /* الفواتير: تفصيل على مستوى الفاتورة، يناير – يوليو 2026. */
+    /* الفواتير: تفصيل على مستوى الفاتورة — النافذة تُشتقّ من meta.data_months. */
     push("الفواتير والمبيعات","dash","overview");
     push("الفواتير والمبيعات","dash","sales");
     push("الفواتير والمبيعات","dash","customers");
@@ -272,22 +277,23 @@ class App extends React.Component {
     push("المديونية والتحصيل","dash","collections");
     push("المديونية والتحصيل","dash","bonus");
 
-    /* التحليل الشامل: تجميعات 18 شهرًا، يناير 2025 – يونيو 2026. */
-    push("التحليل — 18 شهرًا","repo","fin");
-    push("التحليل — 18 شهرًا","repo","sales");
-    push("التحليل — 18 شهرًا","repo","customers");
-    push("التحليل — 18 شهرًا","repo","brands");
-    push("التحليل — 18 شهرًا","repo","products");
-    push("التحليل — 18 شهرًا","repo","analysis");
-    push("التحليل — 18 شهرًا","repo","forecast");
-    push("التحليل — 18 شهرًا","repo","debt");
+    /* التحليل الشامل: تجميعات مسبقة — طولها ونافذتها يُشتقّان من monthly_series. */
+    push(this.aggGroup(),"repo","fin");
+    push(this.aggGroup(),"repo","sales");
+    push(this.aggGroup(),"repo","customers");
+    push(this.aggGroup(),"repo","brands");
+    push(this.aggGroup(),"repo","products");
+    push(this.aggGroup(),"repo","analysis");
+    push(this.aggGroup(),"repo","forecast");
+    push(this.aggGroup(),"repo","debt");
 
     push("الربحية والتقارير","repo","margin");
     push("الربحية والتقارير","repo","reports");
 
     push("تحليلات وجودة البيانات","dash","analytics");
     push("تحليلات وجودة البيانات","dash","quality",null,"جودة البيانات — الفواتير");
-    push("تحليلات وجودة البيانات","repo","quality",null,"جودة البيانات — 18 شهرًا");
+    push("تحليلات وجودة البيانات","repo","quality",null,
+         "جودة البيانات — "+T.aggMonths(this.state.RD));
     return out;
   }
 
@@ -326,10 +332,11 @@ class App extends React.Component {
   navSheet(){
     const st=this.state, reg=this.registry();
     const NOTE={
-      "الفواتير والمبيعات":"تفصيل على مستوى الفاتورة · يناير – يوليو 2026",
+      "الفواتير والمبيعات":"تفصيل على مستوى الفاتورة · "+
+                            (st.api?T.invWindow(st.api.D):""),
       "المديونية والتحصيل":"لقطة أرصدة "+(st.api?this.ltr(st.api.D.meta.as_of):"")+
                             " · التحصيلات والمرتجعات",
-      "التحليل — 18 شهرًا":"تجميعات مسبقة · يناير 2025 – يونيو 2026",
+      [this.aggGroup()]:"تجميعات مسبقة · "+(st.RD?T.aggWindow(st.RD):""),
       "الربحية والتقارير":"الربحية بثلاثة مستويات · وكل جدول قابل للتصدير",
       "تحليلات وجودة البيانات":"Sunburst وSankey · والمطابقة والقيم الشاذّة",
     };
@@ -902,7 +909,7 @@ class App extends React.Component {
         background:"rgba(13,18,32,.75)",borderBottom:"1px solid rgba(255,255,255,.06)",
         padding:"7px 11px",display:"flex",flexDirection:"column",gap:6}},
       React.createElement("div",{key:"r",style:{display:"flex",gap:6,alignItems:"center"}},
-        badge(onDash?"الفواتير":"18 شهرًا"), snapEl,
+        badge(onDash?"الفواتير":T.aggMonths(st.RD)), snapEl,
         React.createElement("label",{key:"ld",style:{flex:"none",padding:"6px 8px",borderRadius:9,
             cursor:"pointer",fontSize:9.5,color:"#94a3b8",border:"1px solid rgba(255,255,255,.10)",
             whiteSpace:"nowrap"}},"data.js",
@@ -913,7 +920,7 @@ class App extends React.Component {
         this.sec()==="reports"
           ? "هذا القسم يجمع جداول الحمولتين — كل جدول يحمل نافذته في عنوانه"
           : onDash
-          ? "هذا القسم من تفصيل الفواتير · يناير – يوليو 2026"
+          ? "هذا القسم من تفصيل الفواتير · "+T.invWindow(st.api&&st.api.D)
             +(cur?" · لقطة أرصدة "+this.ltr(cur.as_of)+" استُخرجت "+this.ltr(cur.generated):"")
           : (st.RD?("هذا القسم من التجميعات المسبقة · "
                     +this.ltr(st.RD.financial.period.start+" → "+st.RD.financial.period.end)
@@ -1163,8 +1170,8 @@ class App extends React.Component {
     const arReps=[...(fin.ar_by_rep||[])].sort((a,b)=>b.net_balance-a.net_balance);
     return [
       this.kpiGridRepo(R.kpisFin(RD)),
-      this.card("اتجاه المبيعات الشهرية (18 شهرًا)",this.lineChart(RD.monthly_series.map(m=>({v:m.revenue})),R.C.blue),{k:"f1",sub:"تفصيل التوقع في تبويب التنبؤ"}),
-      this.card("رصيد المديونية حسب المندوب",this.barsH(arReps.map(r=>[r.rep,r.net_balance,R.C.indigo]),R.fmtEGPk),{k:"f2",sub:"لقطة 2026/7/4"}),
+      this.card("اتجاه المبيعات الشهرية ("+T.aggMonths(RD)+")",this.lineChart(RD.monthly_series.map(m=>({v:m.revenue})),R.C.blue),{k:"f1",sub:"تفصيل التوقع في تبويب التنبؤ"}),
+      this.card("رصيد المديونية حسب المندوب",this.barsH(arReps.map(r=>[r.rep,r.net_balance,R.C.indigo]),R.fmtEGPk),{k:"f2",sub:"لقطة "+this.arSnapAsOf(RD)}),
       this.card("تركّز المخاطر (HHI) وأيام الذمم",React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:6,fontSize:11.5,color:"#94a3b8",lineHeight:1.8}},
         React.createElement("div",null,"العملاء: ",React.createElement("b",{style:{color:"#e2e8f0"}},R.fmt0(fin.hhi_customers))),
         React.createElement("div",null,"العلامات: ",React.createElement("b",{style:{color:"#e2e8f0"}},R.fmt0(fin.hhi_brands))," — تركّز مرتفع"),
@@ -1233,14 +1240,14 @@ class App extends React.Component {
     const repBars=[...repTot.entries()].sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k,v,R.C.indigo]);
 
     const kpis = R.isEmptyFilters(f) ? R.kpisDebt(RD) : [
-      ["صافي رصيد المديونية", R.fmtEGP(balances.reduce((a,b)=>a+b.net_balance,0)), "لقطة 2026/7/4", R.C.amber],
+      ["صافي رصيد المديونية", R.fmtEGP(balances.reduce((a,b)=>a+b.net_balance,0)), "لقطة "+this.arSnapAsOf(RD), R.C.amber],
       ["إجمالي مدين", R.fmtEGP(balances.reduce((a,b)=>a+b.debit,0)), "", R.C.red],
       ["إجمالي دائن", R.fmtEGP(balances.reduce((a,b)=>a+b.credit,0)), "", R.C.green],
       ["عدد العملاء", R.fmt0(balances.length), "في التقسيم", R.C.blue]];
 
     return [
       this.kpiGridRepo(kpis),
-      this.card("رصيد المديونية حسب المندوب",repBars.length?this.barsH(repBars,R.fmtEGPk):this.empty("لا توجد بيانات"),{k:"d1",sub:"لقطة 2026/7/4"}),
+      this.card("رصيد المديونية حسب المندوب",repBars.length?this.barsH(repBars,R.fmtEGPk):this.empty("لا توجد بيانات"),{k:"d1",sub:"لقطة "+this.arSnapAsOf(RD)}),
       this.card("أرصدة العملاء",balances.length?this.pagedList("d2",balances,[["العميل",r=>r.customer_name],["الرصيد الصافي",r=>R.fmt0(r.net_balance)],["مدين",r=>R.fmt0(r.debit)],["دائن",r=>R.fmt0(r.credit)],["المندوب",r=>r.rep||"—"],["الهاتف",r=>r.phone||"—"]]):this.empty("لا توجد بيانات"),{k:"d2",sub:balances.length+" عميل"})];
   }
 
@@ -1303,9 +1310,9 @@ class App extends React.Component {
 
     let monthly;
     if(s.monthlyAvailability==="company")
-      monthly=this.card("الإيراد الشهري",this.lineChart(RD.monthly_series.map(m=>({v:m.revenue})),R.C.blue),{k:"an1",sub:"18 شهرًا"});
+      monthly=this.card("الإيراد الشهري",this.lineChart(RD.monthly_series.map(m=>({v:m.revenue})),R.C.blue),{k:"an1",sub:T.aggMonths(RD)});
     else if(s.monthlyAvailability==="brand")
-      monthly=this.card("الإيراد الشهري — "+f.brand,this.lineChart(R.brandSeries(RD,f.brand).map(v=>({v})),R.BRAND_COLORS[f.brand]||R.C.blue),{k:"an1",sub:"18 شهرًا"});
+      monthly=this.card("الإيراد الشهري — "+f.brand,this.lineChart(R.brandSeries(RD,f.brand).map(v=>({v})),R.BRAND_COLORS[f.brand]||R.C.blue),{k:"an1",sub:T.aggMonths(RD)});
     else
       monthly=this.card("الإيراد الشهري",this.empty("التفصيل الشهري غير متاح لهذا التقسيم. المصدر يوفّر الإيراد الشهري على مستوى الشركة والعلامة التجارية فقط."),{k:"an1"});
 
@@ -1613,10 +1620,24 @@ class App extends React.Component {
 
   /* Arabic counts a noun differently at 1, 2, 3–10 and 11+. "12 أشهر" is
      wrong where "12 شهرًا" is right, and the section's own header says it. */
-  arMonths(n){
-    if(n===1) return "شهر واحد";
-    if(n===2) return "شهرين";
-    return n<11 ? n+" أشهر" : n+" شهرًا";
+  arMonths(n){ return T.arMonths(n); }
+
+  /* The name of the pre-aggregated group, counted from the series it holds
+     rather than written into the string. It read «التحليل — 18 شهرًا» for the
+     two months after the series became twenty. Before the payload loads there is
+     nothing to count, so it degrades to the bare noun instead of guessing. */
+  /* The AR snapshot date carried by the aggregate payload's own rows. Three
+     cards stated «لقطة 2026/7/4» in their sub-lines; the balances moved twice
+     while the sentences did not. */
+  arSnapAsOf(RD){
+    const rows=(RD&&RD.ar_balances)||[];
+    const stamped=rows.find(r=>r&&r.as_of);
+    return stamped?T.arDate(stamped.as_of):"";
+  }
+
+  aggGroup(){
+    const n = T.aggMonths(this.state.RD);
+    return n ? "التحليل — " + n : "التحليل";
   }
 
   /* ---- ترقيم الصفحات ------------------------------------------------------
@@ -1835,7 +1856,7 @@ class App extends React.Component {
           col("الإيراد",null,r=>num(r.total_revenue)),
           col("عدد الفواتير",null,r=>num(r.n_invoices)),
           col("أول فاتورة","first_invoice_date"), col("آخر فاتورة","last_invoice_date")]},
-        {id:"ar", label:"أرصدة المديونية — 18 شهرًا",
+        {id:"ar", label:"أرصدة المديونية — "+T.aggMonths(this.state.RD),
          rows:mf(RD.ar_balances||[],r=>okRep(r)&&okCust(r)), columns:[
           col("المندوب","rep"), col("الكود","customer_code"),
           col("العميل","customer_name"), col("المدينة","city"),

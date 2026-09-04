@@ -26,16 +26,31 @@ const fmtEGPk = x => { if(x==null||isNaN(x)) return "—"; const a=Math.abs(x);
 const AR_MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
 const monthAr = ym => { if(!ym) return "—"; const [y,m]=String(ym).split("-"); return (AR_MONTHS[+m-1]||m)+" "+y; };
 
+/* The as_of the AR rows themselves carry — the analysis pipeline stamps every
+   row with it (analysis/00_ar_snapshot.py), so the label cannot drift from the
+   balances it sits next to. Empty when the payload predates the stamp. */
+const arSnapAsOf = D => {
+  const rows = (D && D.ar_balances) || [];
+  const stamped = rows.find(r => r && r.as_of);
+  return stamped ? T.arDate(stamped.as_of) : "";
+};
+
 /* Sections — titles and sub-lines verbatim from the repo tab_*.js panels. */
 const SECTIONS = [
   {id:"fin",      label:"المالية",   title:"اللوحة المالية التنفيذية",
-   sub:"جميع الأرقام مُحتسبة من فواتير المبيعات الفعلية (18 شهرًا: يناير 2025 – يونيو 2026) ولقطة مديونية العملاء بتاريخ 2026/7/4. الهامش والتكلفة في قسم «الربحية» ولا يظهران هنا؛ وEBITDA غير متاح لعدم وجود بيانات إهلاك."},
+   /* Derived, not written: the month count, the window and the AR snapshot date
+      all come from the payload being displayed. Written out, this sentence went
+      on claiming «18 شهرًا» and «لقطة 2026/7/4» for two months after both moved. */
+   sub:D=>"جميع الأرقام مُحتسبة من فواتير المبيعات الفعلية ("+
+          T.aggMonths(D)+": "+T.aggWindow(D)+") ولقطة مديونية العملاء بتاريخ "+
+          arSnapAsOf(D)+". الهامش والتكلفة في قسم «الربحية» ولا يظهران هنا؛ "+
+          "وEBITDA غير متاح لعدم وجود بيانات إهلاك."},
   {id:"sales",    label:"المبيعات",  title:"لوحة المبيعات التنفيذية",
    sub:"أعلى/أدنى الأداء، تحليل باريتو 80/20، وشجرة التحليل الهرمي القابلة للتوسيع (عميل ← علامة تجارية ← صنف)."},
   {id:"customers",label:"العملاء",   title:"لوحة ربحية العملاء (على أساس الإيراد الصافي)",
    sub:"تُبنى هذه اللوحة على الإيراد الصافي وليس هامش الربح، لعدم توفر بيانات تكلفة البضاعة المباعة لكل عميل. تصنيف ABC حسب حجم الإيراد، وتصنيف XYZ حسب استقرار الطلب."},
   {id:"debt",     label:"المديونية", title:"المديونية حسب المندوب والعميل",
-   sub:"لقطة أرصدة العملاء بتاريخ 2026/7/4 — مدين، دائن، وصافي الرصيد."},
+   sub:D=>"لقطة أرصدة العملاء بتاريخ "+arSnapAsOf(D)+" — مدين، دائن، وصافي الرصيد."},
   {id:"brands",   label:"العلامات",  title:"لوحة أداء العلامات التجارية",
    sub:"3 علامات تجارية نشطة: الهنا، أبوهاشم، اسبشيال (وفقًا لملف «تصنيف الأصناف كبراند»)."},
   {id:"products", label:"الأصناف",   title:"تحليل الأصناف",
@@ -58,10 +73,11 @@ const UNFILTERABLE = ["fin", "forecast", "quality"];
 function kpisFin(D){
   const f=D.financial;
   return [
-    ["إجمالي الإيرادات (18 شهرًا)", fmtEGP(f.total_revenue_egp), "من "+f.period.start+" إلى "+f.period.end, C.blue],
+    ["إجمالي الإيرادات ("+T.aggMonths(D)+")", fmtEGP(f.total_revenue_egp), "من "+f.period.start+" إلى "+f.period.end, C.blue],
     ["إيرادات آخر 12 شهرًا", fmtEGP(f.trailing_12m_revenue_egp), "", C.green],
     ["متوسط الإيراد الشهري (آخر 12 شهرًا)", fmtEGP(f.avg_monthly_revenue_t12_egp), "", C.indigo],
-    ["رصيد المديونية الصافي", fmtEGP(f.ar_total_net_balance_egp), "لقطة 2026/7/4", C.amber],
+    ["رصيد المديونية الصافي", fmtEGP(f.ar_total_net_balance_egp),
+     "لقطة "+arSnapAsOf(D), C.amber],
     ["نسبة الاستقطاع الإجمالية", fmtPct(f.aggregate_deduction_rate_pct), "من القيمة الاسمية", C.red],
     ["حصة أعلى 10 عملاء", fmtPct(f.top10_customer_share_pct), "من إجمالي الإيرادات", C.orange],
   ];
@@ -72,7 +88,7 @@ function kpisSales(D){
     ["عدد العملاء النشطين", fmt0(D.eda_summary.n_customers), "", C.blue],
     ["عدد الأصناف المباعة", fmt0(D.eda_summary.n_items), "", C.green],
     ["عدد العلامات التجارية", "3", "أبوهاشم، الهنا، اسبشيال", C.amber],
-    ["متوسط قيمة الفاتورة", fmtEGP(m.reduce((a,r)=>a+r.revenue_per_invoice,0)/m.length), "متوسط 18 شهرًا", C.indigo],
+    ["متوسط قيمة الفاتورة", fmtEGP(m.reduce((a,r)=>a+r.revenue_per_invoice,0)/m.length), "متوسط "+T.aggMonths(D), C.indigo],
   ];
 }
 function kpisCust(D){
@@ -81,7 +97,7 @@ function kpisCust(D){
     ["عدد العملاء الإجمالي", fmt0(c.length), "", C.blue],
     ["عملاء فئة A (80% من الإيراد)", fmt0(c.filter(x=>x.abc_class==="A").length), "", C.green],
     ["متوسط إيراد الشهر النشط/عميل", fmtEGP(f.avg_revenue_per_active_month_per_customer_egp), "الوسيط: "+fmtEGP(f.median_revenue_per_active_month_per_customer_egp), C.indigo],
-    ["عملاء لديهم رصيد مدين حاليًا", fmt0(f.ar_n_customers_with_debit_balance), "من لقطة 2026/7/4", C.amber],
+    ["عملاء لديهم رصيد مدين حاليًا", fmt0(f.ar_n_customers_with_debit_balance), "من لقطة "+arSnapAsOf(D), C.amber],
   ];
 }
 function kpisBrands(D){
@@ -93,7 +109,8 @@ function kpisBrands(D){
 function kpisDebt(D){
   const f=D.financial;
   return [
-    ["صافي رصيد المديونية", fmtEGP(f.ar_total_net_balance_egp), "لقطة 2026/7/4", C.amber],
+    ["صافي رصيد المديونية", fmtEGP(f.ar_total_net_balance_egp),
+     "لقطة "+arSnapAsOf(D), C.amber],
     ["إجمالي مدين", fmtEGP(f.ar_total_debit_egp), "", C.red],
     ["إجمالي دائن", fmtEGP(f.ar_total_credit_egp), "", C.green],
     ["أيام الذمم المدينة (DSO) التقريبية", fmt1(f.dso_proxy_days)+" يومًا", "تقديري", C.indigo],

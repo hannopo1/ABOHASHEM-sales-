@@ -47,11 +47,25 @@
    revenue. Uncosted revenue is shown as its own figure, never as zero cost. */
 const M = (function(){
 
+/* The three levels, each counted from the data behind it rather than written
+   down. Level 3 widened from twelve months to thirteen the moment July's
+   invoices met July's existing income statement, and a literal would have gone
+   on saying twelve. Level 2's month is the cost month the model measured. */
 const SECTION = {
   id:"margin", label:"الربحية", title:"الربحية — التكلفة والهامش",
-  sub:"ثلاثة مستويات: هامش مقيس على مستوى الشركة من قوائم الدخل (13 شهرًا)، "+
-      "ثم تفصيل مقيس حسب الصنف والعلامة والمندوب لشهر يونيو 2026 وحده، "+
-      "ثم ربحية شهرية لكل صنف وعميل ومندوب معايَرة على قوائم الدخل (12 شهرًا)."
+  sub:()=>{
+    const d=D();
+    const stmts=((d&&d.statements&&d.statements.by_month)||[]).length;
+    const cal=calMonths().length;
+    const costM=(d&&d.calibration&&d.calibration.cost_month)||
+                (d&&d.meta&&d.meta.cost_month)||"";
+    return "ثلاثة مستويات: هامش مقيس على مستوى الشركة من قوائم الدخل"+
+      (stmts?" ("+T.arMonths(stmts)+")":"")+"، "+
+      "ثم تفصيل مقيس حسب الصنف والعلامة والمندوب"+
+      (costM?" لشهر "+T.arMonth(costM)+" وحده":"")+"، "+
+      "ثم ربحية شهرية لكل صنف وعميل ومندوب معايَرة على قوائم الدخل"+
+      (cal?" ("+T.arMonths(cal)+")":" — غير متاحة")+".";
+  }
 };
 
 const OK = "#10b981", WARN = "#f59e0b", BAD = "#ef4444", MUTED = "#64748b";

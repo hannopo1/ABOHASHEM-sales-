@@ -323,6 +323,10 @@ def main() -> int:
             "data_months": months,
             "all_months_label": C.ALL_MONTHS_LABEL,
             "as_of": C.AS_OF_DATE,
+            # The edition this payload belongs to, distinct from as_of above:
+            # as_of is when the receivables were counted, snapshot_date is when
+            # the app was cut from them. The UI labels itself from this one.
+            "snapshot_date": C.SNAPSHOT_DATE,
             "net_terms_days": C.NET_TERMS_DAYS,
             "bonus_rules": C.BONUS_RULES,
             "generated_utc": date.today().isoformat(),
@@ -447,6 +451,27 @@ def validate(lines_all, invoices_all, jl, ji, june, receivables, dq, months,
           f"({receivables['net_of_credit']:,.2f} vs {printed_net:,.2f}; "
           f"{receivables['credit_customers']} in credit, "
           f"{receivables['total_credit']:,.2f})")
+
+    # 8a-bis. the two payloads must agree about the debt.
+    #     The app shows one set of receivables under «المديونية والتحصيل» (from
+    #     this build) and another under «التحليل» (from the analysis pipeline's
+    #     ar_customer_balances_current.csv). They read the same reports but by
+    #     different routes, and for two months they silently disagreed by 432,425
+    #     because six analysis steps still named a dated July file. This check is
+    #     what makes that divergence loud.
+    try:
+        import csv as _csv
+        with open(C.F_AR_BALANCES, encoding="utf-8") as fh:
+            rows = list(_csv.DictReader(fh))
+        side_b = round(sum(float(r["debit"]) - float(r["credit"]) for r in rows), 2)
+        as_of_b = {r.get("as_of") for r in rows}
+        check("both payloads agree on the debt",
+              abs(receivables["net_of_credit"] - side_b) < 0.02
+              and as_of_b == {C.AS_OF_DATE},
+              f"({receivables['net_of_credit']:,.2f} vs {side_b:,.2f}; "
+              f"as_of {sorted(as_of_b)})")
+    except FileNotFoundError:
+        print("  [INFO] analysis AR snapshot absent — cross-payload debt check skipped")
 
     # 8b. per-customer FIFO reconciliation: current+overdue == final balance
     recon_bad = sum(1 for r in receivables["rows"]

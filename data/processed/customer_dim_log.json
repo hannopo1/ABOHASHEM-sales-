@@ -1,17 +1,22 @@
 {
   "n_customers_in_transactions": 371,
-  "n_customers_in_ar_snapshot": 242,
-  "n_customers_matched": 210,
+  "n_customers_in_ar_snapshot": 218,
+  "n_customers_matched": 192,
   "n_customers_with_multiple_name_variants": 82,
   "customers_with_no_name_in_any_source": [
     "009"
   ],
   "ar_customers_not_in_transactions": [
-    "1000",
-    "1001",
-    "1007",
-    "1008",
-    "1009",
+    "1003",
+    "1004",
+    "1024",
+    "1025",
+    "1026",
+    "1030",
+    "1031",
+    "1032",
+    "1033",
+    "1036",
     "21",
     "43",
     "583",
@@ -23,21 +28,10 @@
     "628",
     "631",
     "633",
-    "683",
-    "686",
     "7",
-    "702",
-    "703",
     "704",
     "705",
-    "717",
     "720",
-    "730",
-    "737",
-    "742",
-    "744",
-    "747",
-    "748",
-    "767"
+    "747"
   ]
 }

@@ -95,7 +95,7 @@ JUNE_AGG = REPO_ROOT / "analysis" / "data_2026_06"
 F_SALES_ALL = PROCESSED / "sales_transactions.csv"            # full parsed history
 F_DIM_CUSTOMERS = PROCESSED / "dim_customers.csv"
 F_DIM_ITEMS = PROCESSED / "dim_items.csv"
-F_AR_BALANCES = PROCESSED / "ar_customer_balances_2026-07-04.csv"
+F_AR_BALANCES = PROCESSED / "ar_customer_balances_current.csv"
 F_DEBT_DETAIL = JUNE_AGG / "customer_debt_arrears_detail.csv"
 F_REP_SUMMARY = JUNE_AGG / "rep_debt_arrears_summary.csv"
 F_ITEM_SUMMARY = JUNE_AGG / "item_summary.csv"                 # cross-check only
@@ -122,6 +122,11 @@ DEFAULT_MONTH = "2026-08"          # month the dashboard opens on
 # AR snapshot date used for the receivable/overdue analysis. Updated to the
 # per-rep customer balances filed on 3 September 2026 («… 3-9.pdf»).
 AS_OF_DATE = "2026-09-03"
+# The snapshot's ISSUE date — the edition of the app cut from this data. It is
+# deliberately a SEPARATE field from AS_OF_DATE: the receivables were struck on
+# 3 September and re-dating them to the 4th would claim a count nobody made.
+# One is when the app was built, the other is when the money was counted.
+SNAPSHOT_DATE = "2026-09-04"
 # Invoices dated on/before this are classified OVERDUE when still unpaid.
 # One month before the snapshot date, matching NET_TERMS_DAYS.
 OVERDUE_CUTOFF = "2026-07-31"

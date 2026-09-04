@@ -20,8 +20,10 @@ from collections import defaultdict
 
 from . import config as C
 
-# x-bands in the debt report (RTL). Debit ~161, credit ~238, code ~521,
-# name ~450, rep ~310.
+# x-bands in the debt report (RTL). Phone ~25, city ~110, debit ~161,
+# credit ~238, rep ~310, name ~450, code ~521.
+_PHONE = (0, 90)
+_CITY = (90, 148)
 _BAL = (148, 216)
 _CREDIT = (216, 272)
 _CODE = (505, 535)
@@ -57,14 +59,23 @@ def _parse_pdf(path) -> list[tuple]:
                 continue
             credit = next((_num(wd) for x, wd in ws
                            if _CREDIT[0] <= x <= _CREDIT[1] and _num(wd) is not None), 0.0) or 0.0
-            bal = round(bal - credit, 2)
+            debit = bal
+            bal = round(debit - credit, 2)
             name = " ".join(
                 wd for x, wd in sorted((p for p in ws if _NAME[0] <= p[0] <= _NAME[1]),
                                        key=lambda t: -t[0])
                 if wd != "عميل" and not re.fullmatch(r"[\d.,]+", wd))
             rep = " ".join(wd for x, wd in sorted((p for p in ws if _REP[0] <= p[0] <= _REP[1]),
                                                   key=lambda t: -t[0]))
-            rows_out.append((code, bal, name.strip(), rep.strip()))
+            phone = next((wd for x, wd in ws
+                          if _PHONE[0] <= x <= _PHONE[1] and re.fullmatch(r"0\d{8,11}", wd)), "")
+            city = " ".join(wd for x, wd in sorted((p for p in ws if _CITY[0] <= p[0] <= _CITY[1]),
+                                                   key=lambda t: -t[0])
+                            if not re.fullmatch(r"[\d.,]+", wd))
+            rows_out.append({"code": code, "balance": bal,
+                             "debit": round(debit, 2), "credit": round(credit, 2),
+                             "name": name.strip(), "rep": rep.strip(),
+                             "phone": phone, "city": city.strip()})
     return rows_out
 
 
@@ -90,21 +101,24 @@ def load_final_balances() -> dict:
             continue
         rows = _parse_pdf(str(path))
         printed = _printed_net(path)
-        parsed = round(sum(r[1] for r in rows), 2)
+        parsed = round(sum(r["balance"] for r in rows), 2)
         if printed is not None and abs(parsed - printed) > 0.01:
             raise SystemExit(
                 f"[debt] {path.name} does not reconcile to its printed net.\n"
                 f"  parsed  : {parsed:,.2f}\n"
                 f"  printed : {printed:,.2f}\n"
                 f"  diff    : {parsed - printed:,.2f}")
-        for code, bal, name, rep in rows:
+        for r in rows:
             # Canonicalise the code (strip thousands-comma + apply the +1000
             # alias) so the balance keys onto the same identity as the invoices.
             # One row per customer; on the rare collision the balances are summed.
-            code = C.canonical_code(code)
+            code = C.canonical_code(r["code"])
             if code in out:
-                out[code]["balance"] = round(out[code]["balance"] + round(bal, 2), 2)
+                for f in ("balance", "debit", "credit"):
+                    out[code][f] = round(out[code][f] + r[f], 2)
             else:
-                out[code] = {"balance": round(bal, 2), "name": name,
-                             "rep": rep, "rep_official": rep_official}
+                out[code] = {"balance": r["balance"], "debit": r["debit"],
+                             "credit": r["credit"], "name": r["name"],
+                             "rep": r["rep"], "rep_official": rep_official,
+                             "phone": r["phone"], "city": r["city"]}
     return out

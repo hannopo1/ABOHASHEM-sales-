@@ -85,7 +85,81 @@ const KPI_ICONS = {
   warn:'<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/>',
   clock:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
 };
+/* ---- period labels -------------------------------------------------------
+   Every window the app prints — «يناير – أغسطس 2026», «20 شهرًا», the snapshot
+   date — used to be typed into the string that displayed it. About twenty of
+   them, spread over three modules. So when August arrived the numbers moved and
+   the labels did not: the nav still said «يناير – يوليو 2026», the badge still
+   said «18 شهرًا», and the eighteen-month section still announced an AR snapshot
+   dated 2026/7/4 that had been superseded two months earlier.
+
+   These derive each label from the payload that section actually reads, so a new
+   month relabels the app by arriving. Nothing here formats a date it was not
+   given: an absent field yields an empty string, never a guess. */
+const AR_MONTH_NAMES = ["يناير","فبراير","مارس","أبريل","مايو","يونيو",
+                        "يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+
+/* "2026-08" -> "أغسطس 2026" */
+const arMonth = m => {
+  if(!m) return "";
+  const p = String(m).split("-");
+  const i = parseInt(p[1],10) - 1;
+  return (AR_MONTH_NAMES[i] || "") + " " + p[0];
+};
+
+/* Arabic counts a noun differently at 1, 2, 3–10 and 11+: "12 أشهر" is wrong
+   where "12 شهرًا" is right. */
+const arMonths = n => {
+  if(n === 1) return "شهر واحد";
+  if(n === 2) return "شهرين";
+  return n < 11 ? n + " أشهر" : n + " شهرًا";
+};
+
+/* A first→last span, collapsing the year when both ends share it:
+   ("2026-01","2026-08") -> "يناير – أغسطس 2026"   (not "يناير 2026 – أغسطس 2026")
+   ("2025-01","2026-08") -> "يناير 2025 – أغسطس 2026" */
+const monthSpan = (from, to) => {
+  if(!from || !to) return "";
+  if(from === to) return arMonth(from);
+  const yf = String(from).split("-")[0], yt = String(to).split("-")[0];
+  if(yf === yt) return arMonth(from).replace(" "+yf, "") + " – " + arMonth(to);
+  return arMonth(from) + " – " + arMonth(to);
+};
+
+/* The invoice-detail window, from the months the payload says it HAS — not from
+   the twelve months its month-selector offers. */
+const invWindow = D => {
+  const m = D && D.meta && D.meta.data_months;
+  return (m && m.length) ? monthSpan(m[0], m[m.length-1]) : "";
+};
+
+/* The pre-aggregated window and its length. */
+const aggSeries = RD => (RD && RD.monthly_series) || [];
+const aggWindow = RD => {
+  const s = aggSeries(RD);
+  return s.length ? monthSpan(s[0].month, s[s.length-1].month) : "";
+};
+const aggMonths = RD => {
+  const n = aggSeries(RD).length;
+  return n ? arMonths(n) : "";
+};
+
+/* "2026-09-04" -> "4 سبتمبر 2026". The snapshot's ISSUE date, which is NOT the
+   date its receivables were struck — that is meta.as_of, and conflating the two
+   would re-date the balances to a day nobody counted them on. */
+const arDate = d => {
+  if(!d) return "";
+  const p = String(d).split("-");
+  if(p.length < 3) return String(d);
+  return parseInt(p[2],10) + " " + (AR_MONTH_NAMES[parseInt(p[1],10)-1] || "") + " " + p[0];
+};
+const snapshotDate = D => (D && D.meta && D.meta.snapshot_date) || "";
+const snapshotLabel = D => {
+  const d = snapshotDate(D);
+  return d ? "لقطة " + arDate(d) : "";
+};
+
 const FMT = {egp, egpK, num, int, pct:(x)=>pct(x)};
 
-return {PAL,AGING_KEYS,AGING_COLORS,egp,egpK,num,int,pct,round2,sum,groupSum,SECTION_LABELS,BONUS_RULES,FILTER_DEFS,KPI_DEFS,KPI_ICONS,FMT};
+return {PAL,AGING_KEYS,AGING_COLORS,egp,egpK,num,int,pct,round2,sum,groupSum,SECTION_LABELS,BONUS_RULES,FILTER_DEFS,KPI_DEFS,KPI_ICONS,FMT,arMonth,arMonths,monthSpan,invWindow,aggWindow,aggMonths,arDate,snapshotDate,snapshotLabel};
 })();

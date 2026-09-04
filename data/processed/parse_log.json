@@ -5,7 +5,9 @@
   "invoice_blocks_no_items_main": 0,
   "invoices_found_june": 311,
   "invoices_parsed_june": 311,
-  "line_items_total": 13324,
+  "invoices_parsed_pdf": 645,
+  "invoices_reconciliation_fail_pdf": 0,
+  "line_items_total": 15036,
   "reconciliation_fail_examples": [],
   "unparsed_examples": []
 }

@@ -27,8 +27,22 @@ def main():
     ar = pd.read_csv(AR_CSV, dtype={"customer_code": str})
     ar["net_balance"] = ar["debit"] - ar["credit"]
 
+    def _best_name(s):
+        """Most frequent non-blank name for a customer code.
+
+        A customer can carry NO name at all in any source — code 009 invoices
+        under a blank name in every one of its five PDF invoices. ``value_counts``
+        drops those, leaving an empty index, so taking ``[0]`` blindly crashed the
+        whole pipeline the first time such a customer appeared. Fall back to the
+        same honest placeholder the dashboard uses («عميل <code>») rather than
+        inventing a name or dropping the customer's sales.
+        """
+        vc = s.dropna().astype(str).str.strip()
+        vc = vc[vc != ""].value_counts()
+        return vc.index[0] if len(vc) else None
+
     g = df.groupby("customer_code").agg(
-        customer_name=("customer_name_raw", lambda s: s.value_counts().index[0]),
+        customer_name=("customer_name_raw", _best_name),
         n_invoices=("invoice_no", "nunique"),
         total_revenue=("line_total", "sum"),
         first_invoice_date=("invoice_date", "min"),
@@ -43,6 +57,9 @@ def main():
     ).reset_index()
 
     dim = g.merge(ar_dedup, on="customer_code", how="left")
+    # Label — never fabricate — a customer with no name anywhere in the sources.
+    nameless = dim["customer_name"].isna()
+    dim.loc[nameless, "customer_name"] = "عميل " + dim.loc[nameless, "customer_code"]
     dim["has_ar_snapshot"] = dim["rep"].notna()
     dim = dim.sort_values("total_revenue", ascending=False)
     dim.to_csv(OUT_DIM_CUST, index=False, encoding="utf-8")
@@ -52,6 +69,7 @@ def main():
         n_customers_in_ar_snapshot=ar["customer_code"].nunique(),
         n_customers_matched=int(dim["has_ar_snapshot"].sum()),
         n_customers_with_multiple_name_variants=int((g["n_name_variants"] > 1).sum()),
+        customers_with_no_name_in_any_source=sorted(dim.loc[nameless, "customer_code"]),
         ar_customers_not_in_transactions=sorted(set(ar["customer_code"]) - set(g["customer_code"])),
     )
     with open(OUT_LOG, "w", encoding="utf-8") as f:

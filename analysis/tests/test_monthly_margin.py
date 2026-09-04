@@ -140,11 +140,26 @@ def test_every_row_carries_a_basis(dash):
 
 
 def test_calibrated_window_is_the_intersection(dash):
-    """Invoices 2025-01..2026-06, statements 2025-07..2026-07 -> twelve months."""
+    """The calibrated months are exactly the months that have BOTH an invoice
+    history and an income statement — derived, not hard-coded, because the window
+    grows every time a month of either arrives (it was twelve months until the
+    July invoices landed, thirteen after).
+    """
     months = dash["calibration"]["months"]
     assert months == sorted(months)
-    assert months[0] == "2025-07" and months[-1] == COST_MONTH
-    assert len(months) == 12
+    assert len(set(months)) == len(months)
+
+    invoice_months = {r["month"] for r in dash["by_item_month"]}
+    statement_months = {r["period"] for r in dash["statements"]["by_month"]}
+    assert set(months) == invoice_months
+    assert set(months) <= statement_months, "a month was calibrated with no statement"
+
+    # A month with an invoice history but no statement must be left OUT, not
+    # calibrated against a neighbour's ratio.
+    all_invoice_months = {r["month"] for r in dash["by_month"]}
+    for m in sorted(all_invoice_months - statement_months):
+        assert m not in months, f"{m} has no income statement yet"
+
     assert dash["calibration"]["estimated_months"] == sorted(QUARTER_MONTHS)
 
 

@@ -447,6 +447,13 @@ def agg(j: pd.DataFrame, keys: list[str], reliable_only: bool = True) -> pd.Data
     out["gross_margin_pct"] = out["gross_profit"] / out["revenue_costed"] * 100
     out["op_margin_pct"] = out["op_profit"] / out["revenue_costed"] * 100
     out["cost_coverage_pct"] = out["revenue_costed"] / out["revenue_total"] * 100
+    # A group that sold something but has NO costed line at all — a brand-new
+    # item with no June cost, say — leaves the division at NaN, which the payload
+    # writes as null and the app reads as "coverage unknown". Its coverage is not
+    # unknown, it is zero: none of that revenue is costed. The margins above stay
+    # null, because there is genuinely no margin to state.
+    sold_uncosted = (out["revenue_total"].fillna(0) != 0) & (out["revenue_costed"].fillna(0) == 0)
+    out.loc[sold_uncosted, "cost_coverage_pct"] = 0.0
     return out.sort_values("revenue_total", ascending=False)
 
 

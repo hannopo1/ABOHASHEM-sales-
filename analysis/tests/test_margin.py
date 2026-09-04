@@ -130,8 +130,13 @@ def test_every_breakdown_row_states_its_coverage(dash):
     invites the reader to assume all of it."""
     for key in ("by_brand", "by_rep"):
         for row in dash[key]:
-            assert row["cost_coverage_pct"] is not None
-            assert 0 < row["cost_coverage_pct"] <= 100 + PCT_TOL, row
+            assert row["cost_coverage_pct"] is not None, row
+            assert 0 <= row["cost_coverage_pct"] <= 100 + PCT_TOL, row
+            # Zero coverage is a legitimate state (a brand-new item with no cost
+            # row yet), but then the row must not also quote a margin.
+            if row["cost_coverage_pct"] == 0:
+                assert row["gross_margin_pct"] is None, row
+                assert row["op_margin_pct"] is None, row
 
 
 def test_pricing_gap_rows_are_actually_under_priced(dash):

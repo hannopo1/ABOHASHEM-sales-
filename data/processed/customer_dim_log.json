@@ -1,8 +1,11 @@
 {
-  "n_customers_in_transactions": 337,
+  "n_customers_in_transactions": 371,
   "n_customers_in_ar_snapshot": 242,
   "n_customers_matched": 210,
-  "n_customers_with_multiple_name_variants": 75,
+  "n_customers_with_multiple_name_variants": 82,
+  "customers_with_no_name_in_any_source": [
+    "009"
+  ],
   "ar_customers_not_in_transactions": [
     "1000",
     "1001",

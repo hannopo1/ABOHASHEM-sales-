@@ -207,10 +207,11 @@ def parse_all(year: int | None = None) -> tuple[pl.DataFrame, pl.DataFrame]:
     June is taken exclusively from the dedicated June file (higher-fidelity table
     extraction); the main file supplies every earlier month.
     """
-    from . import july as july_mod
+    from . import invoice_pdf as pdf_mod
     lm, im = parse_main()
     lj, ij = parse_june()
-    l7, i7 = july_mod.parse_july()          # July 1–15 2026 (PDF); empty if absent
+    l7, i7 = pdf_mod.parse_july()           # July 2026 (PDF); empty if absent
+    l8, i8 = pdf_mod.parse_august()         # August 2026 (PDF); empty if absent
     # main file already contains an (older-format) June? keep the dedicated June
     # file authoritative for 2026-06 and drop any 2026-06 rows from the main set.
     def _drop_june26(df):
@@ -218,8 +219,8 @@ def parse_all(year: int | None = None) -> tuple[pl.DataFrame, pl.DataFrame]:
                            & (pl.col("invoice_date").dt.month() == 6)))
     lm, im = _drop_june26(lm), _drop_june26(im)
 
-    frames_l = [lm, lj] + ([l7] if l7.height else [])
-    frames_i = [im, ij] + ([i7] if i7.height else [])
+    frames_l = [lm, lj] + [f for f in (l7, l8) if f.height]
+    frames_i = [im, ij] + [f for f in (i7, i8) if f.height]
     lines = pl.concat(frames_l, how="vertical_relaxed")
     invoices = pl.concat(frames_i, how="vertical_relaxed")
     # Canonicalise customer codes (strip thousands-comma + apply the +1000 alias)
@@ -236,6 +237,31 @@ def parse_all(year: int | None = None) -> tuple[pl.DataFrame, pl.DataFrame]:
         lines = lines.filter(pl.col("invoice_date").dt.year() == year)
         invoices = invoices.filter(pl.col("invoice_date").dt.year() == year)
     return lines, invoices
+
+
+def _collapse_aliased_customers(dim_customers: pl.DataFrame) -> pl.DataFrame:
+    """One row per customer AFTER the +1000 code alias is applied.
+
+    ``dim_customers`` is built per raw code, so a customer the ERP re-coded (000
+    and 1000, say) arrives as two rows that become the SAME code once aliased.
+    Left as-is they fan out every join keyed on customer_code — silently
+    double-counting that customer's sales, which is how August first came out
+    18,080 EGP heavier from the customer breakdown than from the invoices.
+
+    The two rows are the same customer by construction (that is what the alias
+    asserts), so their measures are summed and the name of the larger side is
+    kept; the spelling variants are exactly why the codes diverged.
+    """
+    if dim_customers.height == dim_customers["customer_code"].n_unique():
+        return dim_customers
+    ordered = dim_customers.sort("total_revenue", descending=True)
+    agg = [pl.first(c).alias(c) for c in ordered.columns
+           if c not in ("customer_code", "total_revenue", "n_invoices")]
+    return (ordered.group_by("customer_code")
+            .agg(agg + [pl.col("total_revenue").sum().alias("total_revenue"),
+                        pl.col("n_invoices").sum().alias("n_invoices")])
+            .select(dim_customers.columns)
+            .sort("total_revenue", descending=True))
 
 
 def load_dimensions() -> dict[str, pl.DataFrame]:
@@ -256,6 +282,7 @@ def load_dimensions() -> dict[str, pl.DataFrame]:
     dim_customers = dim_customers.with_columns(
         pl.col("customer_code").cast(pl.Utf8)
         .map_elements(C.canonical_code, return_dtype=pl.Utf8).alias("customer_code"))
+    dim_customers = _collapse_aliased_customers(dim_customers)
     debt_detail = debt_detail.with_columns(
         pl.col("customer_code").cast(pl.Utf8)
         .map_elements(C.canonical_code, return_dtype=pl.Utf8).alias("customer_code"))
@@ -270,7 +297,7 @@ def load_dimensions() -> dict[str, pl.DataFrame]:
 
 
 def load_history_monthly() -> pl.DataFrame:
-    """Monthly net-sales series across the full 17-month history for trend/variance."""
+    """Monthly net-sales series across the full parsed history for trend/variance."""
     # All columns as strings (customer codes appear comma-quoted, e.g. "1,003");
     # cast only the numerics we aggregate.
     df = pl.read_csv(C.F_SALES_ALL, infer_schema_length=0)

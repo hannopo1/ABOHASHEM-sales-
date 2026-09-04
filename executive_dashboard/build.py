@@ -47,7 +47,7 @@ def _corrected_rep_map(final_balances, dim_customers, debt_detail):
     """Customer → representative, corrected against OFFICIAL master data.
 
     Single source of truth = the customer-account reports filed by rep
-    (2026-07-16, file-based). Where a customer is absent there, fall back to the
+    (config.AR_SNAPSHOT_FILES, file-based). Where a customer is absent there, fall
     cleaned dim_customers.rep, then the 2026-07-04 debt detail. Never guesses —
     a customer with no rep in any source stays 'غير محدد' and is reported as an
     exception. Touches ONLY the rep relationship, no financial value.
@@ -63,7 +63,7 @@ def _corrected_rep_map(final_balances, dim_customers, debt_detail):
         v = (r["rep"] or "").strip()
         if v:
             rep[str(r["customer_code"])] = v
-    # 1st priority (authoritative): the 2026-07-16 by-rep account reports
+    # 1st priority (authoritative): the current by-rep account reports
     for code, meta in final_balances.items():
         v = (meta.get("rep_official") or meta.get("rep") or "").strip()
         if v:
@@ -202,7 +202,7 @@ def _month_subset(lines_all, invoices_all, month):
 
 def _receivables_for(receivables_full, invoices_sub, month):
     """FIFO overdue snapshot restricted to the customers active in the month
-    (the balance itself is a fixed 2026-07-16 snapshot; only the cohort narrows).
+    (the balance itself is a fixed as-of snapshot; only the cohort narrows).
     Bucket / rep / totals are re-aggregated from the narrowed rows so everything
     still reconciles exactly to that cohort's outstanding."""
     if month == "all":
@@ -260,7 +260,7 @@ def main() -> int:
     print("● Data-quality scan (all 2026) …")
     dq = data_quality.run(lines_all, invoices_all)
 
-    print("● Final balances (2026-07-16) + FIFO overdue analysis …")
+    print(f"● Final balances ({C.AS_OF_DATE}) + FIFO overdue analysis …")
     final_balances = debt_mod.load_final_balances()
     name_map = _name_map(dims["dim_customers"], invoices_full, dims["debt_detail"])
     # Customer→rep corrected against official master (see _corrected_rep_map).
@@ -431,10 +431,22 @@ def validate(lines_all, invoices_all, jl, ji, june, receivables, dq, months,
     # 7. ASP recompute for top product
     check("top product ASP = value/qty", bool(products) and products[0]["asp"] > 0)
 
-    # 8. aging buckets sum == outstanding (FIFO overdue, 2026-07-16)
+    # 8. aging buckets sum == outstanding (FIFO overdue, C.AS_OF_DATE)
     bsum = sum(receivables["buckets"].values())
     check("aging buckets == outstanding", abs(bsum - receivables["total_outstanding"]) < 1.0,
           f"({bsum:,.0f})")
+
+    # 8a. the AR snapshot reproduces the source files' own printed «الصافى».
+    #     src/debt.py already aborts on a per-file mismatch; this closes the loop
+    #     at portfolio level, where the credit balances that are held out of the
+    #     aging buckets have to come back in: outstanding − credit == Σ printed.
+    printed_net = round(sum(debt_mod._printed_net(p) or 0.0
+                            for p, _rep in C.AR_SNAPSHOT_FILES if p.exists()), 2)
+    check("AR snapshot == Σ printed net (per rep)",
+          abs(receivables["net_of_credit"] - printed_net) < 0.02,
+          f"({receivables['net_of_credit']:,.2f} vs {printed_net:,.2f}; "
+          f"{receivables['credit_customers']} in credit, "
+          f"{receivables['total_credit']:,.2f})")
 
     # 8b. per-customer FIFO reconciliation: current+overdue == final balance
     recon_bad = sum(1 for r in receivables["rows"]

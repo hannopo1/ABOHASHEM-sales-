@@ -1,51 +1,51 @@
 {
-  "total_revenue": 57590362.16,
-  "total_qty": 1182006.85,
-  "n_customers": 337,
+  "total_revenue": 66247274.71,
+  "total_qty": 1321958.6,
+  "n_customers": 371,
   "n_brands": 4,
-  "n_items": 86,
-  "n_months": 18,
-  "avg_monthly_revenue": 3199464.564444444,
-  "std_monthly_revenue": 660616.9704778829,
-  "cv_monthly_revenue": 0.206477351810456,
-  "n_a_class_customers": 35,
-  "top10_customers_revenue_share_pct": 49.76,
-  "hhi_customers": 322.7,
-  "hhi_brands": 4391.6,
-  "hhi_items": 773.2,
+  "n_items": 87,
+  "n_months": 20,
+  "avg_monthly_revenue": 3312363.7354999995,
+  "std_monthly_revenue": 738813.0683479906,
+  "cv_monthly_revenue": 0.2230470827916087,
+  "n_a_class_customers": 37,
+  "top10_customers_revenue_share_pct": 48.74,
+  "hhi_customers": 314.2,
+  "hhi_brands": 4207.8,
+  "hhi_items": 754.9,
   "abc_customer_counts": {
-    "C": 246,
-    "B": 56,
-    "A": 35
+    "C": 271,
+    "B": 63,
+    "A": 37
   },
   "abc_item_counts": {
     "C": 60,
-    "B": 14,
+    "B": 15,
     "A": 12
   },
   "xyz_item_counts": {
     "Z": 56,
     "X": 18,
-    "Y": 12
+    "Y": 13
   },
   "xyz_customer_counts": {
-    "Z": 282,
-    "Y": 33,
-    "X": 22
+    "Z": 317,
+    "Y": 31,
+    "X": 23
   },
   "seasonality_index_by_month": {
-    "1": 87.3,
-    "2": 87.5,
-    "3": 103.4,
-    "4": 108.0,
-    "5": 114.1,
-    "6": 93.2,
-    "7": 82.3,
-    "8": 94.8,
-    "9": 120.6,
-    "10": 115.6,
-    "11": 94.4,
-    "12": 98.8
+    "1": 84.1,
+    "2": 84.2,
+    "3": 99.6,
+    "4": 104.0,
+    "5": 109.9,
+    "6": 89.7,
+    "7": 113.1,
+    "8": 101.9,
+    "9": 116.2,
+    "10": 111.3,
+    "11": 90.9,
+    "12": 95.2
   },
   "seasonality_n_years_observed_by_month": {
     "1": 2,
@@ -54,17 +54,17 @@
     "4": 2,
     "5": 2,
     "6": 2,
-    "7": 1,
-    "8": 1,
+    "7": 2,
+    "8": 2,
     "9": 1,
     "10": 1,
     "11": 1,
     "12": 1
   },
   "brand_revenue_share": {
-    "الهنا": 58.91,
-    "ابوهاشم": 26.78,
-    "اسبشيال": 14.29,
-    "غير مصنف": 0.03
+    "الهنا": 56.69,
+    "ابوهاشم": 26.99,
+    "اسبشيال": 16.29,
+    "غير مصنف": 0.02
   }
 }

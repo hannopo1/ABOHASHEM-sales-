@@ -1,5 +1,5 @@
 """
-Central configuration for the June-2026 Executive Financial Dashboard build.
+Central configuration for the Executive Financial Dashboard build.
 
 Every tunable business rule lives here so the pipeline stays declarative and the
 numbers stay traceable to a single, reviewable place.
@@ -18,19 +18,81 @@ REPO_ROOT = APP_DIR.parent                            # repository root
 
 SRC_JUNE_MD = REPO_ROOT / "فواتير_المبيعات_يونيو_2026-1.md"
 SRC_MAIN_MD = REPO_ROOT / "فواتير المبيعات من 112025 الى 3152026.md"
-# July 1–15 2026 sales invoices (Pioneers-template PDF with an extractable text
-# layer). Parsed geometrically at 100% invoice reconciliation.
-SRC_JULY_PDF = REPO_ROOT / "فواتير المبيعات من 1_7_2026الى 15_7_2026.pdf"
-# Full-year-2026 actual cash receipts (سدادات العملاء) and customer returns
-# (ارتجاعات العملاء). Geometric x-band tables; parsed by src/collections.py and
-# reconciled EXACTLY to the printed grand totals below.
-SRC_COLLECTIONS_PDF = REPO_ROOT / "تحصيلات العملاء من 1-1-2026 الى 18-7-2026.pdf"
-SRC_RETURNS_PDF = REPO_ROOT / "مرتجعات العملاء من1-1-2026 الى 16-7-2026.pdf"
+# July and August 2026 sales invoices (Pioneers-template PDFs with an extractable
+# text layer). Parsed geometrically by src/invoice_pdf.py at 100% invoice
+# reconciliation — 344 July invoices, 301 August ones, every one of them balancing
+# Σ line_total against its printed total.
+#
+# July deliberately reads the WHOLE-month file, not the «1_7…15_7» part-month one
+# that also sits in the repo: half a month of July next to a full August would
+# make every month-on-month figure in the app wrong by construction. The
+# part-month file is a strict prefix of this one and is left unused.
+SRC_JULY_PDF = REPO_ROOT / "فواتير المبيعات خلال شهر 7.pdf"
+SRC_AUGUST_PDF = REPO_ROOT / "فواتير من 1-8-2026 الى 31-8-2026.pdf"
+# Actual cash receipts (سدادات العملاء) and customer returns (ارتجاعات العملاء).
+# Geometric x-band tables; parsed by src/collections.py and reconciled EXACTLY to
+# the printed grand total carried by each file (the build aborts otherwise).
+#
+# The receipts arrive as one cumulative file plus later month-only files, and the
+# two OVERLAP: the cumulative run stops mid-month (18 July / 16 July), so its last
+# month is partial. A month-only file therefore SUPERSEDES the cumulative file for
+# the month it covers — it is the same ledger, re-run once the month closed.
+# Concatenating them instead would double-count the first half of July.
+#
+# Each entry is (path, month-it-owns | None for "every month not owned by another",
+# printed grand total). Ordered oldest-first; later entries win.
+SRC_COLLECTIONS: list[tuple[Path, str | None, float]] = [
+    (REPO_ROOT / "تحصيلات العملاء من 1-1-2026 الى 18-7-2026.pdf", None, 22_177_149.68),
+    (REPO_ROOT / "تحصيلات العملاء حتى تاريخ 30-7-2026.pdf", "2026-07", 4_031_541.00),
+    (REPO_ROOT / "تحصيلات العملاء شهر 8.pdf", "2026-08", 4_022_295.50),
+]
+# A SECOND August receipts report was uploaded alongside the one above:
+# «تحصيلات العملاء شهر 8 سنة 2026.pdf», a per-customer statement totalling
+# 4,156,517.75 — 134,222.25 more. It is not a corrected version of the same
+# ledger: it adds credit notes (إشعار خصم) and old-return settlements, which are
+# not cash received. Every other month in this dataset is on the cash-receipts
+# («سدادات») basis, so August stays on it too; mixing bases mid-series would move
+# the collection-rate KPI for one month only. Recorded, not used.
+SRC_COLLECTIONS_AUG_ALT = (REPO_ROOT / "تحصيلات العملاء شهر 8 سنة 2026.pdf",
+                           4_156_517.75)
+
+# Returns: same supersede rule. August arrives in a different report layout
+# («تقرير مرتجع المبيعات» — one row per returned ITEM, carrying quantity, item,
+# rep and governorate) rather than the one-row-per-credit-note layout of the
+# earlier files, so it is parsed by its own band set and rolled up.
+SRC_RETURNS: list[tuple[Path, str | None, float]] = [
+    (REPO_ROOT / "مرتجعات العملاء من1-1-2026 الى 16-7-2026.pdf", None, 435_830.63),
+    (REPO_ROOT / "مرتجعات العملاء خلال شهر 7.pdf", "2026-07", 128_129.55),
+]
+SRC_RETURNS_ITEMISED: list[tuple[Path, str | None, float]] = [
+    (REPO_ROOT / "مرتجعات شهر 8 سنة 2026.pdf", "2026-08", 117_327.25),
+]
+# Customer account-balance reports («تقرير عن حسابات العملاء»), one file per
+# representative — the file name IS the official customer→rep assignment, which
+# is why they are listed rather than globbed: the rep has to be stated, not
+# guessed out of a filename, and the set that filed has to be reviewable.
+#
+# Two things about the 3 September set are deliberate and NOT omissions:
+#   * «مورين 3-9.pdf» is excluded. Despite sitting in the same upload it is a
+#     «حسابات الموردين» report — SUPPLIER balances (≈1.05M). Adding it would
+#     inflate customer receivables by money the company OWES.
+#   * «محمود السيد» filed on 16 July but not on 3 September. His customers keep
+#     whatever the newer files say about them and are otherwise reported as
+#     dropped — no balance is carried forward from July to fill the gap.
+AR_SNAPSHOT_FILES: list[tuple[Path, str]] = [
+    (REPO_ROOT / "ايمن فارس 3-9.pdf", "ايمن فارس"),
+    (REPO_ROOT / "بشرى 3-9.pdf", "محمد بشرى"),
+    (REPO_ROOT / "حسام حسن 3-9.pdf", "حسام حسن"),
+    (REPO_ROOT / "شعبان 3-9.pdf", "شعبان"),
+    (REPO_ROOT / "محمد امام الصعيد 3-9.pdf", "محمد امام الصعيد"),
+    (REPO_ROOT / "محمد خليل 3-9.pdf", "محمد خليل"),
+    (REPO_ROOT / "هانى 3-9.pdf", "هانى"),
+]
 PROCESSED = REPO_ROOT / "data" / "processed"
 JUNE_AGG = REPO_ROOT / "analysis" / "data_2026_06"
 
 # Reused processed inputs (regeneratable from source by the repo pipeline)
-F_SALES_ALL = PROCESSED / "sales_transactions.csv"            # 17-month history
+F_SALES_ALL = PROCESSED / "sales_transactions.csv"            # full parsed history
 F_DIM_CUSTOMERS = PROCESSED / "dim_customers.csv"
 F_DIM_ITEMS = PROCESSED / "dim_items.csv"
 F_AR_BALANCES = PROCESSED / "ar_customer_balances_2026-07-04.csv"
@@ -54,14 +116,15 @@ FONT_BOLD = APP_DIR / "vendor" / "fonts" / "Amiri-Bold.ttf"
 # Period
 # ---------------------------------------------------------------------------
 PERIOD_YEAR = 2026
-PERIOD_MONTH = 7
-PERIOD_LABEL_AR = "يوليو ٢٠٢٦"
-DEFAULT_MONTH = "2026-07"          # month the dashboard opens on
+PERIOD_MONTH = 8
+PERIOD_LABEL_AR = "أغسطس ٢٠٢٦"
+DEFAULT_MONTH = "2026-08"          # month the dashboard opens on
 # AR snapshot date used for the receivable/overdue analysis. Updated to the
-# FINAL post-July customer balances (مديونية …-16_7_2026.pdf).
-AS_OF_DATE = "2026-07-16"
+# per-rep customer balances filed on 3 September 2026 («… 3-9.pdf»).
+AS_OF_DATE = "2026-09-03"
 # Invoices dated on/before this are classified OVERDUE when still unpaid.
-OVERDUE_CUTOFF = "2026-06-30"
+# One month before the snapshot date, matching NET_TERMS_DAYS.
+OVERDUE_CUTOFF = "2026-07-31"
 
 # Arabic month names (used to label the month selector).
 MONTHS_AR = {
@@ -101,11 +164,18 @@ BONUS_RULES: list[tuple[float, float]] = [
 RECON_TOL_ABS = 1.0
 RECON_TOL_PCT = 0.01
 
-# Printed grand totals on the collections / returns source PDFs. The parsed sums
-# must equal these EXACTLY (the build aborts otherwise) — the anti-fabrication
-# anchor for the collections/reconciliation drill-down.
-COLLECTIONS_PRINTED_TOTAL = 22_177_149.68
-RETURNS_PRINTED_TOTAL = 435_830.63
+# Printed grand total the dataset as a whole must reproduce. Each source file is
+# first checked against its OWN printed total (see SRC_COLLECTIONS / SRC_RETURNS
+# above; a mismatch aborts the build), then the superseded months are dropped, so
+# this figure is not the sum of the printed totals — it is what survives the
+# supersede rule. Computed by src/collections.py and asserted there, which keeps
+# it honest when a month file is added: a hand-maintained constant would silently
+# go stale.
+#
+# These two names remain for the payload/report fields that quote "the printed
+# total"; they are filled in at parse time.
+COLLECTIONS_PRINTED_TOTAL: float | None = None
+RETURNS_PRINTED_TOTAL: float | None = None
 
 # Payment-method classification for a receipt, by keyword in its البيان text.
 # Checked in this order; first hit wins; no hit -> "أخرى".

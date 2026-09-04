@@ -1508,107 +1508,140 @@ class App extends React.Component {
      Ignores the filter bar: both levels are precomputed aggregates and cannot
      honestly be re-derived for an arbitrary slice, as with the fin / forecast /
      quality sections. */
-  /* ---- المصروفات: كل شهر على حدة وكل بند على حدة --------------------------
-     The expenses behind the net profit in «الربحية», opened up. Everything here
-     is read from the same statements block that section uses, so the two can
-     never disagree — and everything the source does not carry is said in words
+  /* ---- المصروفات: أربع فئات رئيسية وكل فئة ببنودها -------------------------
+     The expenses behind the net profit in «الربحية», opened up on the four
+     categories the 2026 statements themselves declare. Everything here is read
+     from the same statements block that section uses, so the two can never
+     disagree — and everything the source does not carry is said in words
      rather than drawn as a zero. */
   repoExpenses(R,RD){
     if(!M.hasExp()) return [this.empty("قوائم الدخل غير محمّلة في هذا البناء.")];
     const C=this.state.C, T=this.state.T, st=M.S(), cov=(M.EXP().coverage)||{};
+    const meta=(M.EXP().categories)||{};
     const rows=(st.by_month||[]).slice().sort((a,b)=>a.period<b.period?-1:1);
-    const items=M.expItems(null);
-    const detail=cov.item_detail_periods||[];
+    const stmts=M.expStatements();
+    const stated=meta.stated_periods||[];
     const noStmt=cov.no_statement_periods||[];
-    const outside=(M.EXP().rows_outside_totals)||[];
     const aliases=(M.EXP().aliases)||[];
+    const decisions=meta.decisions||[];
+    const outside=(M.EXP().rows_outside_totals)||[];
+    const pick=this.state.expCat||null;
+    const items=M.expItems(null).filter(i=>!pick || i.category===pick);
+    const cats=M.expByCategory(null);
 
-    /* Every month that carries item detail becomes a column of the item table.
-       Derived from the data: a seventh detailed month adds its own column by
-       arriving. */
-    const monthCols=detail.map(m=>[M.arMonth(m), r=>{
-      const v=r.months[m]; return v==null?"—":R.fmt0(v); }]);
+    /* Statements, not months: the quarterly one is a column of its own. */
+    const perLabel=p=>p.indexOf("Q")>0 ? "الربع الأول 2026" : M.arMonth(p);
+    const cols=stmts.map(b=>[perLabel(b.period), r=>{
+      const v=r.months[b.period]; return v==null?"—":R.fmt0(v); }]);
 
     const banner=React.createElement("div",{key:"xb",style:{padding:"11px 12px",
         borderRadius:12,background:"rgba(139,92,246,.10)",
         border:"1px solid rgba(139,92,246,.30)",fontSize:11,lineHeight:1.85,
         color:"#ddd6fe"}},
-      ["المصروفات مذكورة لكل شهر من "+M.arMonth(st.totals.period_from)+" إلى "+
-       M.arMonth(st.totals.period_to)+". التفصيل بالبند متاح لـ"+
-       this.arMonths(detail.length)+
-       (detail.length?" ("+T.monthSpan(detail[0],detail[detail.length-1])+")":"")+
-       " فقط — وهي الأشهر التي وصلت بأوراق تفصيلية.",
+      ["الفئات الأربع ليست تصنيفًا أُضيف: من "+M.arMonth(stated[0]||"")+
+       " تُعلنها قوائم الدخل بنفسها، و"+this.arMonths(stated.length)+
+       " تُقرأ كما كتبها المحاسب بلا اجتهاد.",
        React.createElement("br",{key:"b1"}),
-       "باقي الأشهر تظهر بإجماليها موسومةً «إجمالي فقط»، ولا يُوزَّع إجماليها على "+
-       "بنود لم يذكرها المصدر."+
-       (noStmt.length?" وهناك "+noStmt.length+" شهرًا بلا قائمة دخل أصلًا "+
-        "— لا رقم لها هنا ولا صفر.":"")]);
+       "القوائم الأقدم تُعلن ثلاث مجموعات، لأن ما تسميه «إدارية وعمومية» "+
+       "انقسم لاحقًا إلى تشغيلية وإدارية أصغر. فكل بند فيها يقول كيف وصل إلى "+
+       "فئته، والقرارات معروضة أدناه.",
+       React.createElement("br",{key:"b2"}),
+       "التفصيل متاح لـ"+M.arDocs(cov.statements_with_item_detail||0)+" من "+
+       (cov.statements||0)+" تغطي "+this.arMonths(cov.months_with_item_detail||0)+
+       (noStmt.length?" · و"+noStmt.length+" شهرًا بلا قائمة دخل أصلًا — "+
+        "لا رقم لها هنا ولا صفر.":"")]);
 
     const monthRows=rows.map(r=>({
-      period:r.period,
-      admin:r.expenses?r.expenses.admin:null,
-      selling:r.expenses?r.expenses.selling:null,
-      financing:r.expenses?r.expenses.financing:null,
+      period:r.period, c:r.categories,
       total:r.total_expenses,
       pct:r.net_sales?r.total_expenses/r.net_sales*100:null,
       basis:r.basis==="allocated"?"موزّع من قائمة الربع"
             :(r.has_item_detail?"مقيس · بتفصيل بالبند":"مقيس · إجمالي فقط")}));
-
     const money=v=>v==null?"—":R.fmt0(v);
+    const cell=c=>r=>r.c?money(r.c[c]||0):"—";
+
+    /* One card per main category, then its own lines. This is the request. */
+    const catCards=cats.map(g=>this.card(g.label,
+      this.pagedList("xc"+g.category, g.items,[
+        ["البند",r=>r.label],
+        ["المبلغ",r=>R.fmt0(r.total)],
+        ["حصته من الفئة",r=>r.share_of_cat==null?"—":r.share_of_cat.toFixed(1)+"%"],
+        ["عدد القوائم",r=>r.n_months],
+        ["متوسط لكل قائمة",r=>r.avg==null?"—":R.fmt0(r.avg)],
+        ["أساس الفئة",r=>M.BASIS_AR[r.worst]||r.worst],
+        ["كما في القائمة",r=>r.variants.length?r.variants.join(" · "):"—"],
+        ["ملاحظة",r=>r.note||"—"]]),
+      {k:"xc"+g.category, sub:R.fmtEGPk(g.total)+" · "+g.items.length+" بندًا"}));
 
     return [
       banner,
       this.kpiGridRepo(M.expKpis(R)),
 
-      this.chartCard("المصروفات شهريًا حسب المجموعة",M.expStack(C),
+      this.chartCard("المصروفات شهريًا حسب الفئة",M.expStack(C),
         {k:"xg",h:C.H.tall,
          sub:"الرمادي: شهور بإجمالي بلا تفصيل"}),
+
+      this.card("الفئات الأربع",
+        this.barsH(cats.map(g=>[g.label.replace("مصروفات ",""),g.total,
+                                M.CAT_COL[g.category]]),R.fmtEGPk),
+        {k:"xcat",sub:"مجموع "+M.arDocs(cov.statements_with_item_detail||0)}),
+    ].concat(catCards).concat([
 
       this.card("كل شهر على حدة",this.pagedList("xm",monthRows,[
         ["الشهر",r=>M.arMonth(r.period)],
         ["إجمالي المصروفات",r=>money(r.total)],
         ["نسبتها من صافي المبيعات",r=>r.pct==null?"—":r.pct.toFixed(1)+"%"],
-        ["الأساس",r=>r.basis],
-        ["إدارية وعمومية",r=>money(r.admin)],
-        ["بيعية وتسويقية",r=>money(r.selling)],
-        ["تمويلية",r=>money(r.financing)]]),
-        {k:"xm",sub:rows.length+" شهرًا — اضغط لتفصيل المجموعات"}),
+        ["الأساس",r=>r.basis]].concat(
+          M.CAT_ORDER().map(c=>[M.CAT_AR(c), cell(c)]))),
+        {k:"xm",sub:rows.length+" شهرًا — اضغط لتفصيل الفئات"}),
+
+      this.pickRow("xf",[[null,"كل الفئات"]].concat(
+          M.CAT_ORDER().map(c=>[c,M.CAT_AR(c).replace("مصروفات ","")])),
+        pick,v=>this.setState({expCat:v,pages:{}})),
 
       this.card("كل بند على حدة",this.pagedList("xi",items,[
         ["البند",r=>r.label],
         ["الإجمالي",r=>R.fmt0(r.total)],
-        ["المجموعة",r=>M.GROUP_AR[r.group]||r.group],
-        ["متوسط شهري",r=>r.avg==null?"—":R.fmt0(r.avg)],
-        ["عدد الأشهر",r=>r.n_months],
-        ["حصته من المصروفات المفصَّلة",r=>r.share==null?"—":r.share.toFixed(1)+"%"]]
-        .concat(monthCols).concat([
+        ["الفئة",r=>M.CAT_AR(r.category)],
+        ["متوسط لكل قائمة",r=>r.avg==null?"—":R.fmt0(r.avg)],
+        ["عدد القوائم",r=>r.n_months],
+        ["حصته من المصروفات المفصَّلة",r=>r.share==null?"—":r.share.toFixed(1)+"%"],
+        ["أساس الفئة",r=>M.BASIS_AR[r.worst]||r.worst]]
+        .concat(cols).concat([
         ["الصيغ الأصلية",r=>r.variants.length?r.variants.join(" · "):"—"],
         ["ملاحظة",r=>r.note||"—"]])),
-        {k:"xi",sub:items.length+" بندًا عبر "+this.arMonths(detail.length)+
-          " — اضغط لعرض كل شهر على حدة"}),
+        {k:"xi",sub:items.length+" بندًا"+(pick?" في هذه الفئة":"")+
+          " — اضغط لعرض كل قائمة على حدة"}),
 
-      this.card("أكبر البنود",this.barsH(items.slice(0,12)
-          .map(r=>[r.label,r.total,M.GROUP_COL[r.group]||"#3b82f6"]),R.fmtEGPk),
-        {k:"xt",sub:"مجموع "+this.arMonths(detail.length)+" المفصَّلة"}),
+      this.card("قرارات تصنيف الفئات",
+        this.pagedList("xd",decisions,[
+          ["البند",r=>r.label],
+          ["الفئة",r=>M.CAT_AR(r.category)],
+          ["الأساس",r=>M.BASIS_AR[r.basis]||r.basis]]),
+        {k:"xd",sub:decisions.length+" قرارًا — يخصّ المجموعة الإدارية المدمجة وحدها"}),
 
       aliases.length?this.card("توحيد أسماء البنود",
         this.pagedList("xa",aliases,[
           ["الاسم كما في الملف",r=>r.label_raw],
           ["الاسم الموحّد",r=>r.label],
-          ["المجموعة",r=>M.GROUP_AR[r.group]||r.group]]),
+          ["مجموعة القائمة",r=>M.CAT_AR(r.group)]]),
         {k:"xa",sub:aliases.length+" صيغة — قرار بشري لا قياس"}):null,
 
       React.createElement("div",{key:"xn",style:{padding:"11px 12px",
           borderRadius:12,background:"rgba(255,255,255,.03)",
           border:"1px solid rgba(255,255,255,.08)",fontSize:11,lineHeight:1.9,
           color:"#94a3b8"}},
-        ["توحيد الأسماء اجتهاد لا قياس: القوائم مكتوبة بخط اليد، والبند الواحد "+
-         "يظهر بأكثر من صيغة، فجُمعت الصيغ تحت اسم واحد ليمكن تتبّعه شهرًا بشهر. "+
-         "الاسم الأصلي محفوظ مع كل سطر ومعروض في الجدول أعلاه، والبنود التي لا "+
-         "يتضح أنها الشيء نفسه تُركت بأسمائها الحرفية.",
+        ["ما لا تفعله هذه الشاشة: لا تقسّم بندًا لم تقسّمه القائمة. «ايجارات» "+
+         "في القوائم الأربعية بندان — تشغيلي وإداري — وفي القوائم الأقدم بند "+
+         "واحد يغطيهما، فيبقى حيث قُيّد وموسومًا بذلك بدل أن يُقسم بنسبة لم "+
+         "يقسها أحد.",
          React.createElement("br",{key:"n1"}),
-         "الاسم الموحّد لا يعبر مجموعتين: «مرتبات» الإدارية و«مرتبات» البيعية "+
-         "بندان مختلفان ويظلّان منفصلين."]),
+         "وتوحيد الأسماء اجتهاد كذلك: القوائم مكتوبة بخط اليد وملفات 2026 "+
+         "نصّها مفكَّك الحروف، فجُمعت الصيغ تحت اسم واحد ليمكن تتبّع البند عبر "+
+         "القوائم الإحدى عشرة. الاسم الأصلي محفوظ مع كل سطر.",
+         React.createElement("br",{key:"n2"}),
+         "والاسم الموحّد لا يعبر فئتين: «مرتبات» الإدارية و«مرتبات» البيعية "+
+         "و«مرتبات انتاج والمصنع» التشغيلية بنود مختلفة وتظل منفصلة."]),
 
       noStmt.length?this.card("ما لا يتوفّر",
         React.createElement("div",{style:{fontSize:11.5,lineHeight:1.95,
@@ -1619,14 +1652,15 @@ class App extends React.Component {
            React.createElement("br",{key:"a1"}),
            (cov.allocated_periods||[]).length?
              "وأشهر "+(cov.allocated_periods||[]).map(m=>M.arMonth(m)).join(" · ")+
-             " وصلت قائمةً واحدة للربع ووُزّعت بأوزان إيراد الفواتير: نسبها "+
-             "متطابقة بحكم الطريقة لا بحكم القياس.":null]),
+             " وصلت قائمةً واحدة للربع: بنودها معروضة عمودًا مستقلًا باسم "+
+             "«الربع الأول 2026» لأنها تصف ثلاثة أشهر معًا، ولا تُنسب لشهر "+
+             "بعينه.":null]),
         {k:"xna",approx:true}):null,
 
       outside.length?this.card("سطور خارج مجاميع المجموعات",
         this.pagedList("xo",outside,[
           ["البند",r=>r.label_raw],
-          ["الشهر",r=>M.arMonth(r.period)],
+          ["الشهر",r=>perLabel(r.period)],
           ["المبلغ",r=>R.fmt0(r.amount)]]),
         {k:"xo",approx:true,
          sub:outside.length+" سطرًا — مذكورة في الورقة ولم يجمعها أي مجموع"}):null,
@@ -1635,11 +1669,11 @@ class App extends React.Component {
           borderRadius:12,background:"rgba(245,158,11,.09)",
           border:"1px solid rgba(245,158,11,.26)",fontSize:11,lineHeight:1.9,
           color:"#fcd9a0"}},
-        "هذه السطور مكتوبة في أوراق الشهور لكن معادلة مجموع المجموعة لا تضمّها، "+
+        "هذه السطور مكتوبة في القوائم لكن معادلة مجموع المجموعة لا تضمّها، "+
         "فهي غير محتسبة في إجمالي المصروفات ولا في صافي الربح المعلن. تُعرض كما "+
         "هي ولا تُضاف: مجاميع المجموعات هي ما يطابق صافي الربح، وإضافتها هنا "+
         "كانت ستجعل الشاشة تخالف القائمة التي جاءت منها."):null,
-    ].filter(Boolean);
+    ]).filter(Boolean);
   }
 
   repoMargin(R,RD){
@@ -2227,47 +2261,68 @@ class App extends React.Component {
           col("هامش صافي %",null,r=>num(r.net_margin_pct))]});
     }
 
-    /* المصروفات: three sheets, and the alias sheet is not decoration. Once a
-       workbook is open on someone's laptop the merge is invisible unless the
-       original spellings travel with it, so the item sheet carries the variants
-       column and the third sheet is the map itself. */
+    /* المصروفات: four sheets, and neither the alias sheet nor the decisions
+       sheet is decoration. Once a workbook is open on someone's laptop the
+       reading is invisible unless it travels with the figures — so the item
+       sheet carries the original spellings and the basis of every category,
+       and two sheets carry the maps themselves. */
     if(M.hasExp()){
       const cov=(M.EXP().coverage)||{};
-      const detail=cov.item_detail_periods||[];
+      const stmts=M.expStatements();
+      const perLabel=p=>p.indexOf("Q")>0?"الربع الأول 2026":M.arMonth(p);
       const items=M.expItems(null);
-      const gAr=g=>M.GROUP_AR[g]||g;
+      const order=M.CAT_ORDER();
       out.push(
         {id:"x_month", label:"المصروفات الشهرية",
          rows:M.S().by_month||[], columns:[
           col("الشهر","period"),
           col("الأساس",null,r=>r.basis==="allocated"
               ?"موزّع تناسبيًا — تقديري"
-              :(r.has_item_detail?"مقيس · بتفصيل بالبند":"مقيس · إجمالي فقط")),
-          col("إدارية وعمومية",null,r=>r.expenses?num(r.expenses.admin):""),
-          col("بيعية وتسويقية",null,r=>r.expenses?num(r.expenses.selling):""),
-          col("تمويلية",null,r=>r.expenses?num(r.expenses.financing):""),
+              :(r.has_item_detail?"مقيس · بتفصيل بالبند":"مقيس · إجمالي فقط"))]
+          .concat(order.map(c=>col(M.CAT_AR(c),null,
+              r=>r.categories?num(r.categories[c]||0):"")))
+          .concat([
           col("إجمالي المصروفات",null,r=>num(r.total_expenses)),
           col("صافي المبيعات",null,r=>num(r.net_sales)),
           col("% من صافي المبيعات",null,
-              r=>r.net_sales?num(r.total_expenses/r.net_sales*100):"")]},
+              r=>r.net_sales?num(r.total_expenses/r.net_sales*100):"")])},
+        {id:"x_cat", label:"المصروفات حسب الفئة",
+         rows:M.expByCategory(null).reduce((a,g)=>a.concat(
+             g.items.map(i=>Object.assign({}, i, {_cat:g.label}))), []),
+         columns:[
+          col("الفئة","_cat"),
+          col("البند","label"),
+          col("المبلغ",null,r=>num(r.total)),
+          col("حصته من الفئة",null,
+              r=>r.share_of_cat==null?"":num(r.share_of_cat)),
+          col("عدد القوائم","n_months"),
+          col("أساس الفئة",null,r=>M.BASIS_AR[r.worst]||r.worst)]},
         {id:"x_item", label:"المصروفات لكل بند",
          rows:items, columns:[
           col("البند","label"),
-          col("المجموعة",null,r=>gAr(r.group)),
+          col("الفئة",null,r=>M.CAT_AR(r.category)),
+          col("أساس الفئة",null,r=>M.BASIS_AR[r.worst]||r.worst),
           col("الإجمالي",null,r=>num(r.total)),
-          col("عدد الأشهر","n_months"),
-          col("متوسط شهري",null,r=>r.avg==null?"":num(r.avg)),
+          col("عدد القوائم","n_months"),
+          col("متوسط لكل قائمة",null,r=>r.avg==null?"":num(r.avg)),
           col("% من المصروفات المفصَّلة",null,
               r=>r.share==null?"":num(r.share))]
-          .concat(detail.map(m=>col(M.arMonth(m),null,
-              r=>r.months[m]==null?"":num(r.months[m]))))
+          .concat(stmts.map(b=>col(perLabel(b.period),null,
+              r=>r.months[b.period]==null?"":num(r.months[b.period]))))
           .concat([col("الصيغ الأصلية",null,r=>r.variants.join(" · ")),
                    col("ملاحظة",null,r=>r.note||"")])},
-        {id:"x_alias", label:"مرادفات بنود المصروفات",
-         rows:(M.EXP().aliases)||[], columns:[
-          col("الاسم كما في الملف","label_raw"),
-          col("الاسم الموحّد","label"),
-          col("المجموعة",null,r=>gAr(r.group))]});
+        {id:"x_map", label:"قرارات الفئات ومرادفات البنود",
+         rows:(((M.EXP().categories||{}).decisions)||[])
+           .map(d=>({a:d.label, b:M.CAT_AR(d.category),
+                     c:M.BASIS_AR[d.basis]||d.basis, kind:"قرار فئة"}))
+           .concat(((M.EXP().aliases)||[]).map(x=>({
+              a:x.label_raw, b:x.label,
+              c:M.CAT_AR(x.group), kind:"مرادف اسم"}))),
+         columns:[
+          col("النوع","kind"),
+          col("البند / الاسم كما في الملف","a"),
+          col("الفئة / الاسم الموحّد","b"),
+          col("الأساس / مجموعة القائمة","c")]});
     }
 
     if(M.has()){

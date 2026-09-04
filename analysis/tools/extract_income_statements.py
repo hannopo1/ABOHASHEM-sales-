@@ -26,13 +26,37 @@ neither format is machine-friendly:
   mid-word (مرصوفات تش, مرصوفات بي); numbers detach from their labels; and in
   one document the group totals are emitted *after* the net-profit line.
 
-So this extractor reads from the PDFs only the four figures that are reliably
-label-adjacent and comma-formatted — net sales, cost of sales, gross profit and
-net profit — plus the percentage column where the document prints one. It does
-NOT try to parse the expense breakdown out of a PDF: every general rule tried
-against these five documents mis-read at least one of them, and a plausible
-wrong number is worse than an absent one. Total operating expenses is therefore
-carried as gross profit minus net profit, which is exact by construction.
+The four headline figures — net sales, cost of sales, gross profit, net profit —
+are read from the flat text, where they are reliably label-adjacent and
+comma-formatted, plus the percentage column where the document prints one.
+
+WHY THE EXPENSE BREAKDOWN IS NOW READ FROM THE PDFs TOO
+
+This extractor used to refuse to parse the expense items out of a PDF, on the
+grounds that every general rule tried against these five documents mis-read at
+least one, and a plausible wrong number is worse than an absent one. That
+refusal was aimed at the FLAT text, and it was right about the flat text: there
+the labels glue onto the figures (منظفات ومكافحة7870) and the reading order
+scrambles.
+
+Two things changed the answer, and neither is a softening of the standard:
+
+1. The page is read as POSITIONED WORDS (``page.get_text("words")``) instead of
+   a flattened stream. Every document turns out to be a clean table once the
+   coordinates are kept: the group header sits in its own left-hand column, the
+   item label in the middle, the amount in one column, the percentage on the
+   right. Nothing has to be inferred from reading order.
+
+2. The documents state three things that must agree, so a misread figure cannot
+   pass quietly: each group's own printed total, the sum of the groups against
+   gross profit minus net profit, and each item's printed percentage of net
+   sales. A month that fails any of them ships with its totals and no items —
+   the same fallback as before, now reached by measurement rather than by
+   blanket policy.
+
+Total operating expenses is still carried as gross profit minus net profit,
+which is exact by construction, and remains the figure everything downstream
+adds up to.
 
 Every observation must pass its identities or the run aborts. A statement that
 does not reconcile is a statement we do not understand, and guessing which
@@ -405,6 +429,295 @@ def after(stream: str, pattern: str, period: str, what: str):
     return value, pct
 
 
+# ------------------------------------------------- pdf expense line items ----
+
+# The four expense categories the 2026 statements use, in the order the
+# documents print them. Not a taxonomy of ours: from May 2026 the statements
+# name these groups themselves, and the earlier ones print the first three.
+PDF_CATEGORY_ORDER = ["operating", "admin", "selling", "financing"]
+
+# A header word is one of these, sitting in the left-hand column. The spelling
+# is mangled — مصروفات renders as مرصوفات — so both are accepted.
+_HEAD_WORDS = ("مرصوفات", "مصروفات", "مصاريف")
+
+# What a header's own suffix says about which group it opens. June prints three
+# bare «مرصوفات» headers with no suffix at all, so this resolves what it can and
+# position fills the rest.
+_HEAD_HINTS = [("تشغيل", "operating"), ("تش", "operating"),
+               ("إدار", "admin"), ("ادار", "admin"), ("إد", "admin"),
+               ("بيع", "selling"), ("بي", "selling"),
+               ("تمويل", "financing"), ("تمو", "financing"), ("تم", "financing")]
+
+# A word that can only belong to one group, used to check the assignment above
+# rather than trust it. A financing group with no loan in it, or a selling group
+# with no vehicle and no commission, means the headers were read in the wrong
+# order and every item is in the wrong bucket.
+_GROUP_MARKERS = {"selling": ("عربية", "عمولة", "المبيعات"),
+                  "financing": ("قرض",),
+                  "operating": ("تصنيع", "عمالة", "مرتبات"),
+                  "admin": ("محاسبة", "مرتبات", "ايجارات", "محا")}
+
+_STOP = ("صافى", "صافن", "صافي")          # net profit closes the last group
+_PCT_TOK = re.compile(r"^\d+(?:\.\d+)?%$")
+_NUM_TOK = re.compile(r"^-?\d[\d,]*(?:\.\d+)?$")
+
+# Rows sit in horizontal bands. A band is this many points tall: one printed
+# row splits into two bands in several documents (July's مرتبات is 3pt above
+# its own amount), and the closest two distinct rows ever come is 12pt.
+BAND = 7.0
+
+# A group header is set in its own column, far to the left of the item labels.
+# The gap is derived per document rather than fixed: the five documents use
+# different page layouts (items begin near x=200 in one and near x=420 in
+# another), and a fixed threshold read «مصاريف المكتب» and «مصاريف قرض
+# المبادرة» as group headers — item rows that merely start with the same word.
+HEAD_GAP = 60.0
+
+
+def _bands(doc):
+    """Every row of every page as (page, y, [(x, word), …]) sorted right→left.
+
+    Right to left because the documents are RTL: the label reads from the
+    rightmost word, and the amount column is further right still.
+    """
+    out = []
+    for pi, page in enumerate(doc):
+        rows = {}
+        for x0, y0, _x1, _y1, text, *_rest in page.get_text("words"):
+            key = next((k for k in rows if abs(k - y0) <= BAND), y0)
+            rows.setdefault(key, []).append((x0, text))
+        for y in sorted(rows):
+            out.append((pi, y, sorted(rows[y], key=lambda z: -z[0])))
+    return out
+
+
+# A number this close to the label's own words is part of the name, not a
+# figure: «عربية 1639» and «كباس تير يد 3782» are vehicles, and dropping their
+# digits would merge four different vehicles into one item called «عربية». The
+# page furniture these documents also carry — a stray 0 printed far to the left
+# of the label — sits 75 points away or more, so the two never overlap.
+LABEL_NUM_GAP = 50.0
+
+
+def _split(row):
+    """(label words, figures, percentages) for one band.
+
+    A percentage is neither. A number inside the label's own span is a label
+    word; the rest are figures.
+    """
+    words = [(x, t) for x, t in row if not _PCT_TOK.match(t)]
+    pcts = [float(t[:-1]) for _x, t in row if _PCT_TOK.match(t)]
+    text = [(x, t) for x, t in words if not _NUM_TOK.match(t)]
+    digits = [(x, t) for x, t in words if _NUM_TOK.match(t)]
+    if not digits:
+        return text, [], pcts
+    # The amount is the rightmost figure; every other number is judged by how
+    # close it sits to the name.
+    amount = max(digits, key=lambda z: z[0])
+    rest = [d for d in digits if d is not amount]
+    # The label reads right to left, so a numeric suffix sits just LEFT of its
+    # words — inside the name's own span, never out beyond its right edge. That
+    # right-hand bound is what keeps a group total (printed far to the right of
+    # a header that is a single word) from being read as part of the header.
+    if text:
+        lo = min(x for x, _t in text) - LABEL_NUM_GAP
+        hi = max(x for x, _t in text)
+    else:
+        lo = hi = None
+    part = [] if lo is None else [d for d in rest if lo <= d[0] < hi]
+    labels = sorted(text + part, key=lambda z: -z[0])
+    nums = [(x, float(t.replace(",", "")))
+            for x, t in [amount] + [d for d in rest if d not in part]]
+    return labels, nums, pcts
+
+
+def _amount(nums):
+    """The figure in the amount column: the rightmost number on the row.
+
+    Not "any number on the row" — June and July print a stray 0 inside the label
+    band of the ايجارات row, and April prints one on تصنيع لدى الغير.
+    """
+    return max(nums, key=lambda z: z[0])[1] if nums else None
+
+
+def _subsets(rows, most):
+    """Every combination of up to `most` rows, smallest first.
+
+    Used only to identify rows a group total does not count, and only when the
+    answer is unique — see the reconciliation below.
+    """
+    import itertools
+    out = []
+    for n in range(1, most + 1):
+        out.extend(itertools.combinations(rows, n))
+    return out
+
+
+def pdf_expense_items(doc, period, net_sales, total_expenses):
+    """Line items, grouped, out of one 2026 income-statement PDF.
+
+    Returns (categories, items, outside) or (None, [], []) when the document
+    does not reconcile — in which case the caller ships the month with its
+    totals and no breakdown, exactly as an unreadable workbook sheet would.
+
+    WHY THIS IS SAFE TO READ AND THE FLAT TEXT WAS NOT
+
+    The refusal this replaces was aimed at the flattened text layer, where the
+    Arabic decomposes and labels glue onto figures (منظفات ومكافحة7870). Read as
+    positioned words the same page is a clean table, and — the part that
+    actually settles it — the document states three things that must agree:
+    each group's printed total, the sum of the groups against gross profit minus
+    net profit, and each item's own printed percentage of net sales. A misread
+    figure fails at least one. That is the difference between a number that is
+    probably right and one that cannot be wrong without being caught.
+    """
+    rows = _bands(doc)
+
+    # Where this document sets its item labels, measured from the document
+    # itself: the first (rightmost) word of a row that carries a figure.
+    starts = []
+    for _pi, _y, row in rows:
+        labels, nums, _p = _split(row)
+        if labels and nums:
+            starts.append(max(x for x, _t in labels))
+    if not starts:
+        return None, [], []
+    starts.sort()
+    head_x = starts[len(starts) // 2] - HEAD_GAP
+
+    # Pass 1: locate the header rows and read what their suffix says.
+    heads = []
+    for i, (_pi, _y, row) in enumerate(rows):
+        labels, _nums, _pcts = _split(row)
+        if not labels:
+            continue
+        text = " ".join(t for _x, t in labels)
+        if max(x for x, _t in labels) < head_x and \
+           any(w in text for w in _HEAD_WORDS):
+            cat = next((c for needle, c in _HEAD_HINTS if needle in text), None)
+            heads.append({"i": i, "text": text, "cat": cat})
+    if not heads:
+        return None, [], []
+
+    # Fill the unresolved ones by position: the documents print the groups in a
+    # fixed order, so a bare «مرصوفات» is whichever category has not been used.
+    taken = {h["cat"] for h in heads if h["cat"]}
+    spare = [c for c in PDF_CATEGORY_ORDER if c not in taken]
+    for h in heads:
+        if h["cat"] is None:
+            if not spare:
+                return None, [], []
+            h["cat"] = spare.pop(0)
+    if len({h["cat"] for h in heads}) != len(heads):
+        return None, [], []
+
+    # Pass 2: the rows under each header, up to the next header or net profit.
+    stop = len(rows)
+    for i, (_pi, _y, row) in enumerate(rows):
+        if i > heads[0]["i"] and any(w in t for _x, t in row for w in _STOP):
+            stop = i
+            break
+    bounds = [(h, heads[k + 1]["i"] if k + 1 < len(heads) else stop)
+              for k, h in enumerate(heads)]
+
+    items, printed = [], {}
+    for h, end in bounds:
+        labels, nums, _p = _split(rows[h["i"]][2])
+        # The header's own total, when the document prints it beside the header.
+        # April prints all three on pages of their own instead; those are
+        # matched by value further down.
+        printed[h["cat"]] = _amount([n for n in nums if n[0] >= head_x])
+        carry = []
+        for i in range(h["i"] + 1, end):
+            _pi, _y, row = rows[i]
+            labels, nums, pcts = _split(row)
+            amount = _amount(nums)
+            if amount is None:
+                # A label with no figure of its own continues the row below it:
+                # «الفاسير» and «فتيس» and «عىل» are printed on their own band.
+                carry = labels + carry
+                continue
+            label = " ".join(t for _x, t in sorted(labels + carry,
+                                                   key=lambda z: -z[0]))
+            carry = []
+            if not label and amount == 0:
+                continue                  # an empty row, not a nameless figure
+            items.append({"group": h["cat"], "row": i,
+                          "label_raw": re.sub(r"\s+", " ", label).strip(),
+                          "amount": float(amount),
+                          "stated_pct": pcts[0] if pcts else None})
+
+    # The assignment must agree with what the items actually are.
+    for cat, markers in _GROUP_MARKERS.items():
+        mine = [it for it in items if it["group"] == cat]
+        if mine and not any(m in it["label_raw"] for it in mine
+                            for m in markers):
+            die(f"{period}: the group read as {cat} contains none of "
+                f"{markers} — the headers were matched in the wrong order")
+
+    # April prints its three group totals on pages of their own, after the
+    # net-profit line and with no label beside them. They are still the
+    # document's own totals, so they are read where it put them and matched by
+    # VALUE rather than by position — position would be a guess, value is not.
+    orphans = [_amount(nums) for i, (_pi, _y, row) in enumerate(rows)
+               if i >= stop
+               for labels, nums, _p in [_split(row)] if nums and not labels]
+
+    # Reconcile each group against its own printed total. A shortfall that is
+    # exactly the value of some rows means those rows are printed in the sheet
+    # and counted by nothing — the same finding the 2025 workbook produces ten
+    # times over. They are reported and never folded in. The subset must be the
+    # ONLY one that fits, or the read is not understood and the month ships
+    # with its totals alone.
+    outside = []
+    for cat in sorted({it["group"] for it in items}):
+        mine = [it for it in items if it["group"] == cat]
+        got = sum(it["amount"] for it in mine)
+        want = printed.get(cat)
+        wants = [want] if want is not None else orphans
+        if any(close(got, w) for w in wants):
+            continue
+        # Only rows that carry a figure can explain a shortfall: a zero row
+        # removed changes nothing, so including it would make every answer
+        # ambiguous — {20,600} and {20,600 + a zero} both "fit" and the read
+        # would be rejected for a difference that is not one.
+        pool = [it for it in mine if it["amount"]]
+        fits = [drop for drop in _subsets(pool, 3)
+                if any(close(got - sum(d["amount"] for d in drop), w)
+                       for w in wants)]
+        if len(fits) != 1:
+            return None, [], []
+        for d in fits[0]:
+            outside.append({"row": d["row"], "label_raw": d["label_raw"],
+                            "amount": d["amount"]})
+        items = [it for it in items if it not in fits[0]]
+
+    groups = {}
+    for it in items:
+        groups[it["group"]] = groups.get(it["group"], 0.0) + it["amount"]
+    for cat, total in groups.items():
+        if printed.get(cat) is not None and not close(printed[cat], total):
+            return None, [], []
+    # The check that ties the whole reading to the statement's own bottom line.
+    if not close(sum(groups.values()), total_expenses):
+        return None, [], []
+
+    # The third check, and the only one the source gives per line: each item's
+    # printed share of net sales.
+    if net_sales:
+        for it in items:
+            if it["stated_pct"] is None:
+                continue
+            got = it["amount"] / net_sales * 100
+            if abs(got - it["stated_pct"]) > 0.02:
+                die(f"{period}: «{it['label_raw']}» reads {it['amount']:,.2f} "
+                    f"= {got:.2f}% of net sales, but the document prints "
+                    f"{it['stated_pct']:.2f}%")
+
+    for it in items:
+        it.pop("stated_pct", None)
+    return groups, items, outside
+
 def parse_pdf(repo, ref, path, period, months):
     import pymupdf
     raw = git_show(repo, ref, path)
@@ -418,15 +731,19 @@ def parse_pdf(repo, ref, path, period, months):
     net_profit, _ = after(stream, r"صاف[ىني]\s*الرب\s*ح|صاف[ىني]\s*الربح",
                           period, "net profit")
 
+    total_expenses = gross - net_profit
+    groups, items, outside = pdf_expense_items(doc, period, net_sales,
+                                               total_expenses)
+
     return dict(period=period, months=months, basis="measured",
                 source=path, sheet=None,
                 net_sales=net_sales, cogs=cogs, gross_profit=gross,
-                # The expense breakdown is deliberately not parsed out of the
-                # PDFs; see the module docstring. Total operating expenses is
-                # exact by construction.
-                expenses=None, expense_items=[],
-                expense_rows_outside_totals=[],
-                total_expenses=gross - net_profit,
+                # None, not {}, when the document did not reconcile: the month
+                # then states one total and says so, rather than showing four
+                # zeroes for groups nobody read.
+                expenses=groups, expense_items=items,
+                expense_rows_outside_totals=outside,
+                total_expenses=total_expenses,
                 net_profit=net_profit, net_profit_source="stated",
                 stated_cogs_pct=cogs_pct, stated_gross_margin_pct=gross_pct)
 

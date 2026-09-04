@@ -154,8 +154,11 @@ def run(path: Path) -> int:
         if not exp:
             problems.append("«المصروفات» section is not in the registry")
         else:
-            for want in ["يوليو 2025", "مرتبات", "ايجارات",
-                         "كل بند على حدة", "توحيد أسماء البنود"]:
+            for want in ["يوليو 2025", "يوليو 2026", "مرتبات", "ايجارات",
+                         "كل بند على حدة", "توحيد أسماء البنود",
+                         "قرارات تصنيف الفئات",
+                         "مصروفات تشغيلية", "مصروفات إدارية وعمومية",
+                         "مصروفات بيعية وتسويقية", "مصروفات بنكية وتمويلية"]:
                 if want not in exp:
                     problems.append(f"«المصروفات» is missing «{want}»")
             # August 2026 filed no income statement. It may be NAMED as absent
@@ -165,11 +168,18 @@ def run(path: Path) -> int:
             months = page.evaluate("""() => {
                 const S = (window.DASH_MARGIN||{}).statements;
                 if(!S) return null;
+                const X = S.expenses || {};
+                const cats = (S.by_month||[]).filter(r => r.categories);
                 return {periods: (S.by_month||[]).map(r => r.period),
                         detail: (S.by_month||[]).filter(r => r.has_item_detail)
                                                 .map(r => r.period),
                         items: (S.by_month||[]).reduce(
                                   (a,r) => a + (r.expense_items||[]).length, 0),
+                        statements: (X.by_statement||[]).length,
+                        stated: ((X.categories||{}).stated_periods||[]).length,
+                        catsOff: cats.filter(r => Math.abs(
+                            Object.values(r.categories).reduce((a,v)=>a+v,0)
+                            - r.total_expenses) > 1).length,
                         allocatedWithItems: (S.by_month||[])
                           .filter(r => r.basis === "allocated"
                                     && (r.expense_items||[]).length).length};
@@ -181,9 +191,20 @@ def run(path: Path) -> int:
                 if "2026-08" in months["periods"]:
                     problems.append("2026-08 has no income statement but "
                                     "appears in the expense series")
-                if len(months["detail"]) < 6:
-                    problems.append("fewer than six months carry expense line "
+                if len(months["detail"]) < 10:
+                    problems.append("fewer than ten months carry expense line "
                                     f"items: {months['detail']}")
+                if months["statements"] < 11:
+                    problems.append("the per-statement detail lost a statement: "
+                                    f"{months['statements']}")
+                if not months["stated"]:
+                    problems.append("no statement is marked as declaring the "
+                                    "four categories itself")
+                # The four categories are a re-bucketing of one total, so on
+                # every month they must still add up to it.
+                if months["catsOff"]:
+                    problems.append(f"{months['catsOff']} month(s) whose four "
+                                    "categories do not sum to total expenses")
                 if months["allocatedWithItems"]:
                     problems.append("an allocated month carries line items — "
                                     "allocation divides magnitudes, it does not "

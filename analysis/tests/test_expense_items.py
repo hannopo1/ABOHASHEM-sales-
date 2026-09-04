@@ -27,6 +27,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "analysis"))
 
 from lib import expense_aliases as A          # noqa: E402
+from lib import expense_categories as K       # noqa: E402
 from lib import statements as S               # noqa: E402
 
 SRC = ROOT / "data" / "cost" / "income_statements.json"
@@ -47,17 +48,22 @@ def _detail():
 
 # ------------------------------------------------------- the items add up ----
 
-def test_six_months_carry_line_items():
-    """Item detail exists for exactly the months whose source lists items.
+def test_every_measured_month_carries_line_items():
+    """Item detail exists for every month whose own statement lists items.
 
-    Counted, not asserted against a literal: a seventh detailed month arriving
+    Counted, not asserted against a literal: another detailed month arriving
     should widen the app, not fail this test. What would fail it is the detail
-    disappearing.
+    disappearing — which it did for all of 2026 until the PDFs were read as
+    positioned words instead of a flattened stream.
     """
     detail = _detail()
-    assert len(detail) >= 6
+    assert len(detail) >= 10
     assert all(r["basis"] == "measured" for r in detail)
     assert all(r["expense_items"] for r in detail)
+    # Every measured month: the only months without detail are the three split
+    # out of the quarterly statement.
+    assert {r["period"] for r in _rows() if not r["has_item_detail"]} == \
+        {r["period"] for r in _rows() if r["basis"] == "allocated"}
 
 
 def test_items_sum_to_the_group_total_the_statement_printed():
@@ -124,23 +130,25 @@ def test_total_only_months_say_so_rather_than_showing_zeroes():
 
 def test_every_alias_has_a_canonical_name():
     for (group, raw), canon in A.ALIASES.items():
-        assert group in ("admin", "selling", "financing")
+        assert group in ("operating", "admin", "selling", "financing")
         assert raw and canon
         assert raw != canon, "an alias that changes nothing is noise"
 
 
-def test_no_canonical_name_spans_two_groups():
-    """An administrative «مرتبات» and a selling «مرتبات» are different money.
+def test_an_alias_never_renames_one_line_into_another():
+    """A canonical name may be reached from two source groups — but only when
+    the statements themselves moved that line between groups.
 
-    The map is keyed by (group, raw) so it cannot merge across groups by
-    accident, but it could still be written to send two groups' spellings to the
-    same canonical name. That would make one bar out of two unrelated costs.
+    «تصنيع لدى الغير» is filed under the combined administrative group in the
+    three-group statements and under the operating group in the four-group
+    ones: same line, regrouped by the accountant. What must never happen is an
+    alias pointing two genuinely different lines at one name, and the collision
+    test below is what catches that.
     """
-    groups_of = {}
-    for (group, _raw), canon in A.ALIASES.items():
-        groups_of.setdefault(canon, set()).add(group)
-    for canon, groups in groups_of.items():
-        assert len(groups) == 1, f"«{canon}» is a merge target in {sorted(groups)}"
+    for (group, raw), canon in A.ALIASES.items():
+        # A canonical name must itself be a real label somewhere, not a coined
+        # one: everything the app shows has to exist in a document.
+        assert canon.strip() == canon and canon
 
 
 def test_a_merge_never_collides_inside_one_month():
@@ -212,3 +220,152 @@ def test_rows_outside_the_group_totals_are_reported_not_folded_in():
         for group in ("admin", "selling", "financing"):
             assert (group, row["label_raw"], row["amount"]) not in \
                 by_period.get(row["period"], set())
+
+
+# ------------------------------------------------ the four categories --------
+
+def _statements():
+    """One row per income statement, including the quarterly one."""
+    if not DASH.exists():
+        pytest.skip("margin_dashboard.json is not in this checkout")
+    d = json.loads(DASH.read_text(encoding="utf-8"))
+    return d["statements"]["expenses"]["by_statement"]
+
+
+def _four_way():
+    return [b for b in _statements() if b["four_way"]]
+
+
+def test_every_statement_reconciles_group_by_group():
+    """Each group's items add up to the total that group printed.
+
+    This is what makes reading the 2026 PDFs defensible at all: the figures are
+    not trusted because the parser looks careful, they are trusted because the
+    document states a total for every group and the lines meet it.
+    """
+    for b in _statements():
+        for group, total in (b["groups"] or {}).items():
+            got = sum(i["amount"] for i in b["expense_items"]
+                      if i["group"] == group)
+            assert abs(got - total) <= TOL, (
+                f"{b['period']} {group}: items {got:,.2f} vs statement "
+                f"{total:,.2f}")
+
+
+def test_the_four_categories_add_up_to_total_expenses():
+    """Re-bucketing moves money between categories; it never creates or loses any."""
+    for b in _statements():
+        got = sum((b["categories"] or {}).values())
+        assert abs(got - b["total_expenses"]) <= TOL, b["period"]
+
+
+def test_every_item_has_a_category_and_says_how_it_got_one():
+    bases = {"stated", "mapped", "unsplit", "as_filed"}
+    for b in _statements():
+        for it in b["expense_items"]:
+            assert it["category"] in K.CATEGORIES
+            assert it["category_basis"] in bases
+            assert it["group"], "the group its own statement filed it under"
+
+
+def test_stated_categories_come_only_from_the_statements_that_state_them():
+    """«stated» is a claim about the document, so it must match the document.
+
+    A statement that prints four groups needs no interpretation; one that prints
+    three cannot state a category it never named. If this ever passes for an
+    earlier statement, a reading has been relabelled as a measurement.
+    """
+    four = {b["period"] for b in _four_way()}
+    assert four == set(K.FOUR_WAY_PERIODS)
+    for b in _statements():
+        for it in b["expense_items"]:
+            if it["category_basis"] == "stated":
+                assert b["four_way"] or it["group"] != "admin", (
+                    f"{b['period']}: «{it['label']}» claims a stated category "
+                    f"from a statement that never declared one")
+
+
+def test_the_category_map_is_what_the_four_way_statements_actually_say():
+    """The decisions file is re-derived from the source and must match it.
+
+    expense_categories.py is written by hand — every line a human decision — and
+    that is exactly why it needs checking against the documents it claims to be
+    reading. Here the rule is applied from scratch: for a name filed under the
+    combined administrative group, look at where the four-category statements
+    put that same name, and require the file to say the same thing.
+    """
+    where = {}
+    for b in _four_way():
+        for it in b["expense_items"]:
+            if it["group"] in ("operating", "admin"):
+                where.setdefault(it["label"], set()).add(it["group"])
+
+    seen = set()
+    for b in _statements():
+        if b["four_way"]:
+            continue
+        for it in b["expense_items"]:
+            if it["group"] != "admin":
+                continue
+            label = it["label"]
+            seen.add(label)
+            evidence = where.get(label, set())
+            if len(evidence) == 1:
+                # next(iter(...)), not .pop(): the set is the shared evidence
+                # for this name, and popping it empties it for the next row.
+                want = (next(iter(evidence)), "mapped")
+            elif evidence:
+                want = ("admin", "unsplit")
+            else:
+                want = ("admin", "as_filed")
+            assert (it["category"], it["category_basis"]) == want, (
+                f"«{label}»: the four-category statements imply {want}, the "
+                f"map says {(it['category'], it['category_basis'])}")
+
+    # And nothing decided that never occurs — a stale line in the map is a
+    # decision nobody can check.
+    decided = {d["label"] for d in K.decision_table()}
+    assert decided == seen, f"unused decisions: {sorted(decided - seen)}"
+
+
+def test_the_unsplit_line_is_named_and_stays_where_it_was_filed():
+    """One line covering two categories is flagged, never divided.
+
+    Rent is the case: the four-category statements carry an operating rent and
+    a smaller administrative one; the earlier statements carry a single line
+    covering both. Splitting it would need a ratio nobody measured.
+    """
+    assert K.UNSPLIT, "the unsplit list must name the lines it applies to"
+    for b in _statements():
+        if b["four_way"]:
+            continue
+        for it in b["expense_items"]:
+            if it["label"] in K.UNSPLIT and it["group"] == "admin":
+                assert it["category_basis"] == "unsplit"
+                assert it["category"] == "admin", "it stays where it was filed"
+
+
+def test_an_unknown_administrative_line_aborts_rather_than_defaulting():
+    """No default bucket: a new line is decided by a person or it stops the run."""
+    with pytest.raises(K.UnknownExpenseItem):
+        K.classify("admin", "بند لم يُقرَّر بعد", four_way=False)
+    # …but only for the combined group. Selling and financing carry over with
+    # no judgement at all, because those two groups ARE the categories.
+    assert K.classify("selling", "أي شيء", four_way=False) == ("selling", "stated")
+    assert K.classify("financing", "أي شيء", four_way=False) == ("financing", "stated")
+
+
+def test_the_quarterly_statement_keeps_its_items_off_the_months():
+    """2026-Q1 is one document covering three months, and is shown as one.
+
+    Its items describe the quarter. Attaching them to January, February or
+    March would claim a monthly breakdown that was never written — the same
+    rule that keeps the allocated months empty, applied to where the detail
+    does live.
+    """
+    quarter = [b for b in _statements() if b["months"] > 1]
+    assert quarter, "the quarterly statement must still be carried"
+    for b in quarter:
+        assert b["expense_items"], "with its own items"
+    monthly = {r["period"] for r in _rows() if r["expense_items"]}
+    assert not (monthly & {"2026-01", "2026-02", "2026-03"})

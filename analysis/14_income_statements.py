@@ -115,6 +115,26 @@ def expense_block(rows, obs, weights):
     reaches (coverage, counted from the data rather than written down), and the
     rows the sheets contain but no group total counted.
     """
+    # One row per STATEMENT, not per month. 2026-Q1 arrived as a single
+    # quarterly document, so its line items describe three months at once and
+    # belong to the quarter — attaching them to January, February or March
+    # would claim a monthly breakdown the accountant never wrote.
+    by_statement = []
+    for o in sorted(obs, key=lambda o: o["period"]):
+        items = S.expense_items(o)
+        by_statement.append({
+            "period": o["period"], "months": o["months"],
+            "source": o["source"],
+            "net_sales": S.r2(o["net_sales"]),
+            "total_expenses": S.r2(o["total_expenses"]),
+            "groups": o.get("expenses"),
+            "categories": S.category_totals(items),
+            # Said by the document itself: a statement that names an operating
+            # group is one that declared all four categories.
+            "four_way": "operating" in (o.get("expenses") or {}),
+            "expense_items": items,
+        })
+
     detail = [r["period"] for r in rows if r["has_item_detail"]]
     # A month that invoiced but filed no statement is absent, not zero. It is
     # named here so the app can say so instead of drawing a gap.
@@ -126,9 +146,22 @@ def expense_block(rows, obs, weights):
         for it in o.get("expense_rows_outside_totals") or []:
             outside.append(dict(it, period=o["period"]))
 
+    stated = [b["period"] for b in by_statement if b["four_way"]]
     return {
         "aliases": S.aliases.alias_table(),
+        "categories": {
+            "order": S.categories.CATEGORIES,
+            "labels": S.categories.CATEGORY_LABELS,
+            # The three statements that print the four groups themselves. Every
+            # other row's category was read, not stated, and each item says so.
+            "stated_periods": stated,
+            "decisions": S.categories.decision_table(),
+        },
+        "by_statement": by_statement,
         "coverage": {
+            "statements": len(by_statement),
+            "statements_with_item_detail": sum(
+                1 for b in by_statement if b["expense_items"]),
             "months": len(rows),
             "months_with_item_detail": len(detail),
             "item_detail_periods": detail,

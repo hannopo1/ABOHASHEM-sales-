@@ -66,9 +66,10 @@ ALIASES = {
     ("selling", "عمولة البيع +بدلات والاكراميات"):
         "عمولة البيع +بدلات السفر والاكراميات",
 
-    # «زيت» carries a figure only in July and December, and December spells out
-    # what it covers. Same line, so one item.
-    ("selling", "زيت + فلاتر للعربيات"): "زيت",
+    # «زيت» carries a figure only in July and December of 2025, and December
+    # spells out what it covers — as do all five 2026 statements. The fuller
+    # name is the canonical one; the bare «زيت» folds into it.
+    ("selling", "زيت"): "زيت + فلاتر للعربيات",
 
     # NOT merged: «ايجارات» (premises) and «ايجار عربية 1842» (a vehicle) are
     # different rentals even though their months happen to complement.
@@ -82,6 +83,77 @@ ALIASES = {
         "مصاريف قرض السيارة والحساب",
     # Spelling only: مصاريق -> مصاريف.
     ("financing", "مصاريق قرض السيارة والحساب"): "مصاريف قرض السيارة والحساب",
+
+    # ======================================================================
+    # THE 2026 STATEMENTS — the same items, spelled by a broken text layer
+    # ======================================================================
+    # The 2026 documents are PDFs whose Arabic decomposes on extraction: صروف
+    # for صرف, لا printed as ال, ي as ى, ت as ي. The words below are what the
+    # page actually yields, and each is mapped to the name the 2025 workbook
+    # already uses so one item can be followed across the whole series.
+    #
+    # No general de-mangler is written for this. A substitution table that
+    # "fixes" Arabic would be right today and silently wrong on the next
+    # document; every spelling here is one line someone read.
+
+    # --- operating (a group only the 2026 statements have) -----------------
+    ("operating", "تصنيع لدى الغير البانيه"): "تصنيع لدى الغير",
+    ("operating", "فواتير كهرباء"): "فواتير الكهرباء",
+    ("operating", "صيانات وقطه غيار"): "صيانات وقطع غيار",
+    ("operating", "بدالت ومكافئات"): "بدلات ومكافئات",
+    ("operating", "بدالت ومكافاة"): "بدلات ومكافئات",
+    ("operating", "منظفات ومكافحة ."): "منظفات ومكافحة",
+    # May calls the production payroll «مرتبات»; June and July name it. One
+    # salary line per month in this group, so they are the same line — and the
+    # group is part of the key, so this never touches the administrative or
+    # the selling «مرتبات».
+    ("operating", "مرتبات"): "مرتبات انتاج والمصنع",
+
+    # --- administrative ----------------------------------------------------
+    ("admin", "محاىم"): "محامى",
+    ("admin", "تامينات وحكوىم"): "تامينات",
+    ("admin", "تامينات و حكوىم"): "تامينات",
+    ("admin", "بدالت ومكافئات"): "بدلات ومكافئات",
+    ("admin", "مصاريف المكاتب"): "مصاريف المكتب",
+    # «وهدايا ورشا» was left literal when only the 2025 workbook was read: it
+    # appeared once, unexplained, and might have continued the row above it.
+    # The five 2026 statements settle it — the line stands on its own in every
+    # one of them, directly under the insurance line, and June and July spell
+    # it out. So it is one item, and the December 2025 figure joins it.
+    ("admin", "وهدايا ورشا"): "هدايا ورشاوى",
+    ("admin", "هدايا ورشواى"): "هدايا ورشاوى",
+
+    # --- selling -----------------------------------------------------------
+    ("selling", "عمولة البيع + بدالت"): "عمولة البيع +بدلات السفر والاكراميات",
+    ("selling", "عربية الفاسير 1842"): "عربية الفاستر 1842",
+    # May prints the vehicle number on the next page, so the row reads without
+    # it. Same vehicle, same month sequence.
+    ("selling", "عربية الفاسير"): "عربية الفاستر 1842",
+    ("selling", "زيت + فالتر للعربيات"): "زيت + فلاتر للعربيات",
+    ("selling", "مواصالت السوان"): "مواصلات اسوان",
+
+    # --- financing ---------------------------------------------------------
+    # Every month writes the same two loans with a different date phrase glued
+    # to the name.
+    ("financing", "مصاريف قرض المبادرة من شهر 1"): "مصاريف قرض المبادرة",
+    ("financing", "مصاريف قرض المبادرة من شهر 1 اىل شهر 3"):
+        "مصاريف قرض المبادرة",
+    ("financing", "مصاريف قرض المبادرة شهر 4."): "مصاريف قرض المبادرة",
+    ("financing", "مصاريف قرض المبادرة شهر 5"): "مصاريف قرض المبادرة",
+    ("financing", "مصاريف قرض المبادرة من"): "مصاريف قرض المبادرة",
+    ("financing", "مصاريق قرض السيارة من شهر 1 اىل 3"):
+        "مصاريف قرض السيارة والحساب",
+    ("financing", "مصاريق قرض السيارة شهر 4"): "مصاريف قرض السيارة والحساب",
+    ("financing", "مصاريق قرض السيارة شهر 5"): "مصاريف قرض السيارة والحساب",
+    ("financing", "مصاريق قرض السيارة من"): "مصاريف قرض السيارة والحساب",
+    ("financing", "تامير عىل المصنع و العربيات"): "تأمين على المصنع والعربيات",
+    ("financing", "مصاريف االشهار"): "مصاريف الاشهار",
+
+    # NOT mapped, deliberately:
+    #   «كباس تير يد 3782» — the words are mangled past the point of reading;
+    #   it appears twice with the same spelling, so it tracks across months on
+    #   its own and needs no guess about what it says.
+    #   «استيكر» · «كاوتش» · «دعايا» — each appears in one statement only.
 }
 
 # Raw labels whose own words say the figure covers more than the month it sits
@@ -93,6 +165,10 @@ LUMP_POSTINGS = {
         "القيمة مقيدة في ديسمبر وتغطي الأشهر 9–12 بنص الملف",
     ("financing", "مصاريق قرض السيارة من شهر 9 الى 12"):
         "القيمة مقيدة في ديسمبر وتغطي الأشهر 9–12 بنص الملف",
+    ("financing", "مصاريف قرض المبادرة من شهر 1"):
+        "نصّ السطر يقول «من شهر 1» — القيمة مقيدة في يونيو وتغطي ما قبله",
+    ("financing", "مصاريق قرض السيارة من شهر 1"):
+        "نصّ السطر يقول «من شهر 1» — القيمة مقيدة في يونيو وتغطي ما قبله",
 }
 
 

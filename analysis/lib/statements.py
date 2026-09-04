@@ -19,16 +19,23 @@ from pathlib import Path
 
 try:
     from . import expense_aliases as aliases
+    from . import expense_categories as categories
 except ImportError:
     # Loaded straight off its path with no package around it, which is how the
     # no-statements probe in analysis/tests/test_monthly_margin.py exercises the
     # missing-extract path. Resolve the sibling by file rather than by name, so
     # nothing depends on sys.path.
     import importlib.util as _il
-    _spec = _il.spec_from_file_location(
-        "_expense_aliases", Path(__file__).resolve().parent / "expense_aliases.py")
-    aliases = _il.module_from_spec(_spec)
-    _spec.loader.exec_module(aliases)
+
+    def _sibling(name):
+        spec = _il.spec_from_file_location(
+            "_" + name, Path(__file__).resolve().parent / (name + ".py"))
+        mod = _il.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    aliases = _sibling("expense_aliases")
+    categories = _sibling("expense_categories")
 
 ROOT = Path(__file__).resolve().parents[2]
 P = ROOT / "data" / "processed"
@@ -173,8 +180,8 @@ def allocate_quarter(q, weights):
                      # Allocation divides magnitudes; it does not create line
                      # items. The quarter's own statement never listed any, so
                      # these months carry a total and say so.
-                     "expenses": None, "expense_items": [],
-                     "has_item_detail": False,
+                     "expenses": None, "categories": None,
+                     "expense_items": [], "has_item_detail": False,
                      **{f: r2(q[f] * share) for f in independent}})
 
     # Round first, then push the residual onto the largest month. Correcting
@@ -208,6 +215,11 @@ def expense_items(o):
     is a human reading of hand-written statements, and a reader has to be able
     to see what was merged into what. The amounts are the sheet's own.
     """
+    # Whether this statement printed all four expense groups, read off the
+    # statement rather than from a list of periods: a document that names an
+    # operating group is a four-category document.
+    four_way = "operating" in (o.get("expenses") or {})
+
     out = []
     for it in o.get("expense_items") or []:
         group, raw = it["group"], it["label_raw"]
@@ -215,7 +227,12 @@ def expense_items(o):
         # it would break the group total — and named as unnamed rather than
         # rendered as a blank row nobody can ask about.
         label = aliases.canonical(group, raw) if raw else UNNAMED_ITEM
+        category, basis = categories.classify(group, label, four_way)
         out.append({"group": group, "label": label,
+                    # The four-category view, and how this row reached it. The
+                    # group its own statement filed it under travels too, so
+                    # nothing that was moved can be moved invisibly.
+                    "category": category, "category_basis": basis,
                     "label_raw": raw, "amount": r2(it["amount"]),
                     "note": aliases.lump_note(group, raw)})
 
@@ -230,6 +247,20 @@ def expense_items(o):
                 die(f"{o['period']}: {name} line items sum to {got:,.2f}, but "
                     f"the statement's own group total is {total:,.2f}")
     return out
+
+
+def category_totals(items):
+    """The four categories of one statement, summed from its own lines.
+
+    None when there are no lines: a month whose breakdown was never read must
+    not render as four zeroes.
+    """
+    if not items:
+        return None
+    out = {}
+    for it in items:
+        out[it["category"]] = out.get(it["category"], 0.0) + it["amount"]
+    return {k: r2(v) for k, v in out.items()}
 
 
 def monthly_series(obs, weights):
@@ -253,6 +284,7 @@ def monthly_series(obs, weights):
                      # None when it came from a PDF, which states one total
                      # only. None is not zero and must not be shown as zero.
                      "expenses": o.get("expenses"),
+                     "categories": category_totals(items),
                      "expense_items": items,
                      "has_item_detail": bool(items),
                      "net_profit": o["net_profit"]})

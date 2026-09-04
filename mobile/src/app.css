@@ -1,0 +1,67 @@
+html,body{margin:0;padding:0;background:#070b14;color:#e2e8f0;font-family:'Cairo',system-ui,'Segoe UI',Tahoma,sans-serif;min-height:100%}
+#root{height:100dvh}
+a{color:#3b82f6;text-decoration:none}
+a:hover{color:#8b5cf6}
+@keyframes shim{0%{background-position:200% 0}100%{background-position:-200% 0}}
+*{box-sizing:border-box}
+
+
+/* ---------------------------------------------------------------- printing --
+   The app is a fixed-height, single-screen shell with its own scroll container,
+   so printing it unchanged yields one clipped page. These rules unclip it and
+   switch to ink-on-white so the result is a readable, cheap-to-print report.
+
+   The shell carries data-print hooks (app / backdrop / scroll / nav) precisely
+   so this can target the four elements that matter instead of blanket-styling
+   every div — a blanket height:auto would collapse the fixed-height chart
+   containers to nothing, and hiding #root's last child would hide the whole
+   application, since the app root is #root's only child.
+
+   Arabic shaping is left entirely to the browser. That is the reason PDF export
+   goes through the print dialogue rather than a JavaScript PDF library, which
+   without a text-shaping engine emits disjoint, reversed glyphs. */
+@media print {
+  html, body {
+    background: #fff !important; color: #111 !important;
+    height: auto !important; overflow: visible !important;
+  }
+  #root { height: auto !important; overflow: visible !important; }
+
+  /* Let the page grow instead of scrolling inside a phone-sized box. */
+  [data-print="app"] {
+    height: auto !important; max-height: none !important;
+    max-width: none !important; overflow: visible !important;
+    display: block !important; background: #fff !important;
+  }
+  [data-print="scroll"] {
+    overflow: visible !important; height: auto !important;
+    max-height: none !important; display: block !important; padding: 0 !important;
+  }
+
+  /* Screen-only chrome: the decorative glow, the bottom tab bar and the header
+     buttons. The dataset switch stays — on a financial report, which extract the
+     figures came from is part of the record. */
+  [data-print="backdrop"], [data-print="nav"], [data-print="actions"] {
+    display: none !important;
+  }
+
+  /* Repaint the dark panels onto paper. Charts are excluded: their colours are
+     the data, and ECharts paints its own background into the SVG. */
+  [data-print="app"] *:not(svg):not(svg *):not([data-bar]) {
+    background: transparent !important; color: #111 !important;
+    box-shadow: none !important; text-shadow: none !important;
+  }
+  /* Bar fills are excluded above: their colour IS the value, so flattening them
+     would leave a row of labels with no chart. */
+  [data-bar="fill"] { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  [data-print="scroll"] > div {
+    border: 1px solid #ccc !important; border-radius: 8px !important;
+    margin-bottom: 10px !important; padding: 10px !important;
+    break-inside: avoid; page-break-inside: avoid;
+  }
+
+  /* Keep a chart whole on one page; it is unreadable split across two. */
+  svg { break-inside: avoid; page-break-inside: avoid; max-width: 100% !important; }
+
+  @page { margin: 12mm; }
+}

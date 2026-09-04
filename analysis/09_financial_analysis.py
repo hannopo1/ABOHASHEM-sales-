@@ -16,7 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TX = ROOT / "data" / "processed" / "sales_transactions_enriched.csv"
-AR = ROOT / "data" / "processed" / "ar_customer_balances_2026-07-04.csv"
+AR = ROOT / "data" / "processed" / "ar_customer_balances_current.csv"
 OUT = ROOT / "data" / "processed" / "financial_analysis.json"
 
 
@@ -29,6 +29,9 @@ def main():
 
     out = {}
     out["total_revenue_egp"] = float(df["line_total"].sum())
+    # How many months that total covers — so every label quoting it counts them
+    # instead of carrying the number in its text.
+    out["n_months"] = int(df["month"].nunique())
     out["period"] = dict(start=str(df["invoice_date_parsed"].min().date()),
                           end=str(df["invoice_date_parsed"].max().date()), n_months=int(df["month"].nunique()))
 
@@ -110,10 +113,14 @@ def main():
     out["ar_by_rep"] = ar_by_rep.to_dict(orient="records")
 
     # DSO proxy: AR balance / (trailing-12m revenue / 365) -- approximation since
-    # the AR snapshot postdates the transactional data by only ~4 days (2026-06-30 -> 2026-07-04)
+    # the AR snapshot postdates the transactional data by a few days
     daily_revenue = rev_t12 / 365
     out["dso_proxy_days"] = float(ar["net_balance"].sum() / daily_revenue) if daily_revenue else None
-    out["dso_proxy_method_note"] = ("طريقة الاحتساب التقريبية = صافي رصيد المديونية (2026/7/4) ÷ (إيراد آخر 12 شهرًا "
+    # The snapshot stamps its own date on every row (analysis/00_ar_snapshot.py),
+    # so the sentence that quotes it cannot drift from the balances it describes.
+    ar_as_of = str(ar["as_of"].dropna().iloc[0]) if "as_of" in ar.columns and len(ar) else "—"
+    out["ar_as_of"] = ar_as_of
+    out["dso_proxy_method_note"] = (f"طريقة الاحتساب التقريبية = صافي رصيد المديونية ({ar_as_of}) ÷ (إيراد آخر 12 شهرًا "
                                      "÷ 365). هذا تقدير تقريبي وليس مؤشر DSO رسميًا محسوبًا من كشف حركة مديونية متسلسل "
                                      "زمنيًا، نظرًا لتوفر لقطة واحدة فقط لرصيد المديونية في نقطة زمنية محددة (بلا رصيد "
                                      "افتتاحي، وبلا تصنيف أعمار الديون حسب تاريخ كل فاتورة).")

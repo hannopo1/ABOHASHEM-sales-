@@ -1,12 +1,16 @@
 """
-Parser for the July 1–15 2026 sales-invoices PDF (Pioneers-template).
+Parser for the Pioneers-template sales-invoice PDFs (July 2026 onwards).
 
-Unlike the earlier months (delivered as pre-converted markdown), July arrived as
-a native PDF — one invoice per page, 160 pages — carrying an extractable text
+The months up to June 2026 were delivered as pre-converted markdown. From July
+they arrive as native PDFs — one invoice per page — carrying an extractable text
 layer. Header/footer fields are label-anchored; line items are recovered
 geometrically via column x-bands + y-gap clustering, which is robust to wrapped
-Arabic item names. Every one of the 160 invoices reconciles (Σ line_total ==
-reported total), so no value is inferred or fabricated.
+Arabic item names. Every invoice in both shipped files reconciles (Σ line_total
+== reported total), so no value is inferred or fabricated.
+
+One parser serves every month: the template is byte-identical across files, so
+``parse_july`` and ``parse_august`` differ only in which path they hand to
+``parse_pdf``. A new month needs a path in ``config``, not a second parser.
 
 Emits the exact same schema as ``load.parse_june`` / ``load.parse_main`` so it
 concatenates straight into the 2026 dataset.
@@ -44,13 +48,22 @@ def _to_date(s: str) -> date:
     return date(y, m, d)
 
 
+# The invoice date sits immediately after the customer-code label («/ الكود»).
+# Anchoring on that label matters: page 1 of every file also carries the report's
+# period header («… خلال الفترة من 2026/08/01 إلى 2026/08/31»), whose dates come
+# FIRST in the text layer. An unanchored search therefore dates the first invoice
+# of the file to the start of the period — invisible in the July file, where the
+# two happen to coincide, and wrong by 29 days in the August one.
+_RE_DATE_ANCHORED = r"الكود\s*(\d{4}/\d{1,2}/\d{1,2})"
+
+
 def _header_footer(text: str) -> dict:
     def g(rx):
         m = re.search(rx, text)
         return m.group(1) if m else None
     return dict(
         invoice_no=(g(r"([Bb]\d+)\s*فاتورة مبيعات رقم") or "").upper() or None,
-        invoice_date=g(r"(\d{4}/\d{1,2}/\d{1,2})"),
+        invoice_date=g(_RE_DATE_ANCHORED),
         customer_code=g(r"(\d+)\s*\n\s*/?\s*الكود") or "",
         customer_name=(g(r"([^\n]+)\n\s*اسم العميل") or "").strip(),
         phone=g(r"(01\d{9,10})") or "",
@@ -110,14 +123,18 @@ def _items(page) -> list[dict]:
     return out
 
 
-def parse_july() -> tuple[pl.DataFrame, pl.DataFrame]:
-    """Returns (lines_df, invoices_df) in the shared invoice schema. Empty frames
-    if the source PDF is absent (kept optional so the build never hard-fails)."""
-    if not C.SRC_JULY_PDF.exists():
-        return pl.DataFrame(), pl.DataFrame()
+def parse_rows(path) -> tuple[list[dict], list[dict]]:
+    """Returns (line rows, invoice rows) as plain dicts — no polars.
+
+    The dependency-free half of the parser, so the stdlib-only analysis pipeline
+    (``analysis/01_parse_invoices.py``) can read the same PDFs through the same
+    code as the dashboard build instead of growing a second parser that drifts.
+    """
+    if not path.exists():
+        return [], []
     import fitz
 
-    doc = fitz.open(str(C.SRC_JULY_PDF))
+    doc = fitz.open(str(path))
     lines: list[dict] = []
     invoices: list[dict] = []
     for pi in range(doc.page_count):
@@ -146,4 +163,21 @@ def parse_july() -> tuple[pl.DataFrame, pl.DataFrame]:
             line_total_sum=round(line_sum, 2), remaining=hf["remaining"], paid=hf["paid"],
             qty_total=hf["qty_total"], is_bonus=is_bonus, n_lines=len(items),
         ))
+    return lines, invoices
+
+
+def parse_pdf(path) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """``parse_rows`` as polars frames in the shared invoice schema. Empty frames
+    if the source PDF is absent (kept optional so the build never hard-fails)."""
+    lines, invoices = parse_rows(path)
     return pl.DataFrame(lines), pl.DataFrame(invoices)
+
+
+def parse_july() -> tuple[pl.DataFrame, pl.DataFrame]:
+    """July 2026 — the whole month (344 invoices)."""
+    return parse_pdf(C.SRC_JULY_PDF)
+
+
+def parse_august() -> tuple[pl.DataFrame, pl.DataFrame]:
+    """August 2026 — the whole month (301 invoices)."""
+    return parse_pdf(C.SRC_AUGUST_PDF)

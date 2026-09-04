@@ -1,24 +1,37 @@
 """
-Parser for the customer account-balance PDFs dated 2026-07-16
-(``مديونية <rep>-16_7_2026.pdf``) — the FINAL post-July customer balances.
+Parser for the per-representative customer account-balance PDFs
+("تقرير عن حسابات العملاء") — the outstanding balance of every customer as of the
+day the report was filed.
 
-These are "تقرير عن حسابات العملاء" reports (one row per customer): the balance
-(الرصيد) column is the outstanding amount; the code column is the customer code.
+The current snapshot is listed in ``config.AR_SNAPSHOT_FILES``.
+
+Each row carries a debit (مدين) and a credit (دائن) column; the customer's
+balance is the NET of the two. Taking the debit column alone — as this parser
+originally did — overstates every rep's total by their customers' credit
+balances, and the file's own printed «الصافى» is what catches it: each file is
+reconciled against it and a mismatch aborts the build.
+
 Parsed geometrically via column x-bands, deduplicated by customer code.
 """
 from __future__ import annotations
 
-import glob
 import re
 from collections import defaultdict
 
 from . import config as C
 
-# x-bands in the debt report (RTL). Balance ~161, code ~521, name ~450, rep ~310.
+# x-bands in the debt report (RTL). Phone ~25, city ~110, debit ~161,
+# credit ~238, rep ~310, name ~450, code ~521.
+_PHONE = (0, 90)
+_CITY = (90, 148)
 _BAL = (148, 216)
+_CREDIT = (216, 272)
 _CODE = (505, 535)
 _NAME = (342, 505)          # widened; the customer-type word «عميل» (~376) is excluded below
 _REP = (285, 342)
+
+# The printed per-file net, used as the reconciliation anchor.
+_NET_RX = re.compile(r"الصافى\s*([\d,]+(?:\.\d+)?)")
 
 
 def _num(s):
@@ -44,41 +57,68 @@ def _parse_pdf(path) -> list[tuple]:
             bal = next((_num(wd) for x, wd in ws if _BAL[0] <= x <= _BAL[1] and _num(wd) is not None), None)
             if bal is None:
                 continue
+            credit = next((_num(wd) for x, wd in ws
+                           if _CREDIT[0] <= x <= _CREDIT[1] and _num(wd) is not None), 0.0) or 0.0
+            debit = bal
+            bal = round(debit - credit, 2)
             name = " ".join(
                 wd for x, wd in sorted((p for p in ws if _NAME[0] <= p[0] <= _NAME[1]),
                                        key=lambda t: -t[0])
                 if wd != "عميل" and not re.fullmatch(r"[\d.,]+", wd))
             rep = " ".join(wd for x, wd in sorted((p for p in ws if _REP[0] <= p[0] <= _REP[1]),
                                                   key=lambda t: -t[0]))
-            rows_out.append((code, bal, name.strip(), rep.strip()))
+            phone = next((wd for x, wd in ws
+                          if _PHONE[0] <= x <= _PHONE[1] and re.fullmatch(r"0\d{8,11}", wd)), "")
+            city = " ".join(wd for x, wd in sorted((p for p in ws if _CITY[0] <= p[0] <= _CITY[1]),
+                                                   key=lambda t: -t[0])
+                            if not re.fullmatch(r"[\d.,]+", wd))
+            rows_out.append({"code": code, "balance": bal,
+                             "debit": round(debit, 2), "credit": round(credit, 2),
+                             "name": name.strip(), "rep": rep.strip(),
+                             "phone": phone, "city": city.strip()})
     return rows_out
 
 
-def _rep_from_filename(path: str) -> str:
-    """Each report is filed under one representative — the file name IS the
-    official customer→rep assignment (cleaner than the in-page rep column)."""
-    base = path.split("/")[-1].replace("مديونية ", "")
-    return re.sub(r"[-_ ]*16_7_2026\.pdf$", "", base).strip()
+def _printed_net(path) -> float | None:
+    """The «الصافى» figure printed at the foot of a balance report."""
+    import fitz
+    doc = fitz.open(str(path))
+    m = _NET_RX.search(doc[doc.page_count - 1].get_text())
+    return float(m.group(1).replace(",", "")) if m else None
 
 
 def load_final_balances() -> dict:
     """Return {customer_code: {'balance', 'name', 'rep', 'rep_official'}} as of
-    2026-07-16. ``rep_official`` is the file-based (authoritative) representative.
+    ``config.AS_OF_DATE``. ``rep_official`` is the file-based (authoritative)
+    representative.
 
-    Empty dict if the snapshot PDFs are absent (build never hard-fails).
+    Every file must reproduce its own printed net or the build aborts. Empty dict
+    if the snapshot PDFs are absent (build never hard-fails on a fresh checkout).
     """
-    files = sorted(glob.glob(str(C.REPO_ROOT / "مديونية*16_7_2026.pdf")))
     out: dict[str, dict] = {}
-    for f in files:
-        rep_official = _rep_from_filename(f)
-        for code, bal, name, rep in _parse_pdf(f):
+    for path, rep_official in C.AR_SNAPSHOT_FILES:
+        if not path.exists():
+            continue
+        rows = _parse_pdf(str(path))
+        printed = _printed_net(path)
+        parsed = round(sum(r["balance"] for r in rows), 2)
+        if printed is not None and abs(parsed - printed) > 0.01:
+            raise SystemExit(
+                f"[debt] {path.name} does not reconcile to its printed net.\n"
+                f"  parsed  : {parsed:,.2f}\n"
+                f"  printed : {printed:,.2f}\n"
+                f"  diff    : {parsed - printed:,.2f}")
+        for r in rows:
             # Canonicalise the code (strip thousands-comma + apply the +1000
             # alias) so the balance keys onto the same identity as the invoices.
             # One row per customer; on the rare collision the balances are summed.
-            code = C.canonical_code(code)
+            code = C.canonical_code(r["code"])
             if code in out:
-                out[code]["balance"] = round(out[code]["balance"] + round(bal, 2), 2)
+                for f in ("balance", "debit", "credit"):
+                    out[code][f] = round(out[code][f] + r[f], 2)
             else:
-                out[code] = {"balance": round(bal, 2), "name": name,
-                             "rep": rep, "rep_official": rep_official}
+                out[code] = {"balance": r["balance"], "debit": r["debit"],
+                             "credit": r["credit"], "name": r["name"],
+                             "rep": r["rep"], "rep_official": rep_official,
+                             "phone": r["phone"], "city": r["city"]}
     return out

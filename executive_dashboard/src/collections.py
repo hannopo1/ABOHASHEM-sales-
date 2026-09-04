@@ -43,6 +43,19 @@ _R_VAL = (90, 155)
 _R_INV = (155, 220)
 _R_NAME = (300, 430)
 _R_SEQ = (520, 9999)
+# Itemised returns («تقرير مرتجع المبيعات», August 2026 onwards): a wider report,
+# one row per returned ITEM rather than per credit note, with its own bands:
+# date | value | qty | unit | item | governorate | rep | customer | invoice | seq
+_I_DATE = (0, 60)
+_I_VAL = (60, 120)
+_I_QTY = (120, 175)
+_I_UNIT = (175, 210)
+_I_ITEM = (210, 320)
+_I_GOV = (320, 375)
+_I_REP = (375, 430)
+_I_NAME = (430, 505)
+_I_INV = (505, 545)
+_I_SEQ = (545, 9999)
 
 _DATE_RX = re.compile(r"^\d{4}/\d{1,2}/\d{1,2}$")
 _AMOUNT_RX = re.compile(r"^-?[\d,]+\.\d+$")
@@ -55,6 +68,12 @@ _COLL_SCHEMA = {
 _RET_SCHEMA = {
     "date": pl.Date, "month": pl.Utf8, "customer_name": pl.Utf8,
     "invoice_ref": pl.Utf8, "value": pl.Float64,
+}
+_RET_ITEM_SCHEMA = {
+    "date": pl.Date, "month": pl.Utf8, "customer_name": pl.Utf8,
+    "invoice_ref": pl.Utf8, "value": pl.Float64, "qty": pl.Float64,
+    "item_name": pl.Utf8, "unit": pl.Utf8, "rep_reported": pl.Utf8,
+    "governorate": pl.Utf8,
 }
 
 
@@ -112,13 +131,50 @@ def _method(bayan: str) -> str:
     return C.PAYMENT_METHOD_DEFAULT
 
 
-def parse_collections() -> pl.DataFrame:
-    """1,423 receipt rows. Empty (typed) frame if the source PDF is absent."""
-    if not C.SRC_COLLECTIONS_PDF.exists():
+def _supersede(frames: list[tuple[pl.DataFrame, str | None]], schema: dict) -> pl.DataFrame:
+    """Stack per-source frames under the supersede rule declared in ``config``.
+
+    A frame tagged with a month owns that month outright; the untagged (cumulative)
+    frame supplies every month nobody claims. This is what stops the first half of
+    July being counted twice — once from the cumulative run that stopped on the
+    18th, once from the whole-month re-run.
+    """
+    owned = {m for _, m in frames if m}
+    keep: list[pl.DataFrame] = []
+    for df, month in frames:
+        if df.height == 0:
+            continue
+        keep.append(df.filter(pl.col("month") == month) if month
+                    else df.filter(~pl.col("month").is_in(list(owned))))
+    if not keep:
+        return pl.DataFrame(schema=schema)
+    return pl.concat(keep, how="vertical_relaxed").sort("date", "customer_name", "value"
+                                                        if "value" in schema else "amount")
+
+
+def _check_printed(name: str, path, parsed: float, printed: float) -> None:
+    """Abort the build when a parsed file does not reproduce its own printed total.
+
+    This is the anti-fabrication anchor: a band that drifts, a page that fails to
+    extract, or a row silently dropped all show up here as a mismatch rather than
+    as a plausible-looking number in the app.
+    """
+    if abs(round(parsed, 2) - printed) > 0.01:
+        raise SystemExit(
+            f"[collections] {name} does not reconcile to its printed total.\n"
+            f"  file    : {path.name}\n"
+            f"  parsed  : {parsed:,.2f}\n"
+            f"  printed : {printed:,.2f}\n"
+            f"  diff    : {parsed - printed:,.2f}")
+
+
+def _parse_collections_file(path) -> pl.DataFrame:
+    """Receipt rows from one «سدادات العملاء» PDF."""
+    if not path.exists():
         return pl.DataFrame(schema=_COLL_SCHEMA)
     import fitz
 
-    doc = fitz.open(str(C.SRC_COLLECTIONS_PDF))
+    doc = fitz.open(str(path))
     out: list[dict] = []
     for pi in range(doc.page_count):
         for row in _cluster_rows(doc[pi]):
@@ -153,13 +209,30 @@ def parse_collections() -> pl.DataFrame:
     return pl.DataFrame(out, schema=_COLL_SCHEMA)
 
 
-def parse_returns() -> pl.DataFrame:
-    """156 credit-note rows. Empty (typed) frame if the source PDF is absent."""
-    if not C.SRC_RETURNS_PDF.exists():
+def parse_collections() -> pl.DataFrame:
+    """Every receipt row across the configured sources, superseded month by month.
+
+    Each file is reconciled to its own printed grand total first; the surviving
+    total is stored on ``config.COLLECTIONS_PRINTED_TOTAL`` for the payload.
+    """
+    frames: list[tuple[pl.DataFrame, str | None]] = []
+    for path, month, printed in C.SRC_COLLECTIONS:
+        df = _parse_collections_file(path)
+        if df.height:
+            _check_printed("collections", path, float(df["amount"].sum()), printed)
+        frames.append((df, month))
+    out = _supersede(frames, _COLL_SCHEMA)
+    C.COLLECTIONS_PRINTED_TOTAL = round(float(out["amount"].sum() or 0.0), 2)
+    return out
+
+
+def _parse_returns_file(path) -> pl.DataFrame:
+    """Credit-note rows from one «ارتجاعات العملاء» PDF (one row per note)."""
+    if not path.exists():
         return pl.DataFrame(schema=_RET_SCHEMA)
     import fitz
 
-    doc = fitz.open(str(C.SRC_RETURNS_PDF))
+    doc = fitz.open(str(path))
     out: list[dict] = []
     for pi in range(doc.page_count):
         for row in _cluster_rows(doc[pi]):
@@ -186,6 +259,98 @@ def parse_returns() -> pl.DataFrame:
                 "value": value,
             })
     return pl.DataFrame(out, schema=_RET_SCHEMA)
+
+
+def _parse_returns_itemised_file(path) -> pl.DataFrame:
+    """Rows from one «تقرير مرتجع المبيعات» PDF — one row per returned ITEM.
+
+    Richer than the credit-note layout: it carries the quantity, the item, the
+    representative and the governorate, so August's returns can be read by item
+    and by rep, not only by customer.
+    """
+    if not path.exists():
+        return pl.DataFrame(schema=_RET_ITEM_SCHEMA)
+    import fitz
+
+    bands = {"date": _I_DATE, "val": _I_VAL, "qty": _I_QTY, "unit": _I_UNIT,
+             "item": _I_ITEM, "gov": _I_GOV, "rep": _I_REP, "name": _I_NAME,
+             "inv": _I_INV, "seq": _I_SEQ}
+    doc = fitz.open(str(path))
+    out: list[dict] = []
+    for pi in range(doc.page_count):
+        for row in _cluster_rows(doc[pi]):
+            cells: dict[str, list] = {k: [] for k in bands}
+            for x0, y0, x1, y1, wd, *_ in row:
+                for k, (lo, hi) in bands.items():
+                    if lo <= x0 < hi:
+                        cells[k].append((x0, wd))
+                        break
+            dates = [w for x, w in cells["date"] if _DATE_RX.match(w)]
+            vals = [_num(w) for x, w in cells["val"] if _AMOUNT_RX.match(w)]
+            seqs = [w for x, w in cells["seq"] if _INT_RX.match(w)]
+            if not dates or not vals or not seqs:
+                continue
+            qtys = [_num(w) for x, w in cells["qty"] if _AMOUNT_RX.match(w)]
+            date_s = dates[0]
+            out.append({
+                "date": _to_date(date_s),
+                "month": date_s.split("/")[0] + "-" + date_s.split("/")[1].zfill(2),
+                "customer_name": _join_desc(cells["name"]),
+                "invoice_ref": cells["inv"][0][1] if cells["inv"] else "",
+                "value": vals[0],
+                "qty": qtys[0] if qtys else None,
+                "item_name": C.clean_item_name(_join_desc(cells["item"])),
+                "unit": _join_desc(cells["unit"]),
+                "rep_reported": _join_desc(cells["rep"]),
+                "governorate": _join_desc(cells["gov"]),
+            })
+    return pl.DataFrame(out, schema=_RET_ITEM_SCHEMA)
+
+
+def parse_returns_itemised() -> pl.DataFrame:
+    """Item-level return rows across the configured itemised sources."""
+    frames: list[tuple[pl.DataFrame, str | None]] = []
+    for path, month, printed in C.SRC_RETURNS_ITEMISED:
+        df = _parse_returns_itemised_file(path)
+        if df.height:
+            _check_printed("returns (itemised)", path, float(df["value"].sum()), printed)
+        frames.append((df, month))
+    return _supersede(frames, _RET_ITEM_SCHEMA)
+
+
+def parse_returns() -> pl.DataFrame:
+    """Every return row across the configured sources, superseded month by month.
+
+    The itemised August report is rolled up to the credit-note grain here — one
+    row per (date, customer, invoice) — so downstream aggregation stays on a
+    single grain and a month's returns are never counted once per item line. The
+    item detail itself stays available through ``parse_returns_itemised``.
+    """
+    frames: list[tuple[pl.DataFrame, str | None]] = []
+    for path, month, printed in C.SRC_RETURNS:
+        df = _parse_returns_file(path)
+        if df.height:
+            _check_printed("returns", path, float(df["value"].sum()), printed)
+        frames.append((df, month))
+
+    items = parse_returns_itemised()
+    if items.height:
+        rolled = (items.group_by("date", "month", "customer_name", "invoice_ref")
+                       .agg(pl.col("value").sum().round(2).alias("value"))
+                       .select(list(_RET_SCHEMA)))
+        for month in sorted({m for m in items["month"].to_list()}):
+            frames.append((rolled.filter(pl.col("month") == month), month))
+
+    out = _supersede(frames, _RET_SCHEMA)
+    C.RETURNS_PRINTED_TOTAL = round(float(out["value"].sum() or 0.0), 2)
+    return out
+
+
+def _period_str(df: pl.DataFrame, col: str) -> str:
+    """'YYYY-MM-DD … YYYY-MM-DD' over the rows that survived the supersede rule."""
+    if df.height == 0:
+        return "—"
+    return f"{df[col].min().isoformat()} … {df[col].max().isoformat()}"
 
 
 def _name_index(invoices_full: pl.DataFrame, dim_customers: pl.DataFrame) -> dict:
@@ -309,7 +474,12 @@ def compute(collections_df: pl.DataFrame, returns_df: pl.DataFrame,
                            "rep": rep_map.get(c) or "غير محدد",
                            "collected": round(collected_by_code.get(c, 0.0), 2),
                            "returns": round(returns_by_code.get(c, 0.0), 2)}
-                          for c in codes), key=lambda x: x["collected"], reverse=True)
+                          for c in codes),
+                         # Sorting on "collected" alone leaves ties in the order
+                         # the set happened to iterate, which PYTHONHASHSEED
+                         # changes every run — so data.js differed between
+                         # identical builds. The code breaks the tie.
+                         key=lambda x: (-x["collected"], x["customer_code"]))
 
     reliable_codes = set(collected_by_code)      # codes with a unique-name receipt
 
@@ -318,7 +488,11 @@ def compute(collections_df: pl.DataFrame, returns_df: pl.DataFrame,
         "grand_total_returns": total_returns,
         "printed_total_collected": C.COLLECTIONS_PRINTED_TOTAL,
         "printed_total_returns": C.RETURNS_PRINTED_TOTAL,
-        "period": {"collections": "2026-01-01 … 2026-07-18", "returns": "2026-01-01 … 2026-07-16"},
+        # Derived from the rows actually kept, never hand-written: the sources
+        # supersede each other by month, so a fixed string went stale the moment
+        # a newer month file arrived.
+        "period": {"collections": _period_str(collections_df, "date"),
+                   "returns": _period_str(returns_df, "date")},
         "monthly": monthly,
         "by_rep": by_rep,
         "by_method": by_method,

@@ -20,50 +20,52 @@
         913891.58,
         883582.6,
         1421969.97,
-        1022948.6
+        1022948.6,
+        1379473.3,
+        1080779.6
       ],
       "forecast": [
         {
           "month": "2026-07",
-          "base_case": 1096190.8800571573,
-          "conservative_case": 798028.7670142873,
-          "optimistic_case": 1394352.993100027
+          "base_case": 1189972.1366152477,
+          "conservative_case": 883835.1109355291,
+          "optimistic_case": 1496109.1622949662
         },
         {
           "month": "2026-08",
-          "base_case": 1121014.9851282386,
-          "conservative_case": 699350.081077192,
-          "optimistic_case": 1542679.8891792852
+          "base_case": 1217843.123705941,
+          "conservative_case": 784899.9900451225,
+          "optimistic_case": 1650786.2573667597
         },
         {
           "month": "2026-09",
-          "base_case": 1145839.0901993196,
-          "conservative_case": 629407.161516974,
-          "optimistic_case": 1662271.0188816653
+          "base_case": 1245714.1107966343,
+          "conservative_case": 715469.2282413436,
+          "optimistic_case": 1775958.9933519252
         },
         {
           "month": "2026-10",
-          "base_case": 1170663.1952704007,
-          "conservative_case": 574338.9691846608,
-          "optimistic_case": 1766987.4213561406
+          "base_case": 1273585.097887328,
+          "conservative_case": 661311.0465278907,
+          "optimistic_case": 1885859.149246765
         },
         {
           "month": "2026-11",
-          "base_case": 1195487.3003414818,
-          "conservative_case": 528776.547262648,
-          "optimistic_case": 1862198.0534203155
+          "base_case": 1301456.0849780212,
+          "conservative_case": 616912.8851285715,
+          "optimistic_case": 1985999.2848274708
         },
         {
           "month": "2026-12",
-          "base_case": 1220311.4054125631,
-          "conservative_case": 489966.36782749486,
-          "optimistic_case": 1950656.4429976314
+          "base_case": 1329327.0720687145,
+          "conservative_case": 579447.5677800935,
+          "optimistic_case": 2079206.5763573356
         },
         {
           "month": "2027-01",
-          "base_case": 1245135.5104836442,
-          "conservative_case": 456272.7089906824,
-          "optimistic_case": 2033998.311976606
+          "base_case": 1357198.0591594079,
+          "conservative_case": 547235.622101878,
+          "optimistic_case": 2167160.496216938
         }
       ]
     },
@@ -87,50 +89,52 @@
         1722949.61,
         2441206.79,
         1868173.68,
-        1857018.2
+        1857018.2,
+        2166561.1,
+        1461808.2
       ],
       "forecast": [
         {
           "month": "2026-07",
-          "base_case": 1875485.9519676487,
-          "conservative_case": 1119579.3291087272,
-          "optimistic_case": 2631392.57482657
+          "base_case": 1853534.0736317912,
+          "conservative_case": 1103714.8482110226,
+          "optimistic_case": 2603353.29905256
         },
         {
           "month": "2026-08",
-          "base_case": 1874477.2226317492,
-          "conservative_case": 805463.8246970179,
-          "optimistic_case": 2943490.620566481
+          "base_case": 1851576.245266979,
+          "conservative_case": 791171.7273488394,
+          "optimistic_case": 2911980.763185119
         },
         {
           "month": "2026-09",
-          "base_case": 1873468.49329585,
-          "conservative_case": 564199.8167263921,
-          "optimistic_case": 3182737.169865308
+          "base_case": 1849618.4169021668,
+          "conservative_case": 550893.4219814548,
+          "optimistic_case": 3148343.4118228788
         },
         {
           "month": "2026-10",
-          "base_case": 1872459.7639599508,
-          "conservative_case": 360646.5182421075,
-          "optimistic_case": 3384273.009677794
+          "base_case": 1847660.5885373545,
+          "conservative_case": 348022.1376958175,
+          "optimistic_case": 3347299.0393788917
         },
         {
           "month": "2026-11",
-          "base_case": 1871451.0346240513,
-          "conservative_case": 181192.44126920588,
-          "optimistic_case": 3561709.6279788967
+          "base_case": 1845702.7601725422,
+          "conservative_case": 169056.0012954655,
+          "optimistic_case": 3522349.519049619
         },
         {
           "month": "2026-12",
-          "base_case": 1870442.305288152,
-          "conservative_case": 18856.78609335143,
-          "optimistic_case": 3722027.8244829527
+          "base_case": 1843744.93180773,
+          "conservative_case": 7070.430197930196,
+          "optimistic_case": 3680419.43341753
         },
         {
           "month": "2027-01",
-          "base_case": 1869433.5759522528,
+          "base_case": 1841787.1034429178,
           "conservative_case": 0.0,
-          "optimistic_case": 3869374.5144236516
+          "optimistic_case": 3825622.302161352
         }
       ]
     },
@@ -154,50 +158,52 @@
         0.0,
         0.0,
         0.0,
-        0.0
+        0.0,
+        0.0,
+        1450.0
       ],
       "forecast": [
         {
           "month": "2026-07",
-          "base_case": 135.52410057678503,
+          "base_case": 792.5730043595654,
           "conservative_case": 0.0,
-          "optimistic_case": 3967.0534835013195
+          "optimistic_case": 4446.485347130923
         },
         {
           "month": "2026-08",
-          "base_case": 244.5253749632467,
+          "base_case": 1004.7145376306075,
           "conservative_case": 0.0,
-          "optimistic_case": 5663.126192926139
+          "optimistic_case": 6172.126928500311
         },
         {
           "month": "2026-09",
-          "base_case": 353.5266493497084,
+          "base_case": 1216.8560709016497,
           "conservative_case": 0.0,
-          "optimistic_case": 6989.93021126803
+          "optimistic_case": 7545.617894984667
         },
         {
           "month": "2026-10",
-          "base_case": 462.52792373617007,
+          "base_case": 1428.9976041726918,
           "conservative_case": 0.0,
-          "optimistic_case": 8125.586689585239
+          "optimistic_case": 8736.822289715406
         },
         {
           "month": "2026-11",
-          "base_case": 571.5291981226318,
+          "base_case": 1641.139137443734,
           "conservative_case": 0.0,
-          "optimistic_case": 9139.089356129713
+          "optimistic_case": 9811.535519706002
         },
         {
           "month": "2026-12",
-          "base_case": 680.5304725090934,
+          "base_case": 1853.280670714776,
           "conservative_case": 0.0,
-          "optimistic_case": 10065.822395155099
+          "optimistic_case": 10803.501475362067
         },
         {
           "month": "2027-01",
-          "base_case": 789.5317468955551,
+          "base_case": 2065.422203985818,
           "conservative_case": 0.0,
-          "optimistic_case": 10926.805635150644
+          "optimistic_case": 11732.765575388228
         }
       ]
     },
@@ -221,50 +227,52 @@
         676235.16,
         1168207.91,
         874696.98,
-        987523.99
+        987523.99,
+        1355867.1,
+        1210973.25
       ],
       "forecast": [
         {
           "month": "2026-07",
-          "base_case": 1050847.505925243,
-          "conservative_case": 759951.7630584234,
-          "optimistic_case": 1341743.2487920625
+          "base_case": 1236721.6990232891,
+          "conservative_case": 931359.5715417294,
+          "optimistic_case": 1542083.826504849
         },
         {
           "month": "2026-08",
-          "base_case": 1115444.529477013,
-          "conservative_case": 704055.8246781603,
-          "optimistic_case": 1526833.2342758658
+          "base_case": 1304035.1264674675,
+          "conservative_case": 872187.8643479438,
+          "optimistic_case": 1735882.3885869912
         },
         {
           "month": "2026-09",
-          "base_case": 1180041.553028783,
-          "conservative_case": 676195.3466779597,
-          "optimistic_case": 1683887.7593796065
+          "base_case": 1371348.5539116457,
+          "conservative_case": 842445.8344062597,
+          "optimistic_case": 1900251.2734170316
         },
         {
           "month": "2026-10",
-          "base_case": 1244638.5765805528,
-          "conservative_case": 662847.0908469136,
-          "optimistic_case": 1826430.062314192
+          "base_case": 1438661.9813558238,
+          "conservative_case": 827937.7263927043,
+          "optimistic_case": 2049386.2363189433
         },
         {
           "month": "2026-11",
-          "base_case": 1309235.6001323229,
-          "conservative_case": 658772.9447168147,
-          "optimistic_case": 1959698.255547831
+          "base_case": 1505975.4088000022,
+          "conservative_case": 823164.933997278,
+          "optimistic_case": 2188785.8836027263
         },
         {
           "month": "2026-12",
-          "base_case": 1373832.623684093,
-          "conservative_case": 661286.4853125254,
-          "optimistic_case": 2086378.7620556604
+          "base_case": 1573288.8362441803,
+          "conservative_case": 825307.4371436506,
+          "optimistic_case": 2321270.23534471
         },
         {
           "month": "2027-01",
-          "base_case": 1438429.647235863,
-          "conservative_case": 668791.8541628668,
-          "optimistic_case": 2208067.440308859
+          "base_case": 1640602.2636883585,
+          "conservative_case": 832690.0145545491,
+          "optimistic_case": 2448514.512822168
         }
       ]
     }
@@ -291,50 +299,52 @@
         189010.0,
         533851.3200000001,
         221575.2,
-        226945.2
+        226945.2,
+        417056.8,
+        320587.95
       ],
       "forecast": [
         {
           "month": "2026-07",
-          "base_case": 405292.08768258797,
-          "conservative_case": 180497.72108317338,
-          "optimistic_case": 630086.4542820025
+          "base_case": 364193.63069023343,
+          "conservative_case": 133119.0317450947,
+          "optimistic_case": 595268.2296353722
         },
         {
           "month": "2026-08",
-          "base_case": 423273.71929611504,
-          "conservative_case": 105366.47730615339,
-          "optimistic_case": 741180.9612860767
+          "base_case": 367481.5342075884,
+          "conservative_case": 40692.70245944947,
+          "optimistic_case": 694270.3659557274
         },
         {
           "month": "2026-09",
-          "base_case": 441255.35090964206,
-          "conservative_case": 51900.08670419175,
-          "optimistic_case": 830610.6151150924
+          "base_case": 370769.4377249434,
+          "conservative_case": 0.0,
+          "optimistic_case": 771002.3834365254
         },
         {
           "month": "2026-10",
-          "base_case": 459236.98252316914,
-          "conservative_case": 9648.249324339966,
-          "optimistic_case": 908825.7157219984
+          "base_case": 374057.34124229837,
+          "conservative_case": 0.0,
+          "optimistic_case": 836206.5391325759
         },
         {
           "month": "2026-11",
-          "base_case": 477218.61413669615,
+          "base_case": 377345.24475965335,
           "conservative_case": 0.0,
-          "optimistic_case": 979874.0988119955
+          "optimistic_case": 894043.7558744848
         },
         {
           "month": "2026-12",
-          "base_case": 495200.24575022317,
+          "base_case": 380633.1482770083,
           "conservative_case": 0.0,
-          "optimistic_case": 1045831.7409709306
+          "optimistic_case": 946648.0082108622
         },
         {
           "month": "2027-01",
-          "base_case": 513181.87736375025,
+          "base_case": 383921.0517943633,
           "conservative_case": 0.0,
-          "optimistic_case": 1107931.8675140855
+          "optimistic_case": 995286.9749071887
         }
       ]
     },
@@ -359,118 +369,52 @@
         188575.47999999998,
         322837.75,
         281908.0,
-        303659.75
+        303659.75,
+        290449.75,
+        288847.0
       ],
       "forecast": [
         {
           "month": "2026-07",
-          "base_case": 291645.8900475192,
-          "conservative_case": 182280.05227269212,
-          "optimistic_case": 401011.72782234626
+          "base_case": 308811.1507390852,
+          "conservative_case": 205228.8027023045,
+          "optimistic_case": 412393.49877586594
         },
         {
           "month": "2026-08",
-          "base_case": 301155.22228837566,
-          "conservative_case": 146488.57124691946,
-          "optimistic_case": 455821.87332983187
+          "base_case": 318232.5192507893,
+          "conservative_case": 171744.95783472387,
+          "optimistic_case": 464720.08066685474
         },
         {
           "month": "2026-09",
-          "base_case": 310664.55452923215,
-          "conservative_case": 121237.36689089611,
-          "optimistic_case": 500091.7421675682
+          "base_case": 327653.88776249334,
+          "conservative_case": 148243.9981955068,
+          "optimistic_case": 507063.77732947987
         },
         {
           "month": "2026-10",
-          "base_case": 320173.8867700886,
-          "conservative_case": 101442.21122043446,
-          "optimistic_case": 538905.5623197427
+          "base_case": 337075.25627419737,
+          "conservative_case": 129910.56020063595,
+          "optimistic_case": 544239.9523477588
         },
         {
           "month": "2026-11",
-          "base_case": 329683.21901094506,
-          "conservative_case": 85133.7713302174,
-          "optimistic_case": 574232.6666916728
+          "base_case": 346496.6247859014,
+          "conservative_case": 114879.4533066178,
+          "optimistic_case": 578113.796265185
         },
         {
           "month": "2026-12",
-          "base_case": 339192.55125180155,
-          "conservative_case": 71302.05341147364,
-          "optimistic_case": 607083.0490921295
+          "base_case": 355917.9932976055,
+          "conservative_case": 102194.09424811389,
+          "optimistic_case": 609641.892347097
         },
         {
           "month": "2027-01",
-          "base_case": 348701.88349265803,
-          "conservative_case": 59347.07481423201,
-          "optimistic_case": 638056.692171084
-        }
-      ]
-    },
-    "50": {
-      "name": "م اللفى",
-      "method": "holt",
-      "historical": [
-        229573.41,
-        153719.75,
-        297251.86,
-        31240.78,
-        231297.84999999998,
-        151978.7,
-        243451.4,
-        252627.6,
-        178649.13,
-        189602.59,
-        188035.14,
-        148741.64,
-        162821.35,
-        113115.24,
-        216818.0,
-        214206.5,
-        311022.5,
-        270642.0
-      ],
-      "forecast": [
-        {
-          "month": "2026-07",
-          "base_case": 214285.62807841107,
-          "conservative_case": 82576.49019331252,
-          "optimistic_case": 345994.7659635096
-        },
-        {
-          "month": "2026-08",
-          "base_case": 215512.74558063576,
-          "conservative_case": 29247.896495061344,
-          "optimistic_case": 401777.5946662102
-        },
-        {
-          "month": "2026-09",
-          "base_case": 216739.86308286042,
-          "conservative_case": 0.0,
-          "optimistic_case": 444866.78172094596
-        },
-        {
-          "month": "2026-10",
-          "base_case": 217966.9805850851,
-          "conservative_case": 0.0,
-          "optimistic_case": 481385.2563552822
-        },
-        {
-          "month": "2026-11",
-          "base_case": 219194.09808730977,
-          "conservative_case": 0.0,
-          "optimistic_case": 513704.6836562831
-        },
-        {
-          "month": "2026-12",
-          "base_case": 220421.21558953446,
-          "conservative_case": 0.0,
-          "optimistic_case": 543041.3978698986
-        },
-        {
-          "month": "2027-01",
-          "base_case": 221648.33309175912,
-          "conservative_case": 0.0,
-          "optimistic_case": 570117.9573304455
+          "base_case": 365339.3618093095,
+          "conservative_case": 91286.2286878482,
+          "optimistic_case": 639392.4949307708
         }
       ]
     },
@@ -495,50 +439,122 @@
         130209.68,
         232953.8,
         316282.5,
-        230214.6
+        230214.6,
+        363470.1,
+        209093.0
       ],
       "forecast": [
         {
           "month": "2026-07",
-          "base_case": 298859.0830334785,
-          "conservative_case": 186654.88208067755,
-          "optimistic_case": 411063.2839862795
+          "base_case": 315817.62476043886,
+          "conservative_case": 197120.20026914746,
+          "optimistic_case": 434515.04925173026
         },
         {
           "month": "2026-08",
-          "base_case": 310304.75926107366,
-          "conservative_case": 151624.05651838635,
-          "optimistic_case": 468985.462003761
+          "base_case": 326975.7719746558,
+          "conservative_case": 159112.26444031508,
+          "optimistic_case": 494839.2795089965
         },
         {
           "month": "2026-09",
-          "base_case": 321750.4354886688,
-          "conservative_case": 127407.0586157493,
-          "optimistic_case": 516093.8123615883
+          "base_case": 338133.91918887274,
+          "conservative_case": 132543.9492423856,
+          "optimistic_case": 543723.8891353599
         },
         {
           "month": "2026-10",
-          "base_case": 333196.1117162639,
-          "conservative_case": 108787.70981066197,
-          "optimistic_case": 557604.5136218659
+          "base_case": 349292.0664030897,
+          "conservative_case": 111897.21742050684,
+          "optimistic_case": 586686.9153856725
         },
         {
           "month": "2026-11",
-          "base_case": 344641.7879438591,
-          "conservative_case": 93745.56725234946,
-          "optimistic_case": 595538.0086353688
+          "base_case": 360450.2136173066,
+          "conservative_case": 95034.70370063058,
+          "optimistic_case": 625865.7235339826
         },
         {
           "month": "2026-12",
-          "base_case": 356087.4641714542,
-          "conservative_case": 81244.42484038573,
-          "optimistic_case": 630930.5035025226
+          "base_case": 371608.36083152355,
+          "conservative_case": 80860.23704532441,
+          "optimistic_case": 662356.4846177227
         },
         {
           "month": "2027-01",
-          "base_case": 367533.1403990494,
-          "conservative_case": 70668.72862122138,
-          "optimistic_case": 664397.5521768774
+          "base_case": 382766.5080457404,
+          "conservative_case": 68722.64157791587,
+          "optimistic_case": 696810.374513565
+        }
+      ]
+    },
+    "50": {
+      "name": "م اللفى",
+      "method": "holt",
+      "historical": [
+        229573.41,
+        153719.75,
+        297251.86,
+        31240.78,
+        231297.84999999998,
+        151978.7,
+        243451.4,
+        252627.6,
+        178649.13,
+        189602.59,
+        188035.14,
+        148741.64,
+        162821.35,
+        113115.24,
+        216818.0,
+        214206.5,
+        311022.5,
+        270642.0,
+        269662.25,
+        262506.0
+      ],
+      "forecast": [
+        {
+          "month": "2026-07",
+          "base_case": 231258.01618264374,
+          "conservative_case": 103817.69817231622,
+          "optimistic_case": 358698.33419297123
+        },
+        {
+          "month": "2026-08",
+          "base_case": 233174.62184344023,
+          "conservative_case": 52946.795720094815,
+          "optimistic_case": 413402.44796678564
+        },
+        {
+          "month": "2026-09",
+          "base_case": 235091.22750423668,
+          "conservative_case": 14358.121777614375,
+          "optimistic_case": 455824.333230859
+        },
+        {
+          "month": "2026-10",
+          "base_case": 237007.83316503317,
+          "conservative_case": 0.0,
+          "optimistic_case": 491888.4691856882
+        },
+        {
+          "month": "2026-11",
+          "base_case": 238924.43882582965,
+          "conservative_case": 0.0,
+          "optimistic_case": 523889.65297111275
+        },
+        {
+          "month": "2026-12",
+          "base_case": 240841.04448662614,
+          "conservative_case": 0.0,
+          "optimistic_case": 553004.7962699496
+        },
+        {
+          "month": "2027-01",
+          "base_case": 242757.65014742262,
+          "conservative_case": 0.0,
+          "optimistic_case": 579933.038605735
         }
       ]
     },
@@ -563,50 +579,52 @@
         246142.57,
         139740.0,
         108502.5,
-        266000.7
+        266000.7,
+        204127.5,
+        0.0
       ],
       "forecast": [
         {
           "month": "2026-07",
-          "base_case": 170474.43641091738,
+          "base_case": 150500.43707625614,
           "conservative_case": 0.0,
-          "optimistic_case": 397988.8767505615
+          "optimistic_case": 378470.88224742236
         },
         {
           "month": "2026-08",
-          "base_case": 170598.6698024537,
+          "base_case": 149664.35709508386,
           "conservative_case": 0.0,
-          "optimistic_case": 492352.6769665029
+          "optimistic_case": 472063.2524763792
         },
         {
           "month": "2026-09",
-          "base_case": 170722.90319399003,
+          "base_case": 148828.27711391158,
           "conservative_case": 0.0,
-          "optimistic_case": 564789.4733178519
+          "optimistic_case": 543684.6707744665
         },
         {
           "month": "2026-10",
-          "base_case": 170847.13658552637,
+          "base_case": 147992.19713273933,
           "conservative_case": 0.0,
-          "optimistic_case": 625876.0172648147
+          "optimistic_case": 603933.0874750718
         },
         {
           "month": "2026-11",
-          "base_case": 170971.3699770627,
+          "base_case": 147156.11715156704,
           "conservative_case": 0.0,
-          "optimistic_case": 679709.1244393275
+          "optimistic_case": 656913.5294151835
         },
         {
           "month": "2026-12",
-          "base_case": 171095.60336859903,
+          "base_case": 146320.03717039476,
           "conservative_case": 0.0,
-          "optimistic_case": 728389.8913156127
+          "optimistic_case": 704731.3042748813
         },
         {
           "month": "2027-01",
-          "base_case": 171219.83676013537,
+          "base_case": 145483.95718922248,
           "conservative_case": 0.0,
-          "optimistic_case": 773166.4655748756
+          "optimistic_case": 748637.061384814
         }
       ]
     },
@@ -631,50 +649,52 @@
         146015.02000000002,
         249423.9,
         157768.5,
-        200151.0
+        200151.0,
+        156111.0,
+        231642.0
       ],
       "forecast": [
         {
           "month": "2026-07",
-          "base_case": 185305.1087202767,
-          "conservative_case": 100517.41414098881,
-          "optimistic_case": 270092.80329956464
+          "base_case": 194111.92932840434,
+          "conservative_case": 110628.50706144529,
+          "optimistic_case": 277595.3515953634
         },
         {
           "month": "2026-08",
-          "base_case": 188557.15066173032,
-          "conservative_case": 68649.24306535361,
-          "optimistic_case": 308465.05825810705
+          "base_case": 197473.0654611616,
+          "conservative_case": 79409.67745790807,
+          "optimistic_case": 315536.45346441516
         },
         {
           "month": "2026-09",
-          "base_case": 191809.19260318394,
-          "conservative_case": 44952.59773522502,
-          "optimistic_case": 338665.78747114283
+          "base_case": 200834.20159391887,
+          "conservative_case": 56236.67263781885,
+          "optimistic_case": 345431.7305500189
         },
         {
           "month": "2026-10",
-          "base_case": 195061.23454463755,
-          "conservative_case": 25485.84538606176,
-          "optimistic_case": 364636.62370321335
+          "base_case": 204195.33772667614,
+          "conservative_case": 37228.49319275803,
+          "optimistic_case": 371162.1822605942
         },
         {
           "month": "2026-11",
-          "base_case": 198313.27648609117,
-          "conservative_case": 8722.22775131301,
-          "optimistic_case": 387904.32522086933
+          "base_case": 207556.47385943338,
+          "conservative_case": 20881.866676193342,
+          "optimistic_case": 394231.08104267344
         },
         {
           "month": "2026-12",
-          "base_case": 201565.3184275448,
-          "conservative_case": 0.0,
-          "optimistic_case": 409251.9066137434
+          "base_case": 210917.60999219064,
+          "conservative_case": 6425.823456837679,
+          "optimistic_case": 415409.3965275436
         },
         {
           "month": "2027-01",
-          "base_case": 204817.36036899837,
+          "base_case": 214278.7461249479,
           "conservative_case": 0.0,
-          "optimistic_case": 429144.51446429343
+          "optimistic_case": 435155.1200399137
         }
       ]
     },
@@ -699,50 +719,52 @@
         0.0,
         277359.0,
         104400.0,
+        0.0,
+        170630.0,
         0.0
       ],
       "forecast": [
         {
           "month": "2026-07",
-          "base_case": 104190.07918767928,
+          "base_case": 63468.42739158418,
           "conservative_case": 0.0,
-          "optimistic_case": 441006.2055714998
+          "optimistic_case": 384030.49398149946
         },
         {
           "month": "2026-08",
-          "base_case": 85404.33270237013,
+          "base_case": 43145.12653969164,
           "conservative_case": 0.0,
-          "optimistic_case": 561734.2666603397
+          "optimistic_case": 496488.34869349713
         },
         {
           "month": "2026-09",
-          "base_case": 66618.58621706098,
+          "base_case": 22821.825687799108,
           "conservative_case": 0.0,
-          "optimistic_case": 650001.2299223784
+          "optimistic_case": 578051.6120008102
         },
         {
           "month": "2026-10",
-          "base_case": 47832.839731751825,
+          "base_case": 2498.5248359065736,
           "conservative_case": 0.0,
-          "optimistic_case": 721465.0924993929
+          "optimistic_case": 643622.6580157372
         },
         {
           "month": "2026-11",
-          "base_case": 29047.093246442673,
+          "base_case": -17824.77601598596,
           "conservative_case": 0.0,
-          "optimistic_case": 782190.8477588259
+          "optimistic_case": 698973.7958868789
         },
         {
           "month": "2026-12",
-          "base_case": 10261.346761133522,
+          "base_case": -38148.076867878495,
           "conservative_case": 0.0,
-          "optimistic_case": 835288.9935422644
+          "optimistic_case": 747065.4171694971
         },
         {
           "month": "2027-01",
-          "base_case": -8524.39972417563,
+          "base_case": -58471.37771977103,
           "conservative_case": 0.0,
-          "optimistic_case": 882607.3082435145
+          "optimistic_case": 789656.130238072
         }
       ]
     },
@@ -767,50 +789,52 @@
         179700.0,
         88218.3,
         205710.6,
-        136276.5
+        136276.5,
+        112014.9,
+        99867.3
       ],
       "forecast": [
         {
           "month": "2026-07",
-          "base_case": 150825.7787535323,
-          "conservative_case": 73909.02658473136,
-          "optimistic_case": 227742.53092233324
+          "base_case": 146337.2472107948,
+          "conservative_case": 69299.90023223916,
+          "optimistic_case": 223374.59418935044
         },
         {
           "month": "2026-08",
-          "base_case": 154004.22896111783,
-          "conservative_case": 45227.514870309344,
-          "optimistic_case": 262780.9430519263
+          "base_case": 148939.93345222567,
+          "conservative_case": 39992.67254591029,
+          "optimistic_case": 257887.19435854105
         },
         {
           "month": "2026-09",
-          "base_case": 157182.67916870338,
-          "conservative_case": 23958.95645915653,
-          "optimistic_case": 290406.40187825024
+          "base_case": 151542.61969365657,
+          "conservative_case": 18110.02064648547,
+          "optimistic_case": 284975.21874082764
         },
         {
           "month": "2026-10",
-          "base_case": 160361.1293762889,
-          "conservative_case": 6527.625038687023,
-          "optimistic_case": 314194.6337138908
+          "base_case": 154145.30593508744,
+          "conservative_case": 70.61197797616478,
+          "optimistic_case": 308219.9998921987
         },
         {
           "month": "2026-11",
-          "base_case": 163539.57958387447,
+          "base_case": 156747.99217651834,
           "conservative_case": 0.0,
-          "optimistic_case": 335530.66604181775
+          "optimistic_case": 329008.7368268068
         },
         {
           "month": "2026-12",
-          "base_case": 166718.02979146,
+          "base_case": 159350.6784179492,
           "conservative_case": 0.0,
-          "optimistic_case": 355124.8252771336
+          "optimistic_case": 348052.86965314986
         },
         {
           "month": "2027-01",
-          "base_case": 169896.47999904555,
+          "base_case": 161953.3646593801,
           "conservative_case": 0.0,
-          "optimistic_case": 373399.0778924809
+          "optimistic_case": 365775.0264288315
         }
       ]
     },
@@ -835,50 +859,52 @@
         153656.96,
         61021.5,
         109705.0,
-        120214.2
+        120214.2,
+        56850.7,
+        63837.3
       ],
       "forecast": [
         {
           "month": "2026-07",
-          "base_case": 134799.90863060553,
-          "conservative_case": 48376.61126781734,
-          "optimistic_case": 221223.20599339373
+          "base_case": 104706.83163152734,
+          "conservative_case": 15079.355913390478,
+          "optimistic_case": 194334.30734966422
         },
         {
           "month": "2026-08",
-          "base_case": 139933.55494536486,
-          "conservative_case": 17712.555709906854,
-          "optimistic_case": 262154.55418082286
+          "base_case": 105216.4316318897,
+          "conservative_case": 0.0,
+          "optimistic_case": 231968.8233537441
         },
         {
           "month": "2026-09",
-          "base_case": 145067.20126012416,
+          "base_case": 105726.03163225208,
           "conservative_case": 0.0,
-          "optimistic_case": 294756.7432501067
+          "optimistic_case": 260965.37333021098
         },
         {
           "month": "2026-10",
-          "base_case": 150200.84757488346,
+          "base_case": 106235.63163261444,
           "conservative_case": 0.0,
-          "optimistic_case": 323047.44230045984
+          "optimistic_case": 285490.58306888817
         },
         {
           "month": "2026-11",
-          "base_case": 155334.49388964276,
+          "base_case": 106745.23163297682,
           "conservative_case": 0.0,
-          "optimistic_case": 348582.86163251544
+          "optimistic_case": 307158.35999044264
         },
         {
           "month": "2026-12",
-          "base_case": 160468.1402044021,
+          "base_case": 107254.8316333392,
           "conservative_case": 0.0,
-          "optimistic_case": 372161.12063205225
+          "optimistic_case": 326796.4140764638
         },
         {
           "month": "2027-01",
-          "base_case": 165601.7865191614,
+          "base_case": 107764.43163370156,
           "conservative_case": 0.0,
-          "optimistic_case": 394256.3388232832
+          "optimistic_case": 344896.4430223719
         }
       ]
     },
@@ -903,50 +929,52 @@
         82210.62,
         62653.5,
         90924.0,
-        31059.0
+        31059.0,
+        88724.7,
+        29376.0
       ],
       "forecast": [
         {
           "month": "2026-07",
-          "base_case": 79627.75836273159,
-          "conservative_case": 34586.414377086665,
-          "optimistic_case": 124669.10234837652
+          "base_case": 56653.08896462601,
+          "conservative_case": 6854.039433730293,
+          "optimistic_case": 106452.13849552174
         },
         {
           "month": "2026-08",
-          "base_case": 80395.036883569,
-          "conservative_case": 16696.957351558107,
-          "optimistic_case": 144093.1164155799
+          "base_case": 52773.29980030306,
+          "conservative_case": 0.0,
+          "optimistic_case": 123199.79104018532
         },
         {
           "month": "2026-09",
-          "base_case": 81162.3154044064,
-          "conservative_case": 3148.419180082521,
-          "optimistic_case": 159176.2116287303
+          "base_case": 48893.510635980114,
+          "conservative_case": 0.0,
+          "optimistic_case": 135147.99459213056
         },
         {
           "month": "2026-10",
-          "base_case": 81929.5939252438,
+          "base_case": 45013.72147165716,
           "conservative_case": 0.0,
-          "optimistic_case": 172012.28189653365
+          "optimistic_case": 144611.8205334486
         },
         {
           "month": "2026-11",
-          "base_case": 82696.8724460812,
+          "base_case": 41133.93230733422,
           "conservative_case": 0.0,
-          "optimistic_case": 183412.37939593458
+          "optimistic_case": 152487.99227329605
         },
         {
           "month": "2026-12",
-          "base_case": 83464.15096691859,
+          "base_case": 37254.14314301127,
           "conservative_case": 0.0,
-          "optimistic_case": 193792.46106092463
+          "optimistic_case": 159236.40416929178
         },
         {
           "month": "2027-01",
-          "base_case": 84231.429487756,
+          "base_case": 33374.35397868832,
           "conservative_case": 0.0,
-          "optimistic_case": 203399.6243898873
+          "optimistic_case": 165130.25456482614
         }
       ]
     }
@@ -972,50 +1000,52 @@
         541298.8,
         562277.0,
         805805.0,
-        602275.0
+        602275.0,
+        905565.0,
+        626305.0
       ],
       "forecast": [
         {
           "month": "2026-07",
-          "base_case": 655012.0230674002,
-          "conservative_case": 468814.4367211524,
-          "optimistic_case": 841209.609413648
+          "base_case": 724280.0540492736,
+          "conservative_case": 516368.37786943436,
+          "optimistic_case": 932191.7302291128
         },
         {
           "month": "2026-08",
-          "base_case": 675871.9555986036,
-          "conservative_case": 412548.80370660446,
-          "optimistic_case": 939195.1074906026
+          "base_case": 746451.4955417548,
+          "conservative_case": 452419.9833125029,
+          "optimistic_case": 1040483.0077710066
         },
         {
           "month": "2026-09",
-          "base_case": 696731.8881298071,
-          "conservative_case": 374228.20833141275,
-          "optimistic_case": 1019235.5679282014
+          "base_case": 768622.9370342359,
+          "conservative_case": 408509.3504039465,
+          "optimistic_case": 1128736.5236645252
         },
         {
           "month": "2026-10",
-          "base_case": 717591.8206610105,
-          "conservative_case": 345196.64796851476,
-          "optimistic_case": 1089986.993353506
+          "base_case": 790794.3785267171,
+          "conservative_case": 374971.0261670386,
+          "optimistic_case": 1206617.7308863956
         },
         {
           "month": "2026-11",
-          "base_case": 738451.7531922138,
-          "conservative_case": 322101.2928756169,
-          "optimistic_case": 1154802.2135088108
+          "base_case": 812965.8200191982,
+          "conservative_case": 348061.1787651539,
+          "optimistic_case": 1277870.4612732425
         },
         {
           "month": "2026-12",
-          "base_case": 759311.6857234172,
-          "conservative_case": 303222.607837298,
-          "optimistic_case": 1215400.7636095365
+          "base_case": 835137.2615116795,
+          "conservative_case": 325859.7433043057,
+          "optimistic_case": 1344414.7797190533
         },
         {
           "month": "2027-01",
-          "base_case": 780171.6182546206,
-          "conservative_case": 287539.110061973,
-          "optimistic_case": 1272804.1264472683
+          "base_case": 857308.7030041607,
+          "conservative_case": 307226.1131657143,
+          "optimistic_case": 1407391.292842607
         }
       ]
     },
@@ -1039,50 +1069,52 @@
         475232.64,
         709482.6900000001,
         389980.2,
-        486138.6
+        486138.6,
+        625456.4,
+        365397.89999999997
       ],
       "forecast": [
         {
           "month": "2026-07",
-          "base_case": 449671.11013255833,
-          "conservative_case": 217938.20621591306,
-          "optimistic_case": 681404.0140492036
+          "base_case": 458077.05289227446,
+          "conservative_case": 222763.61051620534,
+          "optimistic_case": 693390.4952683436
         },
         {
           "month": "2026-08",
-          "base_case": 447650.7593470504,
-          "conservative_case": 119930.94378002931,
-          "optimistic_case": 775370.5749140715
+          "base_case": 456651.65719490516,
+          "conservative_case": 123868.19557796844,
+          "optimistic_case": 789435.1188118418
         },
         {
           "month": "2026-09",
-          "base_case": 445630.4085615425,
-          "conservative_case": 44257.245192436094,
-          "optimistic_case": 847003.571930649
+          "base_case": 455226.2614975358,
+          "conservative_case": 47651.42359825282,
+          "optimistic_case": 862801.0993968188
         },
         {
           "month": "2026-10",
-          "base_case": 443610.05777603464,
+          "base_case": 453800.8658001665,
           "conservative_case": 0.0,
-          "optimistic_case": 907075.8656093252
+          "optimistic_case": 924427.7505523048
         },
         {
           "month": "2026-11",
-          "base_case": 441589.7069905267,
+          "base_case": 452375.47010279715,
           "conservative_case": 0.0,
-          "optimistic_case": 959760.2327715728
+          "optimistic_case": 978552.3232751673
         },
         {
           "month": "2026-12",
-          "base_case": 439569.3562050188,
+          "base_case": 450950.07440542785,
           "conservative_case": 0.0,
-          "optimistic_case": 1007196.7274142011
+          "optimistic_case": 1027347.9378446096
         },
         {
           "month": "2027-01",
-          "base_case": 437549.00541951094,
+          "base_case": 449524.6787080585,
           "conservative_case": 0.0,
-          "optimistic_case": 1050656.63977378
+          "optimistic_case": 1072105.5273856653
         }
       ]
     },
@@ -1106,50 +1138,52 @@
         254795.64,
         502324.94,
         280988.4,
-        383628.0
+        383628.0,
+        340662.0,
+        310674.0
       ],
       "forecast": [
         {
           "month": "2026-07",
-          "base_case": 310534.9513024048,
-          "conservative_case": 156971.4129686238,
-          "optimistic_case": 464098.4896361858
+          "base_case": 300473.36302219995,
+          "conservative_case": 154740.03276867856,
+          "optimistic_case": 446206.69327572134
         },
         {
           "month": "2026-08",
-          "base_case": 302841.78424543136,
-          "conservative_case": 85670.14564779753,
-          "optimistic_case": 520013.42284306523
+          "base_case": 293033.15539433935,
+          "conservative_case": 86935.10326001211,
+          "optimistic_case": 499131.2075286666
         },
         {
           "month": "2026-09",
-          "base_case": 295148.617188458,
-          "conservative_case": 29168.76660429832,
-          "optimistic_case": 561128.4677726177
+          "base_case": 285592.94776647876,
+          "conservative_case": 33175.41541116516,
+          "optimistic_case": 538010.4801217923
         },
         {
           "month": "2026-10",
-          "base_case": 287455.45013148454,
+          "base_case": 278152.74013861816,
           "conservative_case": 0.0,
-          "optimistic_case": 594582.5267990466
+          "optimistic_case": 569619.4006456609
         },
         {
           "month": "2026-11",
-          "base_case": 279762.2830745111,
+          "base_case": 270712.53251075756,
           "conservative_case": 0.0,
-          "optimistic_case": 623140.7936542403
+          "optimistic_case": 596582.165545058
         },
         {
           "month": "2026-12",
-          "base_case": 272069.11601753766,
+          "base_case": 263272.32488289697,
           "conservative_case": 0.0,
-          "optimistic_case": 648221.4280316257
+          "optimistic_case": 620244.622520531
         },
         {
           "month": "2027-01",
-          "base_case": 264375.9489605643,
+          "base_case": 255832.11725503634,
           "conservative_case": 0.0,
-          "optimistic_case": 670666.8818388829
+          "optimistic_case": 641406.2668390995
         }
       ]
     },
@@ -1173,50 +1207,52 @@
         279375.99,
         285869.76,
         201787.2,
-        174624.0
+        174624.0,
+        282512.0,
+        177480.0
       ],
       "forecast": [
         {
           "month": "2026-07",
-          "base_case": 275702.1196429284,
-          "conservative_case": 112281.61334236481,
-          "optimistic_case": 439122.62594349205
+          "base_case": 268207.90672810323,
+          "conservative_case": 108450.32496642153,
+          "optimistic_case": 427965.48848978494
         },
         {
           "month": "2026-08",
-          "base_case": 279297.0657958891,
-          "conservative_case": 48185.56941575423,
-          "optimistic_case": 510408.562176024
+          "base_case": 271061.5312456248,
+          "conservative_case": 45130.1924263259,
+          "optimistic_case": 496992.8700649238
         },
         {
           "month": "2026-09",
-          "base_case": 282892.0119488498,
+          "base_case": 273915.1557631464,
           "conservative_case": 0.0,
-          "optimistic_case": 565944.6318600557
+          "optimistic_case": 550623.4042687181
         },
         {
           "month": "2026-10",
-          "base_case": 286486.9581018105,
+          "base_case": 276768.78028066806,
           "conservative_case": 0.0,
-          "optimistic_case": 613327.9707029377
+          "optimistic_case": 596283.9438040315
         },
         {
           "month": "2026-11",
-          "base_case": 290081.9042547711,
+          "base_case": 279622.40479818964,
           "conservative_case": 0.0,
-          "optimistic_case": 655501.265260264
+          "optimistic_case": 636851.2175382907
         },
         {
           "month": "2026-12",
-          "base_case": 293676.85040773184,
+          "base_case": 282476.02931571123,
           "conservative_case": 0.0,
-          "optimistic_case": 693973.7043513961
+          "optimistic_case": 673800.5871727956
         },
         {
           "month": "2027-01",
-          "base_case": 297271.7965606925,
+          "base_case": 285329.6538332328,
           "conservative_case": 0.0,
-          "optimistic_case": 729641.8153602479
+          "optimistic_case": 708008.4852317108
         }
       ]
     },
@@ -1240,50 +1276,52 @@
         205470.0,
         220044.0,
         293508.9,
-        194466.0
+        194466.0,
+        128387.0,
+        84095.0
       ],
       "forecast": [
         {
           "month": "2026-07",
-          "base_case": 234438.17854242845,
-          "conservative_case": 129762.82328924122,
-          "optimistic_case": 339113.53379561566
+          "base_case": 166769.86353617086,
+          "conservative_case": 40144.06355526879,
+          "optimistic_case": 293395.6635170729
         },
         {
           "month": "2026-08",
-          "base_case": 237352.63163974247,
-          "conservative_case": 89319.32459446328,
-          "optimistic_case": 385385.93868502165
+          "base_case": 158662.5238818259,
+          "conservative_case": 0.0,
+          "optimistic_case": 337738.4475611604
         },
         {
           "month": "2026-09",
-          "base_case": 240267.0847370565,
-          "conservative_case": 58964.05113821445,
-          "optimistic_case": 421570.1183358985
+          "base_case": 150555.18422748096,
+          "conservative_case": 0.0,
+          "optimistic_case": 369877.50334345753
         },
         {
           "month": "2026-10",
-          "base_case": 243181.5378343705,
-          "conservative_case": 33830.827327996056,
-          "optimistic_case": 452532.248340745
+          "base_case": 142447.844573136,
+          "conservative_case": 0.0,
+          "optimistic_case": 395699.4445349402
         },
         {
           "month": "2026-11",
-          "base_case": 246095.99093168456,
-          "conservative_case": 12034.781016618217,
-          "optimistic_case": 480157.2008467509
+          "base_case": 134340.50491879106,
+          "conservative_case": 0.0,
+          "optimistic_case": 417484.4013813797
         },
         {
           "month": "2026-12",
-          "base_case": 249010.44402899858,
+          "base_case": 126233.16526444614,
           "conservative_case": 0.0,
-          "optimistic_case": 505411.6530438659
+          "optimistic_case": 436401.76348938013
         },
         {
           "month": "2027-01",
-          "base_case": 251924.8971263126,
+          "base_case": 118125.8256101012,
           "conservative_case": 0.0,
-          "optimistic_case": 528869.8555235844
+          "optimistic_case": 453146.2019241755
         }
       ]
     },
@@ -1307,184 +1345,52 @@
         145089.43,
         200792.3,
         190204.5,
-        132651.0
+        132651.0,
+        167764.5,
+        146956.5
       ],
       "forecast": [
         {
           "month": "2026-07",
-          "base_case": 146441.293282308,
-          "conservative_case": 59562.30608031002,
-          "optimistic_case": 233320.280484306
+          "base_case": 145842.77140373713,
+          "conservative_case": 63137.05663227776,
+          "optimistic_case": 228548.4861751965
         },
         {
           "month": "2026-08",
-          "base_case": 142228.73144168328,
-          "conservative_case": 19363.289455379185,
-          "optimistic_case": 265094.1734279874
+          "base_case": 141988.74837250216,
+          "conservative_case": 25025.204856943485,
+          "optimistic_case": 258952.29188806083
         },
         {
           "month": "2026-09",
-          "base_case": 138016.16960105856,
+          "base_case": 138134.72534126719,
           "conservative_case": 0.0,
-          "optimistic_case": 288494.9895450453
+          "optimistic_case": 281385.2254017346
         },
         {
           "month": "2026-10",
-          "base_case": 133803.60776043384,
+          "base_case": 134280.7023100322,
           "conservative_case": 0.0,
-          "optimistic_case": 307561.5821644298
+          "optimistic_case": 299692.13185295096
         },
         {
           "month": "2026-11",
-          "base_case": 129591.04591980913,
+          "base_case": 130426.67927879724,
           "conservative_case": 0.0,
-          "optimistic_case": 323858.36711981083
+          "optimistic_case": 315362.27963548887
         },
         {
           "month": "2026-12",
-          "base_case": 125378.4840791844,
+          "base_case": 126572.65624756226,
           "conservative_case": 0.0,
-          "optimistic_case": 338187.6720938694
+          "optimistic_case": 329159.4562498032
         },
         {
           "month": "2027-01",
-          "base_case": 121165.92223855968,
+          "base_case": 122718.6332163273,
           "conservative_case": 0.0,
-          "optimistic_case": 351026.1165322096
-        }
-      ]
-    },
-    "سجق الهنا 350 طبق": {
-      "method": "holt",
-      "historical": [
-        203852.7,
-        152315.5,
-        166819.5,
-        142884.0,
-        132133.5,
-        75276.0,
-        67860.0,
-        115443.0,
-        132912.0,
-        149823.0,
-        116022.0,
-        130275.0,
-        91287.0,
-        134860.5,
-        128805.75,
-        133636.18,
-        181602.0,
-        103275.0
-      ],
-      "forecast": [
-        {
-          "month": "2026-07",
-          "base_case": 122843.40810148872,
-          "conservative_case": 55796.875536007734,
-          "optimistic_case": 189889.9406669697
-        },
-        {
-          "month": "2026-08",
-          "base_case": 119734.09273283747,
-          "conservative_case": 24915.97706864486,
-          "optimistic_case": 214552.20839703007
-        },
-        {
-          "month": "2026-09",
-          "base_case": 116624.77736418623,
-          "conservative_case": 496.7764894518623,
-          "optimistic_case": 232752.7782389206
-        },
-        {
-          "month": "2026-10",
-          "base_case": 113515.46199553498,
-          "conservative_case": 0.0,
-          "optimistic_case": 247608.52712649695
-        },
-        {
-          "month": "2026-11",
-          "base_case": 110406.14662688374,
-          "conservative_case": 0.0,
-          "optimistic_case": 260326.75109895263
-        },
-        {
-          "month": "2026-12",
-          "base_case": 107296.8312582325,
-          "conservative_case": 0.0,
-          "optimistic_case": 271526.6250665565
-        },
-        {
-          "month": "2027-01",
-          "base_case": 104187.51588958125,
-          "conservative_case": 0.0,
-          "optimistic_case": 281575.96732703736
-        }
-      ]
-    },
-    "برجر اسبشيال عائلى طبق": {
-      "method": "holt",
-      "historical": [
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        65611.25,
-        83036.25,
-        199235.5,
-        98771.75,
-        181335.0,
-        214131.21,
-        94784.25,
-        102839.62,
-        152748.75,
-        167895.75,
-        191825.49,
-        246585.28,
-        220672.08000000002,
-        250080.9
-      ],
-      "forecast": [
-        {
-          "month": "2026-07",
-          "base_case": 270192.89453050756,
-          "conservative_case": 173004.27042155282,
-          "optimistic_case": 367381.5186394623
-        },
-        {
-          "month": "2026-08",
-          "base_case": 287834.6610577596,
-          "conservative_case": 150389.19073449503,
-          "optimistic_case": 425280.13138102414
-        },
-        {
-          "month": "2026-09",
-          "base_case": 305476.42758501164,
-          "conservative_case": 137140.79271058852,
-          "optimistic_case": 473812.06245943473
-        },
-        {
-          "month": "2026-10",
-          "base_case": 323118.1941122637,
-          "conservative_case": 128740.9458943542,
-          "optimistic_case": 517495.44233017316
-        },
-        {
-          "month": "2026-11",
-          "base_case": 340759.9606395157,
-          "conservative_case": 123439.59049221798,
-          "optimistic_case": 558080.3307868135
-        },
-        {
-          "month": "2026-12",
-          "base_case": 358401.72716676776,
-          "conservative_case": 120339.18929667323,
-          "optimistic_case": 596464.2650368623
-        },
-        {
-          "month": "2027-01",
-          "base_case": 376043.4936940198,
-          "conservative_case": 118906.56403718909,
-          "optimistic_case": 633180.4233508505
+          "optimistic_case": 341537.38650545
         }
       ]
     },
@@ -1508,50 +1414,190 @@
         255172.31,
         301261.55,
         267976.8,
-        258560.61
+        258560.61,
+        350617.8,
+        284871.6
       ],
       "forecast": [
         {
           "month": "2026-07",
-          "base_case": 298644.54465325223,
-          "conservative_case": 208514.89206651668,
-          "optimistic_case": 388774.1972399878
+          "base_case": 338956.8248537678,
+          "conservative_case": 249317.79744084156,
+          "optimistic_case": 428595.85226669407
         },
         {
           "month": "2026-08",
-          "base_case": 317582.1518944285,
-          "conservative_case": 190119.5748342917,
-          "optimistic_case": 445044.72895456525
+          "base_case": 358010.5505175886,
+          "conservative_case": 231241.82223229465,
+          "optimistic_case": 484779.2788028826
         },
         {
           "month": "2026-09",
-          "base_case": 336519.75913560466,
-          "conservative_case": 180410.62158684697,
-          "optimistic_case": 492628.8966843623
+          "base_case": 377064.2761814094,
+          "conservative_case": 221804.92636116178,
+          "optimistic_case": 532323.6260016571
         },
         {
           "month": "2026-10",
-          "base_case": 355457.3663767809,
-          "conservative_case": 175198.06120330977,
-          "optimistic_case": 535716.671550252
+          "base_case": 396118.00184523023,
+          "conservative_case": 216839.9470193777,
+          "optimistic_case": 575396.0566710827
         },
         {
           "month": "2026-11",
-          "base_case": 374394.9736179571,
-          "conservative_case": 172858.9436455766,
-          "optimistic_case": 575931.0035903376
+          "base_case": 415171.727509051,
+          "conservative_case": 214732.76877678072,
+          "optimistic_case": 615610.6862413213
         },
         {
           "month": "2026-12",
-          "base_case": 393332.5808591333,
-          "conservative_case": 172560.92132731318,
-          "optimistic_case": 614104.2403909534
+          "base_case": 434225.4531728718,
+          "conservative_case": 214655.57497184878,
+          "optimistic_case": 653795.3313738948
         },
         {
           "month": "2027-01",
-          "base_case": 412270.18810030946,
-          "conservative_case": 173809.54160315773,
-          "optimistic_case": 650730.8345974612
+          "base_case": 453279.1788366926,
+          "conservative_case": 216116.60453638813,
+          "optimistic_case": 690441.7531369971
+        }
+      ]
+    },
+    "برجر اسبشيال عائلى طبق": {
+      "method": "holt",
+      "historical": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        65611.25,
+        83036.25,
+        199235.5,
+        98771.75,
+        181335.0,
+        214131.21,
+        94784.25,
+        102839.62,
+        152748.75,
+        167895.75,
+        191825.49,
+        246585.28,
+        220672.08000000002,
+        250080.9,
+        302349.0,
+        260784.0
+      ],
+      "forecast": [
+        {
+          "month": "2026-07",
+          "base_case": 300430.24091531895,
+          "conservative_case": 205117.09509415747,
+          "optimistic_case": 395743.3867364804
+        },
+        {
+          "month": "2026-08",
+          "base_case": 316818.71193241363,
+          "conservative_case": 182025.56843968257,
+          "optimistic_case": 451611.85542514466
+        },
+        {
+          "month": "2026-09",
+          "base_case": 333207.1829495083,
+          "conservative_case": 168119.97175803542,
+          "optimistic_case": 498294.3941409812
+        },
+        {
+          "month": "2026-10",
+          "base_case": 349595.65396660304,
+          "conservative_case": 158969.36232428008,
+          "optimistic_case": 540221.945608926
+        },
+        {
+          "month": "2026-11",
+          "base_case": 365984.1249836978,
+          "conservative_case": 152857.4517782307,
+          "optimistic_case": 579110.7981891648
+        },
+        {
+          "month": "2026-12",
+          "base_case": 382372.59600079246,
+          "conservative_case": 148904.0229594601,
+          "optimistic_case": 615841.1690421249
+        },
+        {
+          "month": "2027-01",
+          "base_case": 398761.06701788714,
+          "conservative_case": 146586.18649985862,
+          "optimistic_case": 650935.9475359156
+        }
+      ]
+    },
+    "سجق الهنا 350 طبق": {
+      "method": "holt",
+      "historical": [
+        203852.7,
+        152315.5,
+        166819.5,
+        142884.0,
+        132133.5,
+        75276.0,
+        67860.0,
+        115443.0,
+        132912.0,
+        149823.0,
+        116022.0,
+        130275.0,
+        91287.0,
+        134860.5,
+        128805.75,
+        133636.18,
+        181602.0,
+        103275.0,
+        111996.0,
+        126225.0
+      ],
+      "forecast": [
+        {
+          "month": "2026-07",
+          "base_case": 117960.64199516918,
+          "conservative_case": 53932.93453313445,
+          "optimistic_case": 181988.3494572039
+        },
+        {
+          "month": "2026-08",
+          "base_case": 115224.40273411348,
+          "conservative_case": 24675.550473646945,
+          "optimistic_case": 205773.25499458
+        },
+        {
+          "month": "2026-09",
+          "base_case": 112488.1634730578,
+          "conservative_case": 1588.9210566567344,
+          "optimistic_case": 223387.40588945884
+        },
+        {
+          "month": "2026-10",
+          "base_case": 109751.92421200211,
+          "conservative_case": 0.0,
+          "optimistic_case": 237807.33913607156
+        },
+        {
+          "month": "2026-11",
+          "base_case": 107015.68495094641,
+          "conservative_case": 0.0,
+          "optimistic_case": 250185.9912795266
+        },
+        {
+          "month": "2026-12",
+          "base_case": 104279.44568989072,
+          "conservative_case": 0.0,
+          "optimistic_case": 261114.65837206668
+        },
+        {
+          "month": "2027-01",
+          "base_case": 101543.20642883502,
+          "conservative_case": 0.0,
+          "optimistic_case": 270944.5973909735
         }
       ]
     },
@@ -1575,50 +1621,52 @@
         56140.0,
         155795.0,
         166595.0,
-        132485.0
+        132485.0,
+        178710.0,
+        135050.0
       ],
       "forecast": [
         {
           "month": "2026-07",
-          "base_case": 132030.15962034548,
-          "conservative_case": 74701.74646648462,
-          "optimistic_case": 189358.57277420635
+          "base_case": 145923.69181874738,
+          "conservative_case": 88248.21155762419,
+          "optimistic_case": 203599.17207987056
         },
         {
           "month": "2026-08",
-          "base_case": 135797.52149280073,
-          "conservative_case": 54722.902101282554,
-          "optimistic_case": 216872.1408843189
+          "base_case": 149992.86060606418,
+          "conservative_case": 68427.41420440204,
+          "optimistic_case": 231558.3070077263
         },
         {
           "month": "2026-09",
-          "base_case": 139564.883365256,
-          "conservative_case": 40269.159065469066,
-          "optimistic_case": 238860.60766504297
+          "base_case": 154062.029393381,
+          "conservative_case": 54165.167230179766,
+          "optimistic_case": 253958.89155658224
         },
         {
           "month": "2026-10",
-          "base_case": 143332.24523771126,
-          "conservative_case": 28675.418929989537,
-          "optimistic_case": 257989.071545433
+          "base_case": 158131.19818069783,
+          "conservative_case": 42780.23765845147,
+          "optimistic_case": 273482.1587029442
         },
         {
           "month": "2026-11",
-          "base_case": 147099.60711016654,
-          "conservative_case": 18909.378255940537,
-          "optimistic_case": 275289.8359643925
+          "base_case": 162200.36696801466,
+          "conservative_case": 33234.072469195904,
+          "optimistic_case": 291166.66146683344
         },
         {
           "month": "2026-12",
-          "base_case": 150866.9689826218,
-          "conservative_case": 10441.6089922034,
-          "optimistic_case": 291292.3289730402
+          "base_case": 166269.53575533145,
+          "conservative_case": 24994.038445616607,
+          "optimistic_case": 307545.0330650463
         },
         {
           "month": "2027-01",
-          "base_case": 154634.33085507707,
-          "conservative_case": 2957.6065919971734,
-          "optimistic_case": 306311.05511815695
+          "base_case": 170338.70454264828,
+          "conservative_case": 17743.72702550172,
+          "optimistic_case": 322933.68205979484
         }
       ]
     }
@@ -1641,7 +1689,9 @@
     "2026-03",
     "2026-04",
     "2026-05",
-    "2026-06"
+    "2026-06",
+    "2026-07",
+    "2026-08"
   ],
   "months_future": [
     "2026-07",

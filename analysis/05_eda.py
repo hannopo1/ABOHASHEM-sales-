@@ -5,6 +5,10 @@ import json
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import sys
+from pathlib import Path as _Path
+sys.path.insert(0, str(_Path(__file__).resolve().parent))
+from lib.names import best as _best_label  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 TX = ROOT / "data" / "processed" / "sales_transactions_enriched.csv"
@@ -105,7 +109,9 @@ def main():
 
     # 3. customer analysis
     cust_pareto = pareto_abc(df, "customer_code")
-    name_map = df.groupby("customer_code")["customer_name_raw"].agg(lambda s: s.value_counts().index[0])
+    name_map = df.groupby("customer_code")["customer_name_raw"].agg(_best_label)
+    # A customer with no name in ANY source keeps an honest label, not a blank.
+    name_map = name_map.where(name_map.notna(), "عميل " + name_map.index.to_series())
     cust_pareto["customer_name"] = cust_pareto["customer_code"].map(name_map)
     cust_pareto.to_csv(OUT_DIR / "eda_customer_pareto_abc.csv", index=False)
     n_a_customers = int((cust_pareto["abc_class"] == "A").sum())
@@ -125,7 +131,7 @@ def main():
     item_xyz = xyz_classification(df, "item_name_canonical")
     item_full = item_pareto.merge(item_xyz[["item_name_canonical", "cv_qty", "xyz_class"]],
                                    on="item_name_canonical", how="left")
-    brand_map = df.groupby("item_name_canonical")["brand"].agg(lambda s: s.value_counts().index[0])
+    brand_map = df.groupby("item_name_canonical")["brand"].agg(_best_label)
     item_full["brand"] = item_full["item_name_canonical"].map(brand_map)
     item_full.to_csv(OUT_DIR / "eda_item_abc_xyz.csv", index=False)
     hhi_items = float(((item_pareto["line_total"] / item_pareto["line_total"].sum()) ** 2).sum() * 10000)

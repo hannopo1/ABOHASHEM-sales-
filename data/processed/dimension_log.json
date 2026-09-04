@@ -33,11 +33,17 @@
       "revenue": 2900.0
     },
     {
+      "item_code": 454,
+      "name": "كيلو استربس",
+      "revenue": 1450.0
+    },
+    {
       "item_code": 11111,
       "name": "كفته حاتي سيخ طبق",
       "revenue": 640.0
     }
   ],
-  "n_items": 87,
+  "n_items": 88,
+  "items_with_no_name_in_any_source": [],
   "matched_master_fuzzy": 15
 }

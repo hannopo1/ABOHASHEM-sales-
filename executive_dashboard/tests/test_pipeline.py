@@ -16,8 +16,9 @@ import pytest
 APP_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(APP_DIR))
 
+# COLLECTIONS_PRINTED_TOTAL / RETURNS_PRINTED_TOTAL are deliberately NOT imported
+# here: they are filled in at parse time now, so a module-level import binds None.
 from src.config import (bonus_pct, BONUS_RULES,  # noqa: E402
-                        COLLECTIONS_PRINTED_TOTAL, RETURNS_PRINTED_TOTAL,
                         PAYMENT_METHOD_KEYWORDS, PAYMENT_METHOD_DEFAULT,
                         DEBT_CODE_ALIASES, canonical_code, clean_item_name)
 
@@ -53,12 +54,28 @@ def test_bonus_rules_are_monotonic():
 
 
 # --- collections / returns (stdlib-only config checks; always run) -----------
-def test_printed_totals_are_positive():
-    """The anti-fabrication anchors for the collections drill-down are present."""
-    assert COLLECTIONS_PRINTED_TOTAL > 0
-    assert RETURNS_PRINTED_TOTAL > 0
-    assert COLLECTIONS_PRINTED_TOTAL == 22_177_149.68
-    assert RETURNS_PRINTED_TOTAL == 435_830.63
+def test_printed_totals_are_declared_per_source():
+    """The anti-fabrication anchors for the collections drill-down are present.
+
+    They used to be two module constants. They are now one printed total per
+    source file, because the receipts arrive as a cumulative run plus month-only
+    re-runs and a single constant went stale the moment a month was added.
+    """
+    from src.config import SRC_COLLECTIONS, SRC_RETURNS, SRC_RETURNS_ITEMISED
+    sources = SRC_COLLECTIONS + SRC_RETURNS + SRC_RETURNS_ITEMISED
+    assert sources, "no collections/returns sources declared"
+    for path, month, printed in sources:
+        assert printed > 0, path.name
+        assert month is None or len(month) == 7, path.name
+    # Exactly one cumulative (month=None) source per family; the rest own a month.
+    for family in (SRC_COLLECTIONS, SRC_RETURNS):
+        assert sum(1 for _p, m, _t in family if m is None) == 1
+    # A month may be owned once per family — receipts and returns are separate
+    # ledgers — but never twice within one, which would make the winner depend
+    # on list order rather than on a decision.
+    for family in (SRC_COLLECTIONS, SRC_RETURNS + SRC_RETURNS_ITEMISED):
+        owned = [m for _p, m, _t in family if m]
+        assert len(owned) == len(set(owned)), f"two files claim the same month: {owned}"
 
 
 def test_payment_method_keywords_shape():
@@ -121,23 +138,52 @@ def _collections_module():
     pytest.importorskip("fitz")
     from src import collections as coll
     from src import config as C
-    if not (C.SRC_COLLECTIONS_PDF.exists() and C.SRC_RETURNS_PDF.exists()):
+    if not all(p.exists() for p, _m, _t in C.SRC_COLLECTIONS + C.SRC_RETURNS):
         pytest.skip("source collections/returns PDFs not present")
     return coll, C
 
 
-def test_collections_reconcile_to_printed_total():
+def test_each_collections_file_reconciles_to_its_own_printed_total():
+    """The per-file anchor: every source must reproduce the total it prints.
+
+    Asserted file by file rather than on the concatenated frame, because the
+    supersede rule drops rows — a total that only balances after superseding
+    would hide a parser that lost a page from a file it then discarded.
+    """
+    coll, C = _collections_module()
+    for path, _month, printed in C.SRC_COLLECTIONS:
+        df = coll._parse_collections_file(path)
+        assert abs(float(df["amount"].sum()) - printed) < 0.01, path.name
+    for path, _month, printed in C.SRC_RETURNS:
+        df = coll._parse_returns_file(path)
+        assert abs(float(df["value"].sum()) - printed) < 0.01, path.name
+    for path, _month, printed in C.SRC_RETURNS_ITEMISED:
+        df = coll._parse_returns_itemised_file(path)
+        assert abs(float(df["value"].sum()) - printed) < 0.01, path.name
+
+
+def test_superseded_months_are_not_double_counted():
+    """July appears in both the cumulative receipts file (to the 18th) and the
+    whole-month one. Only the whole-month figure may survive."""
     coll, C = _collections_module()
     df = coll.parse_collections()
-    assert df.height == 1423
+    july = df.filter(df["month"] == "2026-07")
+    owner = next(t for p, m, t in C.SRC_COLLECTIONS if m == "2026-07")
+    assert abs(float(july["amount"].sum()) - owner) < 0.01
+    # and the month totals must still sum to the whole
     assert abs(float(df["amount"].sum()) - C.COLLECTIONS_PRINTED_TOTAL) < 0.01
 
 
-def test_returns_reconcile_to_printed_total():
+def test_returns_itemised_rolls_up_without_inflating_the_month():
+    """August returns arrive per ITEM; rolling them to credit-note grain must not
+    change the month's value, only its row count."""
     coll, C = _collections_module()
-    df = coll.parse_returns()
-    assert df.height == 156
-    assert abs(float(df["value"].sum()) - C.RETURNS_PRINTED_TOTAL) < 0.01
+    items = coll.parse_returns_itemised()
+    if items.height == 0:
+        pytest.skip("no itemised returns source")
+    rolled = coll.parse_returns().filter(coll.pl.col("month") == "2026-08")
+    assert abs(float(items["value"].sum()) - float(rolled["value"].sum())) < 0.01
+    assert rolled.height < items.height
 
 
 def test_method_classification():

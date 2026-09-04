@@ -47,7 +47,7 @@ def _corrected_rep_map(final_balances, dim_customers, debt_detail):
     """Customer → representative, corrected against OFFICIAL master data.
 
     Single source of truth = the customer-account reports filed by rep
-    (2026-07-16, file-based). Where a customer is absent there, fall back to the
+    (config.AR_SNAPSHOT_FILES, file-based). Where a customer is absent there, fall
     cleaned dim_customers.rep, then the 2026-07-04 debt detail. Never guesses —
     a customer with no rep in any source stays 'غير محدد' and is reported as an
     exception. Touches ONLY the rep relationship, no financial value.
@@ -63,7 +63,7 @@ def _corrected_rep_map(final_balances, dim_customers, debt_detail):
         v = (r["rep"] or "").strip()
         if v:
             rep[str(r["customer_code"])] = v
-    # 1st priority (authoritative): the 2026-07-16 by-rep account reports
+    # 1st priority (authoritative): the current by-rep account reports
     for code, meta in final_balances.items():
         v = (meta.get("rep_official") or meta.get("rep") or "").strip()
         if v:
@@ -158,7 +158,11 @@ def _customer_ar(dim_customers, final_balances, invoices_full, rep_map,
           dim_customers.with_columns(pl.col("customer_code").cast(pl.Utf8)).iter_rows(named=True)}
 
     out = {}
-    for code in set(billed_map) | set(final_balances) | set(dc):
+    # sorted(): iterating the set directly leaves the output at the mercy of
+    # PYTHONHASHSEED, so data.js came out key-ordered differently on every run.
+    # The content was identical, but the diff was not — which makes a rebuild
+    # pull request unreviewable.
+    for code in sorted(set(billed_map) | set(final_balances) | set(dc)):
         billed = billed_map.get(code, float((dc.get(code) or {}).get("total_revenue") or 0.0))
         has_ar = code in final_balances
         outstanding = float(final_balances[code]["balance"]) if has_ar else None
@@ -197,33 +201,25 @@ def _month_subset(lines_all, invoices_all, month):
 
 
 def _receivables_for(receivables_full, invoices_sub, month):
-    """FIFO overdue snapshot restricted to the customers active in the month
-    (the balance itself is a fixed 2026-07-16 snapshot; only the cohort narrows).
-    Bucket / rep / totals are re-aggregated from the narrowed rows so everything
-    still reconciles exactly to that cohort's outstanding."""
-    if month == "all":
-        return receivables_full
-    active = set(invoices_sub["customer_code"].cast(pl.Utf8).unique().to_list())
-    rows = [r for r in receivables_full["rows"] if r["customer_code"] in active]
-    buckets = {k: 0.0 for k in receivables_full["buckets"]}
-    by_rep: dict = {}
-    cur = ov = 0.0
-    for r in rows:
-        for k, v in r["buckets"].items():
-            buckets[k] += v
-        cur += r["current"]
-        ov += r["overdue"]
-        s = by_rep.setdefault(r["rep"], {"current": 0.0, "overdue": 0.0, "customers": 0})
-        s["current"] += r["current"]
-        s["overdue"] += r["overdue"]
-        s["customers"] += 1
-    rep_rows = sorted(({"rep": k, "current": round(v["current"], 2), "overdue": round(v["overdue"], 2),
-                        "outstanding": round(v["current"] + v["overdue"], 2), "customers": v["customers"]}
-                       for k, v in by_rep.items()), key=lambda x: x["outstanding"], reverse=True)
-    return {**receivables_full,
-            "total_outstanding": round(cur + ov, 2), "total_current": round(cur, 2),
-            "total_overdue": round(ov, 2), "buckets": {k: round(v, 2) for k, v in buckets.items()},
-            "by_rep": rep_rows, "rows": rows}
+    """The receivables snapshot — the SAME one for every month.
+
+    This used to narrow the snapshot to the customers who happened to be invoiced
+    in the selected month and re-total it. That is a category error: a balance is
+    a STOCK struck on one date, not a monthly flow, so slicing it by sales month
+    answers a question nobody asked and looks like an answer to the one they did.
+
+    Concretely, on the 2026-09-03 snapshot the August view showed 2,275,995 of
+    2,942,822 — it dropped 104 debtors who had a balance but no August invoice,
+    and every last pound of the missing 666,827 was OVERDUE, because a customer
+    who has stopped buying is exactly the customer still owing you money. The
+    per-month figures also rose then fell across the year and read like a debt
+    trend, when they only tracked how many customers each month happened to
+    contain.
+
+    The month is therefore ignored here. Customer, rep and aging-band filters
+    still narrow the ledger downstream — those are real slices of the same stock.
+    """
+    return receivables_full
 
 
 def _bundle(lines_all, invoices_all, dims, receivables_full, monthly, month, coll_ctx=None):
@@ -256,7 +252,7 @@ def main() -> int:
     print("● Data-quality scan (all 2026) …")
     dq = data_quality.run(lines_all, invoices_all)
 
-    print("● Final balances (2026-07-16) + FIFO overdue analysis …")
+    print(f"● Final balances ({C.AS_OF_DATE}) + FIFO overdue analysis …")
     final_balances = debt_mod.load_final_balances()
     name_map = _name_map(dims["dim_customers"], invoices_full, dims["debt_detail"])
     # Customer→rep corrected against official master (see _corrected_rep_map).
@@ -265,7 +261,7 @@ def main() -> int:
     print(f"● Customer→rep: {len(rep_map)} mapped · {len(rep_exc)} sales customers with no rep (exceptions)")
     receivables = overdue_mod.compute(invoices_full, final_balances, dims["dim_customers"],
                                       net_terms=C.NET_TERMS_DAYS, as_of_str=C.AS_OF_DATE,
-                                      cutoff_str=C.OVERDUE_CUTOFF, name_map=name_map, rep_map=rep_map)
+                                      name_map=name_map, rep_map=rep_map)
 
     # --- Actual 2026 collections + returns (drives the recomputed collection-
     #     rate / bonus KPIs and the collections drill-down) --------------------
@@ -298,10 +294,14 @@ def main() -> int:
 
     # Per-month + whole-year insight sets (client picks by selected month).
     print("● Per-month analytics + insights …")
-    insights_by_month = {
-        m: _bundle(lines_all, invoices_all, dims, receivables, monthly, m, coll_ctx)["insights"]
+    # Keep the whole bundle per month, not just its insights: the validation pass
+    # below checks that every month view carries the same receivables total, and
+    # it can only do that if the KPIs survive this comprehension.
+    bundles_by_month = {
+        m: _bundle(lines_all, invoices_all, dims, receivables, monthly, m, coll_ctx)
         for m in months + ["all"]
     }
+    insights_by_month = {m: b["insights"] for m, b in bundles_by_month.items()}
 
     # Default-month (June) bundle — drives the PDF and the validation report.
     june = _bundle(lines_all, invoices_all, dims, receivables, monthly, C.DEFAULT_MONTH, coll_ctx)
@@ -319,7 +319,14 @@ def main() -> int:
             "data_months": months,
             "all_months_label": C.ALL_MONTHS_LABEL,
             "as_of": C.AS_OF_DATE,
+            # The edition this payload belongs to, distinct from as_of above:
+            # as_of is when the receivables were counted, snapshot_date is when
+            # the app was cut from them. The UI labels itself from this one.
+            "snapshot_date": C.SNAPSHOT_DATE,
             "net_terms_days": C.NET_TERMS_DAYS,
+            # Latest invoice date still within terms at as_of — derived from
+            # the terms so the client can label the rule without repeating it.
+            "overdue_cutoff": C.overdue_cutoff().isoformat(),
             "bonus_rules": C.BONUS_RULES,
             "generated_utc": date.today().isoformat(),
         },
@@ -368,7 +375,7 @@ def main() -> int:
     # --- validation report ------------------------------------------------
     jl, ji = _month_subset(lines_all, invoices_all, C.DEFAULT_MONTH)
     ok = validate(lines_all, invoices_all, jl, ji, june, receivables, dq, months,
-                  collections_payload, billed2026_total)
+                  collections_payload, billed2026_total, bundles_by_month)
     return 0 if ok else 1
 
 
@@ -379,7 +386,7 @@ def render_index():
 
 
 def validate(lines_all, invoices_all, jl, ji, june, receivables, dq, months,
-             collections=None, billed2026_total=None) -> bool:
+             collections=None, billed2026_total=None, bundles_by_month=None) -> bool:
     print("\n" + "=" * 64)
     print("VALIDATION REPORT")
     print("=" * 64)
@@ -427,10 +434,43 @@ def validate(lines_all, invoices_all, jl, ji, june, receivables, dq, months,
     # 7. ASP recompute for top product
     check("top product ASP = value/qty", bool(products) and products[0]["asp"] > 0)
 
-    # 8. aging buckets sum == outstanding (FIFO overdue, 2026-07-16)
+    # 8. aging buckets sum == outstanding (FIFO overdue, C.AS_OF_DATE)
     bsum = sum(receivables["buckets"].values())
     check("aging buckets == outstanding", abs(bsum - receivables["total_outstanding"]) < 1.0,
           f"({bsum:,.0f})")
+
+    # 8a. the AR snapshot reproduces the source files' own printed «الصافى».
+    #     src/debt.py already aborts on a per-file mismatch; this closes the loop
+    #     at portfolio level, where the credit balances that are held out of the
+    #     aging buckets have to come back in: outstanding − credit == Σ printed.
+    printed_net = round(sum(debt_mod._printed_net(p) or 0.0
+                            for p, _rep in C.AR_SNAPSHOT_FILES if p.exists()), 2)
+    check("AR snapshot == Σ printed net (per rep)",
+          abs(receivables["net_of_credit"] - printed_net) < 0.02,
+          f"({receivables['net_of_credit']:,.2f} vs {printed_net:,.2f}; "
+          f"{receivables['credit_customers']} in credit, "
+          f"{receivables['total_credit']:,.2f})")
+
+    # 8a-bis. the two payloads must agree about the debt.
+    #     The app shows one set of receivables under «المديونية والتحصيل» (from
+    #     this build) and another under «التحليل» (from the analysis pipeline's
+    #     ar_customer_balances_current.csv). They read the same reports but by
+    #     different routes, and for two months they silently disagreed by 432,425
+    #     because six analysis steps still named a dated July file. This check is
+    #     what makes that divergence loud.
+    try:
+        import csv as _csv
+        with open(C.F_AR_BALANCES, encoding="utf-8") as fh:
+            rows = list(_csv.DictReader(fh))
+        side_b = round(sum(float(r["debit"]) - float(r["credit"]) for r in rows), 2)
+        as_of_b = {r.get("as_of") for r in rows}
+        check("both payloads agree on the debt",
+              abs(receivables["net_of_credit"] - side_b) < 0.02
+              and as_of_b == {C.AS_OF_DATE},
+              f"({receivables['net_of_credit']:,.2f} vs {side_b:,.2f}; "
+              f"as_of {sorted(as_of_b)})")
+    except FileNotFoundError:
+        print("  [INFO] analysis AR snapshot absent — cross-payload debt check skipped")
 
     # 8b. per-customer FIFO reconciliation: current+overdue == final balance
     recon_bad = sum(1 for r in receivables["rows"]
@@ -443,6 +483,46 @@ def validate(lines_all, invoices_all, jl, ji, june, receivables, dq, months,
           abs(receivables["total_current"] + receivables["total_overdue"]
               - receivables["total_outstanding"]) < 1.0,
           f"(overdue {receivables['total_overdue']:,.0f})")
+
+    # 8c-bis. THE DEBT IS THE SAME NUMBER IN EVERY MONTH VIEW.
+    #     A balance is a stock struck on one date. The per-month bundles used to
+    #     re-total it over "customers invoiced that month", so the app reported a
+    #     different debt for each month — 2,275,995 under August against a real
+    #     2,942,822 — and the missing 666,827 was overdue to the last pound. This
+    #     check walks every month bundle and refuses any that does not carry the
+    #     whole snapshot.
+    month_debt = {m: b["kpis"]["outstanding"] for m, b in (bundles_by_month or {}).items()}
+    off = {m: v for m, v in month_debt.items()
+           if abs(v - receivables["total_outstanding"]) > 0.02}
+    check("debt is month-independent (stock, not flow)", not off,
+          f"({receivables['total_outstanding']:,.2f} in all "
+          f"{len(month_debt)} views)" if not off else f"(drifted: {off})")
+
+    # 8c-ter. the per-invoice overdue list is a true partition of the overdue
+    #     total: named invoices plus the undatable opening balance, nothing else.
+    oi = receivables["overdue_invoices"]
+    oi_sum = round(sum(o["amount_open"] for o in oi), 2)
+    check("overdue invoices + opening balance == total overdue",
+          abs(oi_sum + receivables["opening_balance"]
+              - receivables["total_overdue"]) < 0.5,
+          f"({oi_sum:,.2f} on {len(oi)} invoices + "
+          f"{receivables['opening_balance']:,.2f} opening "
+          f"= {receivables['total_overdue']:,.2f})")
+
+    # 8c-quater. every listed invoice really is past its own due date, and the
+    #     due date really is invoice date + the terms. The opening balance has no
+    #     invoice and must never be smuggled into this list wearing one.
+    from datetime import timedelta as _td
+    _terms = _td(days=C.NET_TERMS_DAYS)
+    _as_of = date.fromisoformat(C.AS_OF_DATE)
+    bad_due = [o for o in oi
+               if not o.get("invoice_no")
+               or date.fromisoformat(o["due_date"]) != date.fromisoformat(o["invoice_date"]) + _terms
+               or date.fromisoformat(o["due_date"]) >= _as_of
+               or o["days_past_due"] != (_as_of - date.fromisoformat(o["due_date"])).days]
+    check(f"every overdue invoice is named and due = date + {C.NET_TERMS_DAYS}d",
+          not bad_due, f"({len(bad_due)} malformed)" if bad_due
+          else f"({len(oi)} invoices, {receivables['overdue_customers']} customers)")
 
     # 8d. every receivable row shows a customer NAME (or an honest "عميل <code>"
     #     label), never a bare numeric code.

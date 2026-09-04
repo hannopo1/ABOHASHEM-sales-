@@ -6,12 +6,22 @@ into a single clean transactional dataset: one row per invoice line item.
 Sources (uploaded, unmodified):
   - "فواتير المبيعات من 112025 الى 3152026.md"  (2025-01-01 .. 2026-05-31, free-text/fenced blocks)
   - "فواتير_المبيعات_يونيو_2026-1.md"           (2026-06, markdown tables)
+  - the Pioneers-template invoice PDFs from July 2026 onwards, read through
+    ``executive_dashboard/src/invoice_pdf.py`` — the SAME parser the dashboard
+    build uses, so the two never disagree about what an invoice says.
+
+From July 2026 the invoices stopped arriving as pre-converted markdown and started
+arriving as native PDFs. Until they were wired in here, the whole analysis
+pipeline downstream of this file — dimensions, ABC/XYZ, forecasting, the margin
+join, the eighteen-month dashboard — silently ended at June while the executive
+dashboard, which reads the PDFs directly, ran two months ahead.
 
 Output:
   - data/processed/sales_transactions.csv
   - data/processed/parse_log.json  (counts, skipped lines, reconciliation checks)
 """
 import re
+import sys
 import json
 import csv
 from pathlib import Path
@@ -25,6 +35,11 @@ LOG_JSON = ROOT / "data" / "processed" / "parse_log.json"
 
 NUM_RE = re.compile(r"^-?\d{1,3}(,\d{3})*(\.\d+)?$|^-?\d+(\.\d+)?$")
 
+# The PDF months, in the shared parser's terms: (config attribute, source tag).
+# Adding a month means adding its path to executive_dashboard/src/config.py and
+# one line here — never a new parser.
+PDF_MONTHS = [("SRC_JULY_PDF", "july_2026"), ("SRC_AUGUST_PDF", "august_2026")]
+
 log = {
     "invoices_found_main": 0,
     "invoices_parsed_main": 0,
@@ -32,6 +47,8 @@ log = {
     "invoice_blocks_no_items_main": 0,
     "invoices_found_june": 0,
     "invoices_parsed_june": 0,
+    "invoices_parsed_pdf": 0,
+    "invoices_reconciliation_fail_pdf": 0,
     "line_items_total": 0,
     "reconciliation_fail_examples": [],
     "unparsed_examples": [],
@@ -206,8 +223,62 @@ def parse_june_file():
     return rows
 
 
+def parse_pdf_months():
+    """Line rows for every PDF month, in this file's CSV schema.
+
+    Each invoice must balance (Σ line_total == its printed total) or the run
+    aborts: the executive dashboard already refuses to build on a mismatch, and
+    letting the analysis dataset accept one would put two different answers for
+    the same invoice into the same app.
+    """
+    sys.path.insert(0, str(ROOT / "executive_dashboard"))
+    from src import config as C, invoice_pdf  # noqa: E402
+
+    rows = []
+    for attr, source in PDF_MONTHS:
+        path = getattr(C, attr)
+        lines, invoices = invoice_pdf.parse_rows(path)
+        if not invoices:
+            continue
+        by_no = {i["invoice_no"]: i for i in invoices}
+        bad = [i["invoice_no"] for i in invoices
+               if i["reported_total"] is None
+               or abs(i["line_total_sum"] - i["reported_total"]) > 1.0]
+        if bad:
+            log["invoices_reconciliation_fail_pdf"] += len(bad)
+            raise SystemExit(
+                f"[01_parse_invoices] {path.name}: {len(bad)} invoice(s) do not "
+                f"reconcile (e.g. {bad[:5]}). Refusing to write a dataset that "
+                f"disagrees with the executive dashboard.")
+        for ln in lines:
+            inv = by_no[ln["invoice_no"]]
+            d = ln["invoice_date"]
+            rows.append(dict(
+                source=source,
+                invoice_no=ln["invoice_no"],
+                # The markdown months write dates unpadded ("2026/6/2"); every
+                # downstream reader splits on "/" and zero-pads, so match it.
+                invoice_date=f"{d.year}/{d.month}/{d.day}",
+                customer_code=ln["customer_code"],
+                customer_name_raw=ln["customer_name"],
+                phone=ln["phone"],
+                is_bonus=ln["is_bonus"],
+                invoice_reported_total=inv["reported_total"],
+                seq=ln["seq"],
+                item_code=ln["item_code"],
+                item_name_raw=ln["item_name"],
+                qty=ln["qty"],
+                unit_price=ln["unit_price"],
+                discount_pct=ln["discount_pct"],
+                tax_pct=ln["tax_pct"],
+                line_total=ln["line_total"],
+            ))
+        log["invoices_parsed_pdf"] += len(invoices)
+    return rows
+
+
 def main():
-    rows = parse_main_file() + parse_june_file()
+    rows = parse_main_file() + parse_june_file() + parse_pdf_months()
     log["line_items_total"] = len(rows)
 
     OUT_CSV.parent.mkdir(parents=True, exist_ok=True)

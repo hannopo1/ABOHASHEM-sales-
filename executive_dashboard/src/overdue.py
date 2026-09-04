@@ -1,25 +1,41 @@
 """
 Overdue-receivable analysis via FIFO allocation against the FINAL customer
-balance (2026-07-16 snapshot).
+balance (the as-of snapshot in config.AR_SNAPSHOT_FILES).
 
 Method (standard AR FIFO — oldest paid first):
-  * For each customer we take their full invoice history (2025-01 .. 2026-07-15)
-    and their final outstanding balance B from the 16-07 snapshot.
+  * For each customer we take their full parsed invoice history and their final
+    outstanding balance B from the snapshot.
   * Implied collections = total_billed - B are applied to the OLDEST invoices
     first; the unpaid residual therefore lands on the most recent invoices, and
     Σ unpaid reconciles EXACTLY to B.
-  * Any unpaid (or partially unpaid) invoice dated 2026-06-30 or earlier is
-    classified OVERDUE; unpaid July invoices are CURRENT (not yet due).
-  * Overdue amounts are aged into buckets by invoice age vs the 2026-07-16
-    snapshot. Balance in excess of the parsed history (pre-2025 opening balance)
-    is placed in the oldest bucket, keeping the reconciliation exact.
+  * Each still-open invoice gets a DUE DATE of its own: ``invoice date +
+    config.NET_TERMS_DAYS``. It is OVERDUE once that due date has passed at the
+    snapshot date, and CURRENT until then. The source invoices carry no due date,
+    so this is company policy applied here — stated, not measured.
+  * Overdue amounts are aged by DAYS PAST DUE, not by how old the invoice is.
+    Balance in excess of the parsed history (pre-2025 opening balance) has no
+    invoice and therefore no due date; it is placed in the oldest bucket and
+    reported as its own figure, never dressed up with a fabricated due date.
+  * A customer whose net balance is a CREDIT is reported separately rather than
+    netted off another customer's debt — see ``credit_rows`` in the output.
 
 Output mirrors ``receivables.compute`` (so the dashboard consumes it unchanged),
-with an added per-customer ``buckets`` breakdown for exact client-side aging.
+with an added per-customer ``buckets`` breakdown for exact client-side aging and
+an ``overdue_invoices`` list — one row per still-open past-due invoice, which is
+what the app's «المستحق والمتأخرات» section renders.
+
+Why the cutoff is no longer a date
+----------------------------------
+This module used to compare each invoice against a hand-written
+``config.OVERDUE_CUTOFF``. Set to 2026-07-31 against a 2026-09-03 snapshot it
+granted 34 days of credit, not the 30 the company gives, and it had to be
+retyped by hand with every new snapshot or silently drift further. The threshold
+is now derived from the terms (``config.overdue_cutoff()``), so it moves with the
+snapshot on its own.
 """
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, timedelta
 
 import polars as pl
 
@@ -33,37 +49,45 @@ def _valid(nm) -> bool:
     return bool(nm) and not str(nm).strip().replace(" ", "").isdigit()
 
 
-def _bucket_for_age(age_days: int) -> str:
-    if age_days <= 30:
-        return "d1_30"
-    if age_days <= 60:
-        return "d31_60"
-    if age_days <= 90:
-        return "d61_90"
-    if age_days <= 120:
-        return "d91_120"
-    return "d120p"
+# The past-due bands, read from config rather than retyped here. The ladder that
+# used to live in this file disagreed with the one receivables.py reads out of
+# config.AGING_BUCKETS — two spellings of one rule, which is one too many.
+_PAST_DUE_BANDS = [(k, lo, hi) for k, _label, lo, hi in C.AGING_BUCKETS if hi > 0]
+
+
+def _bucket_for_days_past_due(days_past_due: int) -> str:
+    """Band an overdue amount by how many days it is PAST ITS DUE DATE.
+
+    Ageing by invoice age instead put the freshest arrears a whole month too
+    deep: with 30-day terms an invoice one day late is already 31 days old, so
+    the "1-30" band could never receive anything and always read zero.
+    """
+    for key, lo, hi in _PAST_DUE_BANDS:
+        if lo <= days_past_due <= hi:
+            return key
+    return _PAST_DUE_BANDS[-1][0]
 
 
 def compute(invoices_full: pl.DataFrame, final_balances: dict,
             dim_customers: pl.DataFrame,
             net_terms: int = C.NET_TERMS_DAYS,
-            as_of_str: str = "2026-07-16",
-            cutoff_str: str = "2026-06-30",
+            as_of_str: str = C.AS_OF_DATE,
             name_map: dict | None = None,
             rep_map: dict | None = None) -> dict:
     name_map = name_map or {}
     ext_rep = rep_map or {}
     as_of = date.fromisoformat(as_of_str)
-    cutoff = date.fromisoformat(cutoff_str)
+    terms = timedelta(days=net_terms)
 
     # customer -> ordered invoice list [(date, amount)], and last date
     inv = invoices_full.with_columns(pl.col("customer_code").cast(pl.Utf8)).select(
         "customer_code", "invoice_no", "invoice_date", "reported_total")
+    # (date, amount, invoice_no) — the number is carried so a past-due invoice can
+    # be named on the collections screen, not just counted.
     hist: dict[str, list] = {}
     for r in inv.iter_rows(named=True):
         hist.setdefault(r["customer_code"], []).append(
-            (r["invoice_date"], float(r["reported_total"] or 0.0)))
+            (r["invoice_date"], float(r["reported_total"] or 0.0), r["invoice_no"]))
     for v in hist.values():
         v.sort(key=lambda t: t[0])
 
@@ -74,14 +98,39 @@ def compute(invoices_full: pl.DataFrame, final_balances: dict,
     buckets = {k: 0.0 for k in _BUCKET_KEYS}
     by_rep: dict[str, dict] = {}
     rows: list[dict] = []
-    tot_current = tot_overdue = 0.0
+    # One row per still-open invoice whose due date has passed. This is the list
+    # the collections screen is built from, so it names the invoice rather than
+    # only totalling it.
+    overdue_invoices: list[dict] = []
+    tot_current = tot_overdue = tot_opening = 0.0
+
+    # Customers whose net balance is a CREDIT (the company owes them). They carry
+    # no receivable to age, so they are kept out of the buckets — netting one
+    # customer's credit against another's debt would understate the debt actually
+    # out there — but they are counted and reported rather than dropped, because
+    # the per-file printed net includes them and the two figures have to be
+    # reconcilable: outstanding − credit == Σ printed net.
+    credit_rows: list[dict] = []
+    tot_credit = 0.0
 
     for code, meta in final_balances.items():
         B = float(meta["balance"] or 0.0)
         if B <= 0:
+            if B < 0:
+                tot_credit += -B
+                credit_rows.append({
+                    "customer_code": code,
+                    "customer_name": name_map.get(code)
+                    or (meta.get("name") if _valid(meta.get("name")) else None)
+                    or f"عميل {code}",
+                    "rep": ext_rep.get(code) or rep_map_dim.get(code)
+                    or meta.get("rep_official") or meta.get("rep") or "غير محدد",
+                    "credit_balance": round(-B, 2),
+                })
             continue
+        first_row = len(overdue_invoices)   # this customer's slice, for backfill
         invs = hist.get(code, [])
-        total_billed = sum(a for _d, a in invs)
+        total_billed = sum(a for _d, a, _n in invs)
         collected = max(0.0, total_billed - B)
         opening = max(0.0, B - total_billed)
 
@@ -89,29 +138,47 @@ def compute(invoices_full: pl.DataFrame, final_balances: dict,
         cust_b = {k: 0.0 for k in _BUCKET_KEYS}
         cust_current = cust_overdue = 0.0
         oldest = None
-        for d, a in invs:                       # oldest -> newest (FIFO paydown)
+        for d, a, no in invs:                   # oldest -> newest (FIFO paydown)
             pay = min(rem, a)
             rem -= pay
             unpaid = a - pay
             if unpaid <= 0.005:
                 continue
-            if d <= cutoff:                     # June-or-earlier unpaid => overdue
-                age = (as_of - d).days
-                cust_b[_bucket_for_age(age)] += unpaid
+            due = d + terms                     # company terms, not a source field
+            if due < as_of:                     # the due date has passed => overdue
+                dpd = (as_of - due).days
+                bucket = _bucket_for_days_past_due(dpd)
+                cust_b[bucket] += unpaid
                 cust_overdue += unpaid
                 if oldest is None or d < oldest[0]:
                     oldest = (d, unpaid)
-            else:                               # July => not yet due (current)
+                overdue_invoices.append({
+                    "invoice_no": no,
+                    "invoice_date": d.isoformat(),
+                    "due_date": due.isoformat(),
+                    "days_past_due": dpd,
+                    "customer_code": code,
+                    "rep": None,                # filled once the rep is resolved
+                    "amount_open": round(unpaid, 2),
+                    "bucket": bucket,
+                })
+            else:                               # still within terms
                 cust_b["current"] += unpaid
                 cust_current += unpaid
-        if opening > 0.005:                     # pre-history debt => oldest bucket
+        if opening > 0.005:
+            # Debt that predates the invoice history: no invoice, so no due date
+            # and no age that could be measured. It is counted as overdue and put
+            # in the oldest band, but it never enters overdue_invoices — inventing
+            # a due date for it would be inventing data. It is reported on its own
+            # in `opening_balance` below so the screen can say what it is.
             cust_b["d120p"] += opening
             cust_overdue += opening
+            tot_opening += opening
 
         # corrected master mapping wins, then dim fallback, then debt-report rep
         rep = ext_rep.get(code) or rep_map_dim.get(code) or meta.get("rep_official") \
             or meta.get("rep") or "غير محدد"
-        last_dt = max((d for d, _a in invs), default=None)
+        last_dt = max((d for d, _a, _n in invs), default=None)
         old_age = (as_of - oldest[0]).days if oldest else None
         # Always display a real customer name — resolve from the authoritative
         # name map (dim_customers → debt detail → invoice history), then the
@@ -120,6 +187,12 @@ def compute(invoices_full: pl.DataFrame, final_balances: dict,
         # bare number, and never a fabricated name.
         cust_name = name_map.get(code) or (meta.get("name") if _valid(meta.get("name")) else None) \
             or f"عميل {code}"
+        # The per-invoice rows were appended before the rep and the display name
+        # were resolved; stamp them now so every sheet names the same person the
+        # customer table does.
+        for oi in overdue_invoices[first_row:]:
+            oi["rep"] = rep
+            oi["customer_name"] = cust_name
         rows.append({
             "rep": rep,
             "customer_code": code,
@@ -146,6 +219,8 @@ def compute(invoices_full: pl.DataFrame, final_balances: dict,
         slot["customers"] += 1
 
     rows.sort(key=lambda x: x["outstanding"], reverse=True)
+    # Oldest money first: that is the order a collections call list is worked in.
+    overdue_invoices.sort(key=lambda x: (-x["days_past_due"], -x["amount_open"]))
     total_out = tot_current + tot_overdue
     rep_rows = sorted(
         ({"rep": k, "current": round(v["current"], 2), "overdue": round(v["overdue"], 2),
@@ -155,10 +230,26 @@ def compute(invoices_full: pl.DataFrame, final_balances: dict,
 
     return {
         "as_of": as_of_str,
+        "net_terms_days": net_terms,
+        # The last invoice date still within terms at as_of. Derived from the
+        # terms, never typed, so it moves with the snapshot.
+        "overdue_cutoff": (as_of - terms).isoformat(),
         "total_outstanding": round(total_out, 2),
         "total_current": round(tot_current, 2),
         "total_overdue": round(tot_overdue, 2),
-        "total_credit": 0.0,
+        # Overdue splits in two: invoices we can name and date, and balance that
+        # predates the invoice history and can be neither. Reported apart so the
+        # screen never implies a due date it does not have.
+        "overdue_invoices": overdue_invoices,
+        "overdue_on_invoices": round(tot_overdue - tot_opening, 2),
+        "opening_balance": round(tot_opening, 2),
+        "overdue_invoice_count": len(overdue_invoices),
+        "overdue_customers": len({o["customer_code"] for o in overdue_invoices}),
+        "total_credit": round(tot_credit, 2),
+        # outstanding − credit is the figure the source files print as «الصافى».
+        "net_of_credit": round(total_out - tot_credit, 2),
+        "credit_customers": len(credit_rows),
+        "credit_rows": sorted(credit_rows, key=lambda x: -x["credit_balance"]),
         "buckets": {k: round(v, 2) for k, v in buckets.items()},
         "bucket_labels": {key: label for key, label, *_ in C.AGING_BUCKETS},
         "by_rep": rep_rows,

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>أبو هاشم للحوم — لوحة الأداء (تطوير)</title>
+<!--
+  Development shell. Loads every module as its own <script> so a change shows up
+  on reload with no rebuild. Needs a local server, because the AR snapshots are
+  fetched rather than inlined:
+
+      python3 -m http.server 8000        # from the repository root
+      open http://localhost:8000/mobile/
+
+  Ship with `python3 mobile/build_standalone.py`, which inlines all of this into
+  one file that opens straight from file:// with no server and no network.
+-->
+<style id="fontshim">
+/* The distributed build embeds Cairo as a data URI. Here it comes off the same
+   vendored file, so development and production render identically offline. */
+@font-face{font-family:'Cairo';font-weight:400;font-display:swap;
+  src:url(../executive_dashboard/vendor/fonts/Cairo-400.woff2) format('woff2');}
+@font-face{font-family:'Cairo';font-weight:600;font-display:swap;
+  src:url(../executive_dashboard/vendor/fonts/Cairo-600.woff2) format('woff2');}
+@font-face{font-family:'Cairo';font-weight:700;font-display:swap;
+  src:url(../executive_dashboard/vendor/fonts/Cairo-700.woff2) format('woff2');}
+</style>
+<link rel="stylesheet" href="src/app.css">
+</head>
+<body>
+<div id="root"></div>
+
+<script src="vendor/react.production.min.js"></script>
+<script src="vendor/react-dom.production.min.js"></script>
+<script src="../executive_dashboard/vendor/echarts.min.js"></script>
+<script src="../dashboards/data.js"></script>
+
+<script>
+/* Inline the snapshots into the same <script type="application/json"> blocks the
+   production build emits, so readSnapshots()/parseSnapshot() take exactly one
+   code path in development and in the shipped file. */
+(async () => {
+  const base = "data/snapshots/";
+  const index = await (await fetch(base + "index.json")).json();
+  const add = (id, text) => {
+    const s = document.createElement("script");
+    s.type = "application/json"; s.id = id; s.textContent = text;
+    document.body.appendChild(s);
+  };
+  add("snap-index", JSON.stringify(index));
+  for (const e of index) add("snap-" + e.file, await (await fetch(base + e.file)).text());
+
+  for (const m of ["dash-tokens.js", "dash-agg.js", "repo-adapter.js", "dash-aging.js",
+                   "dash-margin.js", "dash-charts.js", "dash-export.js", "dash-app.js"]) {
+    const r = await fetch("src/" + m);
+    if (!r.ok) continue;                 // modules added in later phases
+    const s = document.createElement("script");
+    s.textContent = await r.text();
+    document.body.appendChild(s);
+  }
+})();
+</script>
+</body>
+</html>

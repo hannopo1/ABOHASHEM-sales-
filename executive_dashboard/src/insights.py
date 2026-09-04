@@ -27,9 +27,15 @@ def _insight(title, what, why, risk, opportunity, action, priority):
 def generate(kpis, customers, products, receivables, monthly, dq, focus_month=None) -> dict:
     out: dict[str, dict] = {}
 
+    # The headline names the month actually being shown. It was pinned to
+    # "يونيو ٢٠٢٦" for every month, so the August card carried a June title while
+    # the card directly beneath it said August — one screen, two months.
+    from . import config as _C
+    period = _C.month_label_ar(focus_month) if focus_month else "كل الشهور"
+
     # --- Portfolio / KPIs --------------------------------------------------
     out["overview"] = _insight(
-        "الأداء التنفيذي — يونيو ٢٠٢٦",
+        f"الأداء التنفيذي — {period}",
         f"بلغت المبيعات {_egp(kpis['total_sales'])} عبر {kpis['n_invoices']} فاتورة "
         f"و{kpis['n_customers']} عميلاً، بمتوسط فاتورة {_egp(kpis['avg_invoice_value'])}.",
         "الشهر بيع آجل بالكامل تقريبًا (التحصيل عند الإصدار شبه صفري)، لذا يُقاس "

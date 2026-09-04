@@ -47,7 +47,7 @@ def _corrected_rep_map(final_balances, dim_customers, debt_detail):
     """Customer → representative, corrected against OFFICIAL master data.
 
     Single source of truth = the customer-account reports filed by rep
-    (2026-07-16, file-based). Where a customer is absent there, fall back to the
+    (2026-07-30, file-based). Where a customer is absent there, fall back to the
     cleaned dim_customers.rep, then the 2026-07-04 debt detail. Never guesses —
     a customer with no rep in any source stays 'غير محدد' and is reported as an
     exception. Touches ONLY the rep relationship, no financial value.
@@ -63,7 +63,7 @@ def _corrected_rep_map(final_balances, dim_customers, debt_detail):
         v = (r["rep"] or "").strip()
         if v:
             rep[str(r["customer_code"])] = v
-    # 1st priority (authoritative): the 2026-07-16 by-rep account reports
+    # 1st priority (authoritative): the 2026-07-30 by-rep account reports
     for code, meta in final_balances.items():
         v = (meta.get("rep_official") or meta.get("rep") or "").strip()
         if v:
@@ -82,6 +82,7 @@ def rep_exceptions(rep_map, invoices_all):
             continue
         seen.add(code)
         out.append({"customer_code": code, "customer_name": r["customer_name"],
+                    "rep": "Not Available",
                     "reason": "لا يوجد مندوب لهذا العميل في أي مصدر رسمي (تقارير المديونية / بيانات العملاء)"})
     return sorted(out, key=lambda x: x["customer_code"])
 
@@ -108,6 +109,14 @@ def _name_map(dim_customers, invoices_full, debt_detail):
     # Official name overrides for codes with no name in any source file — win.
     m.update(C.CUSTOMER_NAME_OVERRIDES)
     return m
+
+
+def _consolidate_names(df: pl.DataFrame, name_map: dict) -> pl.DataFrame:
+    """Every row of a customer code takes the code's ONE authoritative name;
+    codes absent from the map keep their original spelling. Display-only."""
+    canon = pl.col("customer_code").cast(pl.Utf8).replace_strict(name_map, default=None)
+    return df.with_columns(
+        pl.coalesce([canon, pl.col("customer_name")]).alias("customer_name"))
 
 
 def _export_frames(lines, invoices, rep_map):
@@ -158,7 +167,9 @@ def _customer_ar(dim_customers, final_balances, invoices_full, rep_map,
           dim_customers.with_columns(pl.col("customer_code").cast(pl.Utf8)).iter_rows(named=True)}
 
     out = {}
-    for code in set(billed_map) | set(final_balances) | set(dc):
+    # sorted() so the emitted dict's key order (and therefore data.js byte-for-byte)
+    # is reproducible; a bare set union iterates in hash-seed-dependent order.
+    for code in sorted(set(billed_map) | set(final_balances) | set(dc)):
         billed = billed_map.get(code, float((dc.get(code) or {}).get("total_revenue") or 0.0))
         has_ar = code in final_balances
         outstanding = float(final_balances[code]["balance"]) if has_ar else None
@@ -198,7 +209,7 @@ def _month_subset(lines_all, invoices_all, month):
 
 def _receivables_for(receivables_full, invoices_sub, month):
     """FIFO overdue snapshot restricted to the customers active in the month
-    (the balance itself is a fixed 2026-07-16 snapshot; only the cohort narrows).
+    (the balance itself is a fixed AS_OF_DATE snapshot; only the cohort narrows).
     Bucket / rep / totals are re-aggregated from the narrowed rows so everything
     still reconciles exactly to that cohort's outstanding."""
     if month == "all":
@@ -253,12 +264,21 @@ def main() -> int:
     invoices_all = invoices_full.filter(pl.col("invoice_date").dt.year() == C.PERIOD_YEAR)
     monthly = load.load_history_monthly().to_dicts()
 
+    # Consolidate customer-name spelling variants: every displayed 2026 row takes
+    # the ONE authoritative name of its code (_name_map: reference master wins,
+    # then debt detail, then invoice history) — same cleanup already applied to
+    # item names. invoices_full is left raw ON PURPOSE: the collections/returns
+    # name-matcher needs every spelling variant to attribute receipts. Purely
+    # cosmetic — codes and every financial value are untouched.
+    name_map = _name_map(dims["dim_customers"], invoices_full, dims["debt_detail"])
+    lines_all = _consolidate_names(lines_all, name_map)
+    invoices_all = _consolidate_names(invoices_all, name_map)
+
     print("● Data-quality scan (all 2026) …")
     dq = data_quality.run(lines_all, invoices_all)
 
-    print("● Final balances (2026-07-16) + FIFO overdue analysis …")
+    print("● Final balances (2026-07-30) + FIFO overdue analysis …")
     final_balances = debt_mod.load_final_balances()
-    name_map = _name_map(dims["dim_customers"], invoices_full, dims["debt_detail"])
     # Customer→rep corrected against official master (see _corrected_rep_map).
     rep_map = _corrected_rep_map(final_balances, dims["dim_customers"], dims["debt_detail"])
     rep_exc = rep_exceptions(rep_map, invoices_all)
@@ -330,7 +350,7 @@ def main() -> int:
         "receivables": receivables,
         "collections": {**collections_payload,
                         "billed_2026": round(billed2026_total, 2),
-                        "outstanding_1607": receivables["total_outstanding"]},
+                        "outstanding_as_of": receivables["total_outstanding"]},
         "monthly": monthly,
         "zero_invoices": dq["zero_invoices"],
         "data_quality": dq["summary"],
@@ -427,7 +447,7 @@ def validate(lines_all, invoices_all, jl, ji, june, receivables, dq, months,
     # 7. ASP recompute for top product
     check("top product ASP = value/qty", bool(products) and products[0]["asp"] > 0)
 
-    # 8. aging buckets sum == outstanding (FIFO overdue, 2026-07-16)
+    # 8. aging buckets sum == outstanding (FIFO overdue, AS_OF_DATE)
     bsum = sum(receivables["buckets"].values())
     check("aging buckets == outstanding", abs(bsum - receivables["total_outstanding"]) < 1.0,
           f"({bsum:,.0f})")

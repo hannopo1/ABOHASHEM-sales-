@@ -72,13 +72,15 @@ def _to_date(s: str) -> date:
 
 def _norm(s) -> str:
     """Normalise an Arabic customer name for matching: unify alef/ya/ta-marbuta,
-    strip tatweel + diacritics, collapse whitespace."""
+    strip tatweel + diacritics, unify the ثلجه/ثلاجه spelling (both spellings of
+    "fridge" are used interchangeably across the sources), collapse whitespace."""
     if not s:
         return ""
     s = str(s)
     for a, b in (("أ", "ا"), ("إ", "ا"), ("آ", "ا"), ("ى", "ي"), ("ة", "ه"), ("ـ", "")):
         s = s.replace(a, b)
     s = re.sub(r"[ً-ْ]", "", s)          # harakat
+    s = re.sub(r"\bثلجه\b", "ثلاجه", s)
     return re.sub(r"\s+", " ", s).strip()
 
 
@@ -112,13 +114,13 @@ def _method(bayan: str) -> str:
     return C.PAYMENT_METHOD_DEFAULT
 
 
-def parse_collections() -> pl.DataFrame:
-    """1,423 receipt rows. Empty (typed) frame if the source PDF is absent."""
-    if not C.SRC_COLLECTIONS_PDF.exists():
+def _parse_collections_file(path) -> pl.DataFrame:
+    """Parse ONE collections PDF (geometric x-band layout)."""
+    if not path.exists():
         return pl.DataFrame(schema=_COLL_SCHEMA)
     import fitz
 
-    doc = fitz.open(str(C.SRC_COLLECTIONS_PDF))
+    doc = fitz.open(str(path))
     out: list[dict] = []
     for pi in range(doc.page_count):
         for row in _cluster_rows(doc[pi]):
@@ -153,13 +155,22 @@ def parse_collections() -> pl.DataFrame:
     return pl.DataFrame(out, schema=_COLL_SCHEMA)
 
 
-def parse_returns() -> pl.DataFrame:
-    """156 credit-note rows. Empty (typed) frame if the source PDF is absent."""
-    if not C.SRC_RETURNS_PDF.exists():
+def parse_collections() -> pl.DataFrame:
+    """Full-year receipts to 2026-07-30: the original file supplies Jan–Jun rows,
+    the new July file supplies all of July (no overlap, no gap)."""
+    old = _parse_collections_file(C.SRC_COLLECTIONS_PDF).filter(
+        pl.col("date") < date(C.PERIOD_YEAR, C.PERIOD_MONTH, 1))
+    july = _parse_collections_file(C.SRC_COLLECTIONS_JULY_PDF)
+    return pl.concat([old, july], how="vertical_relaxed")
+
+
+def _parse_returns_file(path) -> pl.DataFrame:
+    """Parse ONE returns PDF (geometric x-band layout)."""
+    if not path.exists():
         return pl.DataFrame(schema=_RET_SCHEMA)
     import fitz
 
-    doc = fitz.open(str(C.SRC_RETURNS_PDF))
+    doc = fitz.open(str(path))
     out: list[dict] = []
     for pi in range(doc.page_count):
         for row in _cluster_rows(doc[pi]):
@@ -188,9 +199,24 @@ def parse_returns() -> pl.DataFrame:
     return pl.DataFrame(out, schema=_RET_SCHEMA)
 
 
-def _name_index(invoices_full: pl.DataFrame, dim_customers: pl.DataFrame) -> dict:
+def parse_returns() -> pl.DataFrame:
+    """Full-year returns to 2026-07-30: original file for Jan–Jun, new July file
+    for all of July."""
+    old = _parse_returns_file(C.SRC_RETURNS_PDF).filter(
+        pl.col("date") < date(C.PERIOD_YEAR, C.PERIOD_MONTH, 1))
+    july = _parse_returns_file(C.SRC_RETURNS_JULY_PDF)
+    return pl.concat([old, july], how="vertical_relaxed")
+
+
+def _name_index(invoices_full: pl.DataFrame, dim_customers: pl.DataFrame,
+                name_map: dict | None = None) -> dict:
     """normalised customer-name → code, keeping ONLY names that map to a single
-    code (ambiguous names are excluded so attribution never guesses)."""
+    code (ambiguous names are excluded so attribution never guesses).
+
+    ``name_map`` (the authoritative code→name map: reference master → debt report
+    → invoice history) is folded in as well, so a customer whose ONLY name lives
+    in the debt snapshot — e.g. 1009 «MTOM المريوطية», whose invoices carry no
+    name — is still resolvable from a receipt."""
     name2codes: dict[str, set] = defaultdict(set)
     for df, ncol, ccol in ((invoices_full, "customer_name", "customer_code"),
                            (dim_customers, "customer_name", "customer_code")):
@@ -200,7 +226,54 @@ def _name_index(invoices_full: pl.DataFrame, dim_customers: pl.DataFrame) -> dic
             nm = _norm(r[ncol])
             if nm and not nm.replace(" ", "").isdigit():
                 name2codes[nm].add(str(r[ccol]))
+    for code, nm in (name_map or {}).items():
+        nm = _norm(nm)
+        if nm and not nm.replace(" ", "").isdigit():
+            name2codes[nm].add(str(code))
     return {nm: next(iter(codes)) for nm, codes in name2codes.items() if len(codes) == 1}
+
+
+# A receipt name must be at least this specific before the loose fallbacks below
+# are allowed to fire — guards against a short generic name swallowing a customer.
+_MIN_FALLBACK_CHARS = 8
+_MIN_FALLBACK_TOKENS = 2
+
+
+def _resolver(idx: dict):
+    """Return ``resolve(raw_name) -> code | None``.
+
+    The receipts/returns PDFs render the customer column in a fixed width, so long
+    names arrive **truncated** («مصطفى ابو الدهب بنى» for «… بنى سويف») and word
+    spacing differs («هايبر ابوعمار» vs «هايبر ابو عمار»). Exact matching alone
+    therefore stranded real money in the «غير مُطابَق» bucket. Resolution order:
+      1. exact normalised name;
+      2. space-insensitive;
+      3. truncation — the receipt name is a prefix of a master name, or contains
+         one (the report may append a rep suffix).
+    Every fallback demands a name specific enough (≥2 tokens, ≥8 chars) AND a
+    UNIQUE surviving candidate; anything ambiguous stays unmatched. Never guesses.
+    """
+    nospace: dict[str, set] = defaultdict(set)
+    for nm, code in idx.items():
+        nospace[nm.replace(" ", "")].add(code)
+    nospace = {k: next(iter(v)) for k, v in nospace.items() if len(v) == 1}
+
+    def resolve(raw):
+        n = _norm(raw)
+        if not n:
+            return None
+        if n in idx:
+            return idx[n]
+        k = n.replace(" ", "")
+        if k in nospace:
+            return nospace[k]
+        if len(k) < _MIN_FALLBACK_CHARS or len(n.split()) < _MIN_FALLBACK_TOKENS:
+            return None
+        cands = {c for m, c in idx.items()
+                 if m.replace(" ", "").startswith(k) or k.startswith(m.replace(" ", ""))}
+        return next(iter(cands)) if len(cands) == 1 else None
+
+    return resolve
 
 
 def compute(collections_df: pl.DataFrame, returns_df: pl.DataFrame,
@@ -213,11 +286,9 @@ def compute(collections_df: pl.DataFrame, returns_df: pl.DataFrame,
     """
     name_map = name_map or {}
     rep_map = rep_map or {}
-    idx = _name_index(invoices_full, dim_customers)
+    idx = _name_index(invoices_full, dim_customers, name_map)
+    code_for = _resolver(idx)
     UNMATCHED = "غير مُطابَق"
-
-    def code_for(name):
-        return idx.get(_norm(name))
 
     # --- attribute rows ------------------------------------------------------
     collected_by_code: dict[str, float] = defaultdict(float)
@@ -236,7 +307,11 @@ def compute(collections_df: pl.DataFrame, returns_df: pl.DataFrame,
             unmatched_coll_amt += r["amount"]
         receipts_rows.append({
             "date": r["date"].isoformat(), "month": r["month"],
-            "customer_name": r["customer_name"],
+            # Attributed rows show the code's ONE authoritative name (name_map)
+            # so the receipt table matches every other view; unmatched rows keep
+            # the raw PDF spelling (their only name).
+            "customer_name": (name_map.get(code) or r["customer_name"]) if code
+                             else r["customer_name"],
             "customer_code": code or "", "rep": rep or UNMATCHED,
             "method": r["method"], "doc_ref": r["doc_ref"],
             "receipt_no": r["receipt_no"], "amount": round(r["amount"], 2),
@@ -253,7 +328,9 @@ def compute(collections_df: pl.DataFrame, returns_df: pl.DataFrame,
             unmatched_ret_amt += r["value"]
         returns_rows.append({
             "date": r["date"].isoformat(), "month": r["month"],
-            "customer_name": r["customer_name"], "customer_code": code or "",
+            "customer_name": (name_map.get(code) or r["customer_name"]) if code
+                             else r["customer_name"],
+            "customer_code": code or "",
             "rep": rep or UNMATCHED, "invoice_ref": r["invoice_ref"],
             "value": round(r["value"], 2),
         })
@@ -291,7 +368,8 @@ def compute(collections_df: pl.DataFrame, returns_df: pl.DataFrame,
         rep_agg[UNMATCHED]["returns"] += unmatched_ret_amt
     by_rep = sorted(({"rep": k, "collected": round(v["collected"], 2),
                       "returns": round(v["returns"], 2), "customers": len(v["customers"])}
-                     for k, v in rep_agg.items()), key=lambda x: x["collected"], reverse=True)
+                     for k, v in rep_agg.items()),
+                    key=lambda x: (-x["collected"], x["rep"]))   # rep tie-break = deterministic
 
     # --- by payment method ---------------------------------------------------
     if collections_df.height:
@@ -303,13 +381,19 @@ def compute(collections_df: pl.DataFrame, returns_df: pl.DataFrame,
         by_method = []
 
     # --- by customer (attributed) --------------------------------------------
+    # ``codes`` is a set, so its iteration order varies between processes (string
+    # hash randomisation). Sorting on ``collected`` alone is stable, which means
+    # customers TIED on that value would swap places from build to build and make
+    # data.js non-reproducible. The customer_code tie-break makes the order
+    # deterministic. Display order only — no value changes.
     codes = set(collected_by_code) | set(returns_by_code)
     by_customer = sorted(({"customer_code": c,
                            "customer_name": name_map.get(c) or f"عميل {c}",
                            "rep": rep_map.get(c) or "غير محدد",
                            "collected": round(collected_by_code.get(c, 0.0), 2),
                            "returns": round(returns_by_code.get(c, 0.0), 2)}
-                          for c in codes), key=lambda x: x["collected"], reverse=True)
+                          for c in codes),
+                         key=lambda x: (-x["collected"], x["customer_code"]))
 
     reliable_codes = set(collected_by_code)      # codes with a unique-name receipt
 
@@ -318,7 +402,7 @@ def compute(collections_df: pl.DataFrame, returns_df: pl.DataFrame,
         "grand_total_returns": total_returns,
         "printed_total_collected": C.COLLECTIONS_PRINTED_TOTAL,
         "printed_total_returns": C.RETURNS_PRINTED_TOTAL,
-        "period": {"collections": "2026-01-01 … 2026-07-18", "returns": "2026-01-01 … 2026-07-16"},
+        "period": {"collections": "2026-01-01 … 2026-07-30", "returns": "2026-01-01 … 2026-07-30"},
         "monthly": monthly,
         "by_rep": by_rep,
         "by_method": by_method,

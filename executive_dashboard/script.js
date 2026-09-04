@@ -699,7 +699,8 @@ const SECTIONS = {
       const A=C0.attribution||{};
       if(host){
         const rr=[["إجمالي المُفوتر ٢٠٢٦",egp(C0.billed_2026)],["التحصيل النقدي الفعلي",egp(C0.grand_total_collected)],
-          ["المرتجعات",egp(C0.grand_total_returns)],["المديونية القائمة (١٦/٧)",egp(C0.outstanding_1607)],
+          ["المرتجعات",egp(C0.grand_total_returns)],
+          [`المديونية القائمة (${D.meta.as_of})`,egp(C0.outstanding_as_of)],
           ["معدل التحصيل الفعلي",pct(annualRate)]];
         host.innerHTML=rr.map(r=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border2)"><span>${r[0]}</span><b>${r[1]}</b></div>`).join("")
           +`<div class="note" style="margin-top:8px">جسر تقريبي (لا يتضمن رصيد أول المدة)؛ الإجماليان النقديان مطابقان لمستندَي المصدر بالضبط.`
@@ -863,7 +864,7 @@ function openDrill(code){
   const [c]=aggCustomers(lines,inv);
   if(!c) return;
   // Actual cash receipts + returns for this customer (full-year 2026), plus the
-  // authoritative final balance from the 2026-07-16 debt snapshot.
+  // authoritative final balance from the debt snapshot (D.meta.as_of).
   const receipts=((D.collections&&D.collections.receipts)||[]).filter(r=>r.customer_code===code)
                   .sort((a,b)=>a.date<b.date?-1:1);
   const returns=((D.collections&&D.collections.returns_rows)||[]).filter(r=>r.customer_code===code)
@@ -888,14 +889,14 @@ function openDrill(code){
   document.getElementById("drillBody").innerHTML=`
     <div class="mini-kpis">
       ${mk(egpK(c.sales),"مبيعات ٢٠٢٦")}${mk(egpK(totalColl),"التحصيل الفعلي ٢٠٢٦")}
-      ${mk(egpK(totalRet),"المرتجعات ٢٠٢٦")}${mk(finalBal==null?"—":egpK(finalBal),"الرصيد النهائي (١٦/٧)")}
+      ${mk(egpK(totalRet),"المرتجعات ٢٠٢٦")}${mk(finalBal==null?"—":egpK(finalBal),`الرصيد النهائي (${D.meta.as_of})`)}
       ${mk(c.collection_rate==null?"—":pct(c.collection_rate),"معدل التحصيل")}${mk(bonusBadge(c.bonus_pct),"الحافز")}
     </div>
     <div class="note" style="margin-bottom:14px">
       المُفوتر ٢٠٢٦: <b>${egp(ar.billed_2026!=null?ar.billed_2026:c.sales)}</b> ·
       التحصيل الفعلي: <b class="pos">${egp(totalColl)}</b> ·
       المرتجعات: <b>${egp(totalRet)}</b> ·
-      الرصيد النهائي المعتمد (مديونية ١٦/٧): <b>${finalBal==null?"—":egp(finalBal)}</b>
+      الرصيد النهائي المعتمد (مديونية ${D.meta.as_of}): <b>${finalBal==null?"—":egp(finalBal)}</b>
       ${c.oldest_invoice_no?` · أقدم فاتورة غير محصّلة <b>${c.oldest_invoice_no}</b> (${c.oldest_invoice_date})`:""}
     </div>
     <div style="margin-bottom:16px"><h3 style="margin-bottom:8px">الفواتير</h3><div class="tbl-wrap"><table class="dataTable" style="width:100%">
@@ -960,11 +961,12 @@ function fillFilters(){
   const opt=(el,vals)=>{vals.forEach(v=>{const o=document.createElement("option");
     o.value=typeof v==="object"?v.v:v;o.textContent=typeof v==="object"?v.l:v;el.appendChild(o);});};
 
-  // Month selector — the one new feature. Populated with the 2026 months present
-  // in the data plus an "All months" option; defaults to June.
+  // Month selector — populated ONLY with the months that carry source data
+  // (D.meta.data_months) plus an "All months" option; defaults to July.
   const fm=document.getElementById("f_month");
   fm.innerHTML="";
-  opt(fm,[{v:"all",l:ALL_LABEL}, ...D.meta.available_months]);
+  opt(fm,[{v:"all",l:ALL_LABEL},
+          ...D.meta.available_months.filter(m=>DATA_MONTHS.has(m.v))]);
   fm.value=state.filters.month;
 
   opt(document.getElementById("f_customer"),pairs(CUST_NAME));
@@ -1022,6 +1024,39 @@ function toggleTheme(){document.body.setAttribute("data-theme",isLight()?"dark":
 function exportAll(){const t=tables[Object.keys(tables)[0]];
   const btn=$(".dt-button").filter((i,e)=>/Excel/.test(e.textContent)).first();
   if(btn.length){btn[0].click();}else{toast("افتح قسمًا به جدول للتصدير");}}
+
+/* ---- Print preparation (btnPrint AND Ctrl+P go through these) ----
+   WYSIWYG dark print. A canvas can't be re-laid-out for the print box, so each
+   ECharts chart in the active section is snapshotted to a pixel-exact PNG (same
+   getDataURL the PNG-export button uses) and shown in its place; CSS hides the
+   live canvas. Tables expand to every row (not the visible 10). The theme is
+   NOT changed — paper keeps the dashboard's dark look. All restored afterwards. */
+let printPrep=null;
+window.addEventListener("beforeprint",()=>{
+  if(printPrep) return;
+  printPrep={lens:{},imgs:[]};
+  // 1) freeze active-section charts as static images (ECharts only; Plotly is SVG)
+  document.querySelectorAll(".section.active .echart").forEach(el=>{
+    const c=charts[el.id];
+    if(!c||c._plotly||typeof c.getDataURL!=="function") return;
+    let url; try{url=c.getDataURL({type:"png",pixelRatio:2,backgroundColor:"transparent"});}catch(e){return;}
+    if(!url) return;
+    const img=document.createElement("img");
+    img.className="print-chart-img";img.src=url;
+    el.appendChild(img);el.classList.add("printed");printPrep.imgs.push(img);
+  });
+  // 2) expand active-section tables to all rows (page length saved for restore)
+  Object.entries(tables).forEach(([id,t])=>{
+    const el=document.getElementById(id);
+    if(el&&el.closest(".section.active")){printPrep.lens[id]=t.page.len();t.page.len(-1).draw(false);}
+  });
+});
+window.addEventListener("afterprint",()=>{
+  if(!printPrep) return;
+  printPrep.imgs.forEach(img=>{const el=img.parentElement;if(el)el.classList.remove("printed");img.remove();});
+  Object.entries(printPrep.lens).forEach(([id,len])=>{const t=tables[id];if(t)t.page.len(len).draw(false);});
+  printPrep=null;
+});
 
 /* ========================================================================== */
 /*  Boot                                                                        */

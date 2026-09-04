@@ -1,10 +1,12 @@
 """
-Parser for the customer account-balance PDFs dated 2026-07-16
-(``مديونية <rep>-16_7_2026.pdf``) — the FINAL post-July customer balances.
+Parser for the customer account-balance PDFs dated 2026-07-30
+(``مديونية [عملاء] <rep> حتى تاريخ 30-7-2026.pdf``) — the FINAL customer balances
+and the OFFICIAL customer→representative assignment at that date.
 
 These are "تقرير عن حسابات العملاء" reports (one row per customer): the balance
 (الرصيد) column is the outstanding amount; the code column is the customer code.
-Parsed geometrically via column x-bands, deduplicated by customer code.
+Parsed geometrically via column x-bands, deduplicated by customer code. The
+column geometry matches the earlier مديونية snapshot, so the same x-bands apply.
 """
 from __future__ import annotations
 
@@ -56,18 +58,26 @@ def _parse_pdf(path) -> list[tuple]:
 
 def _rep_from_filename(path: str) -> str:
     """Each report is filed under one representative — the file name IS the
-    official customer→rep assignment (cleaner than the in-page rep column)."""
-    base = path.split("/")[-1].replace("مديونية ", "")
-    return re.sub(r"[-_ ]*16_7_2026\.pdf$", "", base).strip()
+    official customer→rep assignment (cleaner than the in-page rep column).
+    Files: «مديونية [عملاء] <rep> حتى تاريخ 30-7-2026.pdf» (some carry a stray
+    double space). The extracted name passes through config.REP_NAME_OVERRIDES
+    so a spacing variant does not split one representative into two."""
+    base = re.sub(r"\.pdf$", "", path.split("/")[-1])
+    base = re.sub(r"^رصيد\s*", "", base)
+    base = re.sub(r"^مي?ديونية\s*", "", base)     # مديونية / ميديونية (source typo)
+    base = re.sub(r"^عملاء\s*", "", base)
+    base = re.sub(r"\s*(?:حتى|الى)\s*(?:تاريخ\s*)?30-7-2026$", "", base)
+    base = re.sub(r"\s+", " ", base).strip()
+    return C.REP_NAME_OVERRIDES.get(base, base)
 
 
 def load_final_balances() -> dict:
     """Return {customer_code: {'balance', 'name', 'rep', 'rep_official'}} as of
-    2026-07-16. ``rep_official`` is the file-based (authoritative) representative.
+    2026-07-30. ``rep_official`` is the file-based (authoritative) representative.
 
     Empty dict if the snapshot PDFs are absent (build never hard-fails).
     """
-    files = sorted(glob.glob(str(C.REPO_ROOT / "مديونية*16_7_2026.pdf")))
+    files = sorted(glob.glob(str(C.REPO_ROOT / "مديونية*30-7-2026.pdf")))
     out: dict[str, dict] = {}
     for f in files:
         rep_official = _rep_from_filename(f)

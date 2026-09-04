@@ -17,11 +17,25 @@ import json
 import sys
 from pathlib import Path
 
+try:
+    from . import expense_aliases as aliases
+except ImportError:
+    # Loaded straight off its path with no package around it, which is how the
+    # no-statements probe in analysis/tests/test_monthly_margin.py exercises the
+    # missing-extract path. Resolve the sibling by file rather than by name, so
+    # nothing depends on sys.path.
+    import importlib.util as _il
+    _spec = _il.spec_from_file_location(
+        "_expense_aliases", Path(__file__).resolve().parent / "expense_aliases.py")
+    aliases = _il.module_from_spec(_spec)
+    _spec.loader.exec_module(aliases)
+
 ROOT = Path(__file__).resolve().parents[2]
 P = ROOT / "data" / "processed"
 SRC = ROOT / "data" / "cost" / "income_statements.json"
 
 TOL = 1.0                       # EGP; the statements are kept to the piastre
+UNNAMED_ITEM = "بند بلا اسم بالمصدر"
 QUARTER = "2026-Q1"
 QUARTER_MONTHS = ["2026-01", "2026-02", "2026-03"]
 
@@ -156,6 +170,11 @@ def allocate_quarter(q, weights):
         rows.append({"period": m, "months": 1, "basis": "allocated",
                      "estimated": True, "source_period": QUARTER,
                      "allocation_weight": round(share, 6),
+                     # Allocation divides magnitudes; it does not create line
+                     # items. The quarter's own statement never listed any, so
+                     # these months carry a total and say so.
+                     "expenses": None, "expense_items": [],
+                     "has_item_detail": False,
                      **{f: r2(q[f] * share) for f in independent}})
 
     # Round first, then push the residual onto the largest month. Correcting
@@ -182,6 +201,37 @@ def allocate_quarter(q, weights):
 
 # ---------------------------------------------------------------- assembly --
 
+def expense_items(o):
+    """One month's line items, under their canonical names.
+
+    The raw label travels with every row: the merge in lib/expense_aliases.py
+    is a human reading of hand-written statements, and a reader has to be able
+    to see what was merged into what. The amounts are the sheet's own.
+    """
+    out = []
+    for it in o.get("expense_items") or []:
+        group, raw = it["group"], it["label_raw"]
+        # A figure the statement counted but did not name. It is kept — dropping
+        # it would break the group total — and named as unnamed rather than
+        # rendered as a blank row nobody can ask about.
+        label = aliases.canonical(group, raw) if raw else UNNAMED_ITEM
+        out.append({"group": group, "label": label,
+                    "label_raw": raw, "amount": r2(it["amount"]),
+                    "note": aliases.lump_note(group, raw)})
+
+    # Items exist to explain a group's total. If they no longer add up to it,
+    # something upstream changed and the breakdown is not describing this
+    # statement any more.
+    if out:
+        groups = o.get("expenses") or {}
+        for name, total in groups.items():
+            got = sum(i["amount"] for i in out if i["group"] == name)
+            if abs(got - total) > TOL:
+                die(f"{o['period']}: {name} line items sum to {got:,.2f}, but "
+                    f"the statement's own group total is {total:,.2f}")
+    return out
+
+
 def monthly_series(obs, weights):
     """Thirteen months: ten measured directly, three allocated from Q1."""
     rows = []
@@ -192,12 +242,19 @@ def monthly_series(obs, weights):
         if o["months"] != 1:
             die(f"{o['period']} spans {o['months']} months and has no "
                 f"allocation rule; refusing to treat it as monthly")
+        items = expense_items(o)
         rows.append({"period": o["period"], "months": 1, "basis": "measured",
                      "estimated": False, "source_period": o["period"],
                      "allocation_weight": None,
                      "net_sales": o["net_sales"], "cogs": o["cogs"],
                      "gross_profit": o["gross_profit"],
                      "total_expenses": o["total_expenses"],
+                     # The three groups when the month came from the xlsx;
+                     # None when it came from a PDF, which states one total
+                     # only. None is not zero and must not be shown as zero.
+                     "expenses": o.get("expenses"),
+                     "expense_items": items,
+                     "has_item_detail": bool(items),
                      "net_profit": o["net_profit"]})
 
     for r in rows:

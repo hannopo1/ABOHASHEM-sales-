@@ -35,7 +35,7 @@ EXPECTED = [
     "receivables", "overdue", "aging", "collections", "bonus",
     "r:fin", "r:sales", "r:customers", "r:brands", "r:products",
     "r:analysis", "r:forecast", "r:debt",
-    "r:margin", "r:reports",
+    "r:margin", "r:expenses", "r:reports",
     "analytics", "quality", "r:quality",
 ]
 MIN_CHARS = 300          # below this a section is effectively blank
@@ -144,6 +144,50 @@ def run(path: Path) -> int:
         for want in ["لقطة 4 سبتمبر 2026", "يناير – أغسطس 2026"]:
             if want not in all_text:
                 problems.append(f"derived label missing everywhere — «{want}»")
+
+        # --- المصروفات: what it must show, and what it must never show ------
+        # The section exists to open up an expense total that used to be one
+        # number. Two failure modes matter more than the rest: a month with no
+        # income statement quietly appearing with a figure, and the six detailed
+        # months losing their detail in a refactor.
+        exp = seen.get("r:expenses", "")
+        if not exp:
+            problems.append("«المصروفات» section is not in the registry")
+        else:
+            for want in ["يوليو 2025", "مرتبات", "ايجارات",
+                         "كل بند على حدة", "توحيد أسماء البنود"]:
+                if want not in exp:
+                    problems.append(f"«المصروفات» is missing «{want}»")
+            # August 2026 filed no income statement. It may be NAMED as absent
+            # — that is the point of the coverage card — but it must never be
+            # shown carrying an expense figure, so it must not appear as a row
+            # of the monthly table.
+            months = page.evaluate("""() => {
+                const S = (window.DASH_MARGIN||{}).statements;
+                if(!S) return null;
+                return {periods: (S.by_month||[]).map(r => r.period),
+                        detail: (S.by_month||[]).filter(r => r.has_item_detail)
+                                                .map(r => r.period),
+                        items: (S.by_month||[]).reduce(
+                                  (a,r) => a + (r.expense_items||[]).length, 0),
+                        allocatedWithItems: (S.by_month||[])
+                          .filter(r => r.basis === "allocated"
+                                    && (r.expense_items||[]).length).length};
+            }""")
+            if not months:
+                problems.append("the statements block carries no by_month")
+            else:
+                result["expenses"] = months
+                if "2026-08" in months["periods"]:
+                    problems.append("2026-08 has no income statement but "
+                                    "appears in the expense series")
+                if len(months["detail"]) < 6:
+                    problems.append("fewer than six months carry expense line "
+                                    f"items: {months['detail']}")
+                if months["allocatedWithItems"]:
+                    problems.append("an allocated month carries line items — "
+                                    "allocation divides magnitudes, it does not "
+                                    "create items")
 
         # The debt is a stock struck on one date. It used to be re-totalled over
         # "customers invoiced in the selected month", so the August view read

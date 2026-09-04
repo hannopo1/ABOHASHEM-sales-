@@ -354,7 +354,153 @@ function calExtremes(key, month, nameOf, minRevenue){
           topName:nameOf(s[0]), bottomName:nameOf(s[s.length-1])};
 }
 
-return {SECTION, has, D, hasStmt, S, kpisStatements, stmtTrend,
+
+/* ==================================================================== المصروفات
+   The expense side of the same statements, month by month and line by line.
+
+   Level 1 above shows what the company spent as ONE number per month. The
+   accountant's own sheets carry the detail behind that number for six of the
+   thirteen months — every item, under a hand-written name — and until now the
+   app never showed it. These functions read it out of the same statements
+   block, so an expense figure here can never disagree with the net profit
+   above it: they are the same rows.
+
+   Three things this deliberately does NOT do:
+     · It never spreads a total across items it cannot see. The 2026 months
+       state one figure and are labelled as stating one figure.
+     · It never draws a zero for a month with no statement. August 2026 filed
+       none; the coverage card says so in words.
+     · It never hides the renaming. Items are grouped under a canonical name so
+       a reader can follow «مرتبات» across six months, and the alias table is
+       on screen showing every original spelling that was folded in. */
+
+const hasExp = () => !!(hasStmt() && S().expenses);
+const EXP    = () => S().expenses;
+
+/* The item rows of one month, or of the whole window when month is falsy.
+   Grouped by (group, canonical label) — the pair, never the label alone: an
+   administrative «مرتبات» and a selling «مرتبات» are different money. */
+function expItems(month){
+  const rows=(S().by_month||[]).filter(r=>r.has_item_detail &&
+                                          (!month || r.period===month));
+  const m=new Map();
+  for(const r of rows){
+    for(const it of r.expense_items||[]){
+      const k=it.group+" "+it.label;
+      let a=m.get(k);
+      if(!a){ a={group:it.group, label:it.label, total:0, months:{},
+                 raws:new Set(), note:null}; m.set(k,a); }
+      a.total += it.amount||0;
+      a.months[r.period] = (a.months[r.period]||0) + (it.amount||0);
+      a.raws.add(it.label_raw);
+      if(it.note) a.note = it.note;
+    }
+  }
+  const out=[...m.values()];
+  const grand=out.reduce((x,a)=>x+a.total,0);
+  for(const a of out){
+    a.n_months = Object.keys(a.months).length;
+    a.avg = a.n_months ? a.total/a.n_months : null;
+    a.share = grand ? a.total/grand*100 : null;
+    a.variants = [...a.raws].filter(v=>v!==a.label);
+  }
+  return out.sort((x,y)=>y.total-x.total);
+}
+
+const GROUP_AR = {admin:"إدارية وعمومية", selling:"بيعية وتسويقية",
+                  financing:"تمويلية"};
+const GROUP_COL = {admin:"#8b5cf6", selling:"#3b82f6", financing:"#f59e0b"};
+
+/* Headline figures, each counted from the rows rather than written down. The
+   window is the WHOLE statement series — expenses are stated for every month,
+   only their breakdown is not. */
+function expKpis(R){
+  const rows=S().by_month||[], t=S().totals, cov=EXP().coverage||{};
+  const spend=rows.reduce((a,r)=>a+(r.total_expenses||0),0);
+  const items=expItems(null);
+  const top=items[0];
+  const detail=rows.filter(r=>r.has_item_detail);
+  const detailSpend=detail.reduce((a,r)=>a+(r.total_expenses||0),0);
+  return [
+    ["إجمالي المصروفات", R.fmtEGP(spend),
+     t.months+" شهرًا · "+arMonth(t.period_from)+" – "+arMonth(t.period_to),
+     GROUP_COL.admin],
+    ["متوسط شهري", R.fmtEGP(rows.length?spend/rows.length:0),
+     "على مدى السلسلة", R.C.indigo],
+    ["نسبتها من صافي المبيعات", R.fmtPct(t.net_sales?spend/t.net_sales*100:null),
+     "مصروفات التشغيل وحدها", R.C.blue],
+    ["أشهر بتفصيل بالبند", String(cov.months_with_item_detail||detail.length),
+     "من "+(cov.months||rows.length)+" شهرًا", R.C.green],
+    ["أكبر بند", top?top.label:"—",
+     top?R.fmtEGP(top.total)+" · "+GROUP_AR[top.group]:"لا يوجد تفصيل",
+     GROUP_COL.selling],
+    ["المصروفات المفصَّلة", R.fmtEGP(detailSpend),
+     (cov.n_items||0)+" سطر بند", R.C.green],
+  ];
+}
+
+/* Monthly columns, stacked by group where the groups are known and drawn as a
+   single grey column where only a total is. The grey is the point: a month
+   whose breakdown does not exist must not look like a month whose breakdown
+   happens to be flat. */
+function expStack(C){
+  const rows=(S().by_month||[]).slice().sort((a,b)=>a.period<b.period?-1:1);
+  if(!rows.length) return {__empty:true};
+  const b=C.ecBase();
+  const g=k=>rows.map(r=>r.expenses?(r.expenses[k]||0):null);
+  const totalOnly=rows.map(r=>r.expenses?null:(r.total_expenses||0));
+  const names=["إدارية وعمومية","بيعية وتسويقية","تمويلية","إجمالي فقط"];
+  return Object.assign(b,{
+    legend:Object.assign(b.legend,{data:names}),
+    grid:{left:6,right:10,top:34,bottom:6,containLabel:true},
+    tooltip:Object.assign(b.tooltip,{trigger:"axis",
+      formatter:ps=>{
+        const r=rows[ps[0].dataIndex];
+        return "<b>"+arMonth(r.period)+"</b><br>"
+          +(r.expenses?"":"<span style='color:"+WARN+"'>لا يوجد تفصيل بالبند لهذا الشهر — إجمالي فقط</span><br>")
+          +(r.basis==="allocated"?"<span style='color:"+WARN+"'>موزّع تناسبيًا من قائمة الربع الأول</span><br>":"")
+          +ps.filter(p=>p.value!=null).map(p=>p.marker+" "+p.seriesName+": <b>"
+              +Number(p.value).toLocaleString("en",{maximumFractionDigits:0})
+              +"</b>").join("<br>")
+          +"<br>الإجمالي: <b>"+Number(r.total_expenses||0)
+              .toLocaleString("en",{maximumFractionDigits:0})+"</b>";
+      }}),
+    xAxis:{type:"category",data:rows.map(r=>arMonth(r.period)),
+           axisLabel:{color:b._muted,fontSize:9,rotate:55},
+           axisLine:{lineStyle:{color:b._grid}}},
+    yAxis:{type:"value",name:"ج.م",nameTextStyle:{color:b._muted,fontSize:9},
+           axisLabel:{color:b._muted,fontSize:9,
+                      formatter:v=>(v/1e3).toFixed(0)+"K"},
+           splitLine:{lineStyle:{color:b._grid}}},
+    series:[
+      {name:names[0],type:"bar",stack:"e",data:g("admin"),
+       itemStyle:{color:GROUP_COL.admin}},
+      {name:names[1],type:"bar",stack:"e",data:g("selling"),
+       itemStyle:{color:GROUP_COL.selling}},
+      {name:names[2],type:"bar",stack:"e",data:g("financing"),
+       itemStyle:{color:GROUP_COL.financing}},
+      {name:names[3],type:"bar",stack:"e",data:totalOnly,
+       itemStyle:{color:"rgba(148,163,184,.45)"}},
+    ],
+  });
+}
+
+const SECTION_EXP = {
+  id:"expenses", label:"المصروفات", title:"المصروفات — كل شهر وكل بند",
+  sub:()=>{
+    if(!hasExp()) return "المصروفات شهريًا وبندًا بندًا من قوائم الدخل.";
+    const c=EXP().coverage||{};
+    const d=c.item_detail_periods||[];
+    return "المصروفات شهريًا من قوائم الدخل، وتفصيل بالبند لـ"+
+      T.arMonths(d.length)+(d.length?" ("+T.monthSpan(d[0],d[d.length-1])+")":"")+
+      " · باقي الأشهر بإجماليها فقط"+
+      ((c.no_statement_periods||[]).length?
+        " · أشهر بلا قائمة دخل: "+c.no_statement_periods.length:"")+".";
+  }
+};
+
+return {SECTION, SECTION_EXP, has, D, hasStmt, S, kpisStatements, stmtTrend,
+        hasExp, EXP, expItems, expKpis, expStack, GROUP_AR, GROUP_COL,
         kpisWindow, kpisMeasured, trend, itemScatter, bars,
         pricingGap, windowLabel, arMonth, marginColour,
         hasCal, CAL, calMonths, calRows, calExtremes, basisLabel,

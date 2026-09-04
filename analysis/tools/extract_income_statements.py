@@ -160,7 +160,98 @@ def value_right_of(ws, row, col, max_span=6):
     return None
 
 
-def parse_sheet(ws, period, source):
+# A1-style reference, single cell or range, with or without $ anchors.
+_REF = re.compile(r"\$?([A-Z]{1,3})\$?(\d+)(?::\$?([A-Z]{1,3})\$?(\d+))?")
+
+
+def _cells_in_formula(formula):
+    """Every cell a total's formula actually adds up, in order.
+
+    The group totals are live formulas — =SUM(D13:D30), =D49+D50 — so the
+    accountant has already declared which rows belong to the group. Reading
+    that range beats any bound we could infer: in July the selling total is
+    =SUM(D32:D43) while two more expense rows sit at D44 and D45, so a
+    "read until the next header" rule silently adds 4,050 the statement never
+    counted, and the sheet stops reconciling to its own net profit.
+    """
+    from openpyxl.utils import range_boundaries
+    out = []
+    for m in _REF.finditer(formula):
+        a = f"{m.group(1)}{m.group(2)}"
+        b = f"{m.group(3)}{m.group(4)}" if m.group(3) else a
+        c1, r1, c2, r2 = range_boundaries(f"{a}:{b}")
+        for r in range(r1, r2 + 1):
+            for c in range(c1, c2 + 1):
+                out.append((r, c))
+    return out
+
+
+def _label_left_of(ws, row, col, span=3):
+    """The nearest non-empty text cell to the left — the item's own name."""
+    for c in range(col - 1, max(0, col - 1 - span), -1):
+        v = ws.cell(row=row, column=c).value
+        if isinstance(v, str) and v.strip():
+            return re.sub(r"\s+", " ", v.strip())
+    return ""
+
+
+def expense_items(ws_val, ws_frm, total_col, header_rows, period):
+    """Line items per group, taken from each group total's own formula.
+
+    Returns (items, outside) where `outside` lists expense rows that sit in the
+    sheet but in no group's summed range. Those are reported, never folded in:
+    the group totals are what tie to net profit, so a row the statement did not
+    count is a finding about the source, not a number to add.
+    """
+    items, counted = [], set()
+    for group, (hrow, hcol) in header_rows.items():
+        formula = None
+        for r in (hrow, hrow + 1):
+            v = ws_frm.cell(row=r, column=total_col).value
+            if isinstance(v, str) and v.startswith("="):
+                formula = v
+                break
+        if formula is None:
+            # A literal total states no membership; ship the group without
+            # items rather than guessing which rows it covers.
+            return [], []
+        for (r, c) in _cells_in_formula(formula):
+            counted.add((r, c))
+            amount = _num(ws_val.cell(row=r, column=c).value)
+            if amount is None:
+                continue
+            label = _label_left_of(ws_val, r, c)
+            # A blank row inside a SUM range that also carries no figure holds
+            # nothing to report — the accountant left room to add an item. A
+            # blank label with a real figure is the opposite: it is money the
+            # statement counted and cannot name, so it is kept and shown
+            # unnamed rather than quietly dropped.
+            if not label and float(amount) == 0.0:
+                continue
+            items.append({"group": group, "row": r,
+                          "label_raw": label,
+                          "amount": float(amount)})
+
+    # Anything in the items column of an expense block that no total counted.
+    outside = []
+    if items:
+        col = {c for _r, c in counted}
+        lo, hi = min(r for _g, (r, _c) in header_rows.items()), ws_val.max_row
+        for r in range(lo, hi + 1):
+            for c in col:
+                if (r, c) in counted:
+                    continue
+                amount = _num(ws_val.cell(row=r, column=c).value)
+                label = _label_left_of(ws_val, r, c)
+                if amount is None or not label:
+                    continue
+                if any(k in label for k in ("صاف", "مجمل", "تكلفة", "مصروفات", "مصاريف")):
+                    continue
+                outside.append({"row": r, "label_raw": label, "amount": float(amount)})
+    return items, outside
+
+
+def parse_sheet(ws, period, source, ws_frm=None):
     """One monthly statement out of one worksheet."""
     anchors = {}
     for key, needles in (("net_sales", ("صافي", "المبيعات")),
@@ -189,12 +280,14 @@ def parse_sheet(ws, period, source):
         die(f"{period}: administrative group has no total")
 
     groups = {}
+    header_rows = {}
     for name, needles in (("admin", ("مصروفات", "إدارية")),
                           ("selling", ("مصروفات", "بيعية")),
                           ("financing", ("مصاريف", "تمويلية"))):
         hit = find_label(ws, *needles)
         if hit is None:
             die(f"{period}: no {name} group header")
+        header_rows[name] = hit
         # Month 9's sheet is shifted: its group headers carry a line item and
         # the group total lands one row lower. Accept either row, nothing else.
         val = None
@@ -230,11 +323,29 @@ def parse_sheet(ws, period, source):
         net_profit = anchors["gross_profit"] - sum(groups.values())
         np_source = "derived"
 
+    # Line items, when the formula workbook is available. Each group's items
+    # must add up to the total that group printed; a group that does not
+    # reconcile ships without items rather than with doubtful ones.
+    items, outside = ([], [])
+    if ws_frm is not None:
+        items, outside = expense_items(ws, ws_frm, total_col, header_rows, period)
+        by_group = {}
+        for it in items:
+            by_group[it["group"]] = by_group.get(it["group"], 0.0) + it["amount"]
+        for name, total in groups.items():
+            got = by_group.get(name, 0.0)
+            if items and not close(got, total):
+                die(f"{period}: {name} items sum to {got:,.2f} but the sheet's "
+                    f"own total says {total:,.2f} — refusing to publish a "
+                    f"breakdown that contradicts the statement it came from")
+
     obs = dict(period=period, months=1, basis="measured",
                source=source, sheet=ws.title,
                net_sales=anchors["net_sales"], cogs=anchors["cogs"],
                gross_profit=anchors["gross_profit"],
                expenses=groups,
+               expense_items=items,
+               expense_rows_outside_totals=outside,
                total_expenses=sum(groups.values()),
                net_profit=net_profit, net_profit_source=np_source,
                stated_cogs_pct=None, stated_gross_margin_pct=None)
@@ -245,10 +356,13 @@ def parse_workbook(repo, ref):
     import openpyxl
     raw = git_show(repo, ref, XLSX_SOURCE)
     wb = openpyxl.load_workbook(io.BytesIO(raw), data_only=True)
+    # A second read keeping formulas: the group totals declare their own item
+    # membership, and only the un-evaluated workbook carries that declaration.
+    wb_frm = openpyxl.load_workbook(io.BytesIO(raw), data_only=False)
     missing = set(XLSX_SHEETS) - set(wb.sheetnames)
     if missing:
         die(f"workbook is missing expected sheets: {sorted(missing)}")
-    return [parse_sheet(wb[name], period, XLSX_SOURCE)
+    return [parse_sheet(wb[name], period, XLSX_SOURCE, ws_frm=wb_frm[name])
             for name, period in sorted(XLSX_SHEETS.items(), key=lambda kv: kv[1])]
 
 
@@ -310,7 +424,9 @@ def parse_pdf(repo, ref, path, period, months):
                 # The expense breakdown is deliberately not parsed out of the
                 # PDFs; see the module docstring. Total operating expenses is
                 # exact by construction.
-                expenses=None, total_expenses=gross - net_profit,
+                expenses=None, expense_items=[],
+                expense_rows_outside_totals=[],
+                total_expenses=gross - net_profit,
                 net_profit=net_profit, net_profit_source="stated",
                 stated_cogs_pct=cogs_pct, stated_gross_margin_pct=gross_pct)
 

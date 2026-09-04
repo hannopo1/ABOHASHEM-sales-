@@ -232,7 +232,8 @@ class App extends React.Component {
     const dash=!!st.api, repo=!!(st.RD && st.R);
     const dashLbl=id=>((T&&T.SECTION_LABELS)||[]).find(s=>s.id===id);
     const repoLbl=id=>{
-      const list=(R?R.SECTIONS:[]).concat(M.has()?[M.SECTION]:[]);
+      const list=(R?R.SECTIONS:[]).concat(M.has()?[M.SECTION]:[])
+        .concat(M.hasExp&&M.hasExp()?[M.SECTION_EXP]:[]);
       return list.find(s=>s.id===id);
     };
     const out=[];
@@ -294,6 +295,7 @@ class App extends React.Component {
     push(this.aggGroup(),"repo","debt");
 
     push("الربحية والتقارير","repo","margin");
+    push("الربحية والتقارير","repo","expenses");
     push("الربحية والتقارير","repo","reports");
 
     push("تحليلات وجودة البيانات","dash","analytics");
@@ -1506,6 +1508,140 @@ class App extends React.Component {
      Ignores the filter bar: both levels are precomputed aggregates and cannot
      honestly be re-derived for an arbitrary slice, as with the fin / forecast /
      quality sections. */
+  /* ---- المصروفات: كل شهر على حدة وكل بند على حدة --------------------------
+     The expenses behind the net profit in «الربحية», opened up. Everything here
+     is read from the same statements block that section uses, so the two can
+     never disagree — and everything the source does not carry is said in words
+     rather than drawn as a zero. */
+  repoExpenses(R,RD){
+    if(!M.hasExp()) return [this.empty("قوائم الدخل غير محمّلة في هذا البناء.")];
+    const C=this.state.C, T=this.state.T, st=M.S(), cov=(M.EXP().coverage)||{};
+    const rows=(st.by_month||[]).slice().sort((a,b)=>a.period<b.period?-1:1);
+    const items=M.expItems(null);
+    const detail=cov.item_detail_periods||[];
+    const noStmt=cov.no_statement_periods||[];
+    const outside=(M.EXP().rows_outside_totals)||[];
+    const aliases=(M.EXP().aliases)||[];
+
+    /* Every month that carries item detail becomes a column of the item table.
+       Derived from the data: a seventh detailed month adds its own column by
+       arriving. */
+    const monthCols=detail.map(m=>[M.arMonth(m), r=>{
+      const v=r.months[m]; return v==null?"—":R.fmt0(v); }]);
+
+    const banner=React.createElement("div",{key:"xb",style:{padding:"11px 12px",
+        borderRadius:12,background:"rgba(139,92,246,.10)",
+        border:"1px solid rgba(139,92,246,.30)",fontSize:11,lineHeight:1.85,
+        color:"#ddd6fe"}},
+      ["المصروفات مذكورة لكل شهر من "+M.arMonth(st.totals.period_from)+" إلى "+
+       M.arMonth(st.totals.period_to)+". التفصيل بالبند متاح لـ"+
+       this.arMonths(detail.length)+
+       (detail.length?" ("+T.monthSpan(detail[0],detail[detail.length-1])+")":"")+
+       " فقط — وهي الأشهر التي وصلت بأوراق تفصيلية.",
+       React.createElement("br",{key:"b1"}),
+       "باقي الأشهر تظهر بإجماليها موسومةً «إجمالي فقط»، ولا يُوزَّع إجماليها على "+
+       "بنود لم يذكرها المصدر."+
+       (noStmt.length?" وهناك "+noStmt.length+" شهرًا بلا قائمة دخل أصلًا "+
+        "— لا رقم لها هنا ولا صفر.":"")]);
+
+    const monthRows=rows.map(r=>({
+      period:r.period,
+      admin:r.expenses?r.expenses.admin:null,
+      selling:r.expenses?r.expenses.selling:null,
+      financing:r.expenses?r.expenses.financing:null,
+      total:r.total_expenses,
+      pct:r.net_sales?r.total_expenses/r.net_sales*100:null,
+      basis:r.basis==="allocated"?"موزّع من قائمة الربع"
+            :(r.has_item_detail?"مقيس · بتفصيل بالبند":"مقيس · إجمالي فقط")}));
+
+    const money=v=>v==null?"—":R.fmt0(v);
+
+    return [
+      banner,
+      this.kpiGridRepo(M.expKpis(R)),
+
+      this.chartCard("المصروفات شهريًا حسب المجموعة",M.expStack(C),
+        {k:"xg",h:C.H.tall,
+         sub:"الرمادي: شهور بإجمالي بلا تفصيل"}),
+
+      this.card("كل شهر على حدة",this.pagedList("xm",monthRows,[
+        ["الشهر",r=>M.arMonth(r.period)],
+        ["إجمالي المصروفات",r=>money(r.total)],
+        ["نسبتها من صافي المبيعات",r=>r.pct==null?"—":r.pct.toFixed(1)+"%"],
+        ["الأساس",r=>r.basis],
+        ["إدارية وعمومية",r=>money(r.admin)],
+        ["بيعية وتسويقية",r=>money(r.selling)],
+        ["تمويلية",r=>money(r.financing)]]),
+        {k:"xm",sub:rows.length+" شهرًا — اضغط لتفصيل المجموعات"}),
+
+      this.card("كل بند على حدة",this.pagedList("xi",items,[
+        ["البند",r=>r.label],
+        ["الإجمالي",r=>R.fmt0(r.total)],
+        ["المجموعة",r=>M.GROUP_AR[r.group]||r.group],
+        ["متوسط شهري",r=>r.avg==null?"—":R.fmt0(r.avg)],
+        ["عدد الأشهر",r=>r.n_months],
+        ["حصته من المصروفات المفصَّلة",r=>r.share==null?"—":r.share.toFixed(1)+"%"]]
+        .concat(monthCols).concat([
+        ["الصيغ الأصلية",r=>r.variants.length?r.variants.join(" · "):"—"],
+        ["ملاحظة",r=>r.note||"—"]])),
+        {k:"xi",sub:items.length+" بندًا عبر "+this.arMonths(detail.length)+
+          " — اضغط لعرض كل شهر على حدة"}),
+
+      this.card("أكبر البنود",this.barsH(items.slice(0,12)
+          .map(r=>[r.label,r.total,M.GROUP_COL[r.group]||"#3b82f6"]),R.fmtEGPk),
+        {k:"xt",sub:"مجموع "+this.arMonths(detail.length)+" المفصَّلة"}),
+
+      aliases.length?this.card("توحيد أسماء البنود",
+        this.pagedList("xa",aliases,[
+          ["الاسم كما في الملف",r=>r.label_raw],
+          ["الاسم الموحّد",r=>r.label],
+          ["المجموعة",r=>M.GROUP_AR[r.group]||r.group]]),
+        {k:"xa",sub:aliases.length+" صيغة — قرار بشري لا قياس"}):null,
+
+      React.createElement("div",{key:"xn",style:{padding:"11px 12px",
+          borderRadius:12,background:"rgba(255,255,255,.03)",
+          border:"1px solid rgba(255,255,255,.08)",fontSize:11,lineHeight:1.9,
+          color:"#94a3b8"}},
+        ["توحيد الأسماء اجتهاد لا قياس: القوائم مكتوبة بخط اليد، والبند الواحد "+
+         "يظهر بأكثر من صيغة، فجُمعت الصيغ تحت اسم واحد ليمكن تتبّعه شهرًا بشهر. "+
+         "الاسم الأصلي محفوظ مع كل سطر ومعروض في الجدول أعلاه، والبنود التي لا "+
+         "يتضح أنها الشيء نفسه تُركت بأسمائها الحرفية.",
+         React.createElement("br",{key:"n1"}),
+         "الاسم الموحّد لا يعبر مجموعتين: «مرتبات» الإدارية و«مرتبات» البيعية "+
+         "بندان مختلفان ويظلّان منفصلين."]),
+
+      noStmt.length?this.card("ما لا يتوفّر",
+        React.createElement("div",{style:{fontSize:11.5,lineHeight:1.95,
+            color:"#cbd5e1"}},
+          ["أشهر لها فواتير مبيعات ولا قائمة دخل لها: "+
+           noStmt.map(m=>M.arMonth(m)).join(" · ")+
+           ". لا تظهر في أي رسم أو جدول هنا، ولا تُحتسب صفرًا.",
+           React.createElement("br",{key:"a1"}),
+           (cov.allocated_periods||[]).length?
+             "وأشهر "+(cov.allocated_periods||[]).map(m=>M.arMonth(m)).join(" · ")+
+             " وصلت قائمةً واحدة للربع ووُزّعت بأوزان إيراد الفواتير: نسبها "+
+             "متطابقة بحكم الطريقة لا بحكم القياس.":null]),
+        {k:"xna",approx:true}):null,
+
+      outside.length?this.card("سطور خارج مجاميع المجموعات",
+        this.pagedList("xo",outside,[
+          ["البند",r=>r.label_raw],
+          ["الشهر",r=>M.arMonth(r.period)],
+          ["المبلغ",r=>R.fmt0(r.amount)]]),
+        {k:"xo",approx:true,
+         sub:outside.length+" سطرًا — مذكورة في الورقة ولم يجمعها أي مجموع"}):null,
+
+      outside.length?React.createElement("div",{key:"xo2",style:{padding:"11px 12px",
+          borderRadius:12,background:"rgba(245,158,11,.09)",
+          border:"1px solid rgba(245,158,11,.26)",fontSize:11,lineHeight:1.9,
+          color:"#fcd9a0"}},
+        "هذه السطور مكتوبة في أوراق الشهور لكن معادلة مجموع المجموعة لا تضمّها، "+
+        "فهي غير محتسبة في إجمالي المصروفات ولا في صافي الربح المعلن. تُعرض كما "+
+        "هي ولا تُضاف: مجاميع المجموعات هي ما يطابق صافي الربح، وإضافتها هنا "+
+        "كانت ستجعل الشاشة تخالف القائمة التي جاءت منها."):null,
+    ].filter(Boolean);
+  }
+
   repoMargin(R,RD){
     if(!M.has()) return [this.empty("بيانات التكلفة غير محمّلة في هذا البناء.")];
     const d=M.D(), C=this.state.C, win=M.windowLabel(d);
@@ -2091,6 +2227,49 @@ class App extends React.Component {
           col("هامش صافي %",null,r=>num(r.net_margin_pct))]});
     }
 
+    /* المصروفات: three sheets, and the alias sheet is not decoration. Once a
+       workbook is open on someone's laptop the merge is invisible unless the
+       original spellings travel with it, so the item sheet carries the variants
+       column and the third sheet is the map itself. */
+    if(M.hasExp()){
+      const cov=(M.EXP().coverage)||{};
+      const detail=cov.item_detail_periods||[];
+      const items=M.expItems(null);
+      const gAr=g=>M.GROUP_AR[g]||g;
+      out.push(
+        {id:"x_month", label:"المصروفات الشهرية",
+         rows:M.S().by_month||[], columns:[
+          col("الشهر","period"),
+          col("الأساس",null,r=>r.basis==="allocated"
+              ?"موزّع تناسبيًا — تقديري"
+              :(r.has_item_detail?"مقيس · بتفصيل بالبند":"مقيس · إجمالي فقط")),
+          col("إدارية وعمومية",null,r=>r.expenses?num(r.expenses.admin):""),
+          col("بيعية وتسويقية",null,r=>r.expenses?num(r.expenses.selling):""),
+          col("تمويلية",null,r=>r.expenses?num(r.expenses.financing):""),
+          col("إجمالي المصروفات",null,r=>num(r.total_expenses)),
+          col("صافي المبيعات",null,r=>num(r.net_sales)),
+          col("% من صافي المبيعات",null,
+              r=>r.net_sales?num(r.total_expenses/r.net_sales*100):"")]},
+        {id:"x_item", label:"المصروفات لكل بند",
+         rows:items, columns:[
+          col("البند","label"),
+          col("المجموعة",null,r=>gAr(r.group)),
+          col("الإجمالي",null,r=>num(r.total)),
+          col("عدد الأشهر","n_months"),
+          col("متوسط شهري",null,r=>r.avg==null?"":num(r.avg)),
+          col("% من المصروفات المفصَّلة",null,
+              r=>r.share==null?"":num(r.share))]
+          .concat(detail.map(m=>col(M.arMonth(m),null,
+              r=>r.months[m]==null?"":num(r.months[m]))))
+          .concat([col("الصيغ الأصلية",null,r=>r.variants.join(" · ")),
+                   col("ملاحظة",null,r=>r.note||"")])},
+        {id:"x_alias", label:"مرادفات بنود المصروفات",
+         rows:(M.EXP().aliases)||[], columns:[
+          col("الاسم كما في الملف","label_raw"),
+          col("الاسم الموحّد","label"),
+          col("المجموعة",null,r=>gAr(r.group))]});
+    }
+
     if(M.has()){
       const d=M.D(), win=M.windowLabel(d);
       const mg=[col("هامش مجمل %",null,r=>num(r.gross_margin_pct)),
@@ -2346,7 +2525,10 @@ class App extends React.Component {
        a filter applied. */
     /* margin joins precomputed company-level cost aggregates, so like
        fin / forecast / quality it cannot be re-derived for a slice. */
-    const unfilterable=R.UNFILTERABLE.concat(["margin"]).includes(st.section);
+    /* Compared against the section ID, not st.section: the nav key of a repo
+       section is prefixed ("r:fin"), so matching it against the bare IDs never
+       fired and the "filters do not apply here" notice never appeared. */
+    const unfilterable=R.UNFILTERABLE.concat(["margin","expenses"]).includes(rsec);
     const f=unfilterable?R.EMPTY_FILTERS:st.rf;
 
     let body;
@@ -2359,6 +2541,7 @@ class App extends React.Component {
     else if(rsec==="forecast") body=this.repoForecast(R,RD);
     else if(rsec==="analysis") body=this.repoAnalysis(R,RD,f);
     else if(rsec==="margin") body=this.repoMargin(R,RD);
+    else if(rsec==="expenses") body=this.repoExpenses(R,RD);
     else if(rsec==="reports") body=this.reports();
     else body=this.repoQuality(R,RD);
 

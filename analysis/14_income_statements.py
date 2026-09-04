@@ -106,6 +106,42 @@ def attach(name, block):
     write_json(path, d)
 
 
+def expense_block(rows, obs, weights):
+    """What the line items need alongside themselves, and nothing they repeat.
+
+    The items themselves already travel inside by_month; copying them into a
+    second shape would create two numbers to keep in step. What does not live
+    there is the reading applied to them (the alias map), how far the detail
+    reaches (coverage, counted from the data rather than written down), and the
+    rows the sheets contain but no group total counted.
+    """
+    detail = [r["period"] for r in rows if r["has_item_detail"]]
+    # A month that invoiced but filed no statement is absent, not zero. It is
+    # named here so the app can say so instead of drawing a gap.
+    have = {r["period"] for r in rows}
+    invoiced = sorted(m for m in weights if m not in have)
+
+    outside = []
+    for o in obs:
+        for it in o.get("expense_rows_outside_totals") or []:
+            outside.append(dict(it, period=o["period"]))
+
+    return {
+        "aliases": S.aliases.alias_table(),
+        "coverage": {
+            "months": len(rows),
+            "months_with_item_detail": len(detail),
+            "item_detail_periods": detail,
+            "total_only_periods": [r["period"] for r in rows
+                                   if not r["has_item_detail"]],
+            "allocated_periods": [r["period"] for r in rows if r["estimated"]],
+            "no_statement_periods": invoiced,
+            "n_items": sum(len(r["expense_items"]) for r in rows),
+        },
+        "rows_outside_totals": outside,
+    }
+
+
 def main():
     meta, obs = S.load_statements()
     S.revalidate(obs)
@@ -130,6 +166,7 @@ def main():
         },
         "totals": tot,
         "by_month": rows,
+        "expenses": expense_block(rows, obs, weights),
     }
 
     write_json(P / "income_statements.json",

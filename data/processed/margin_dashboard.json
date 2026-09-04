@@ -23563,8 +23563,226 @@
         "basis": "measured",
         "cogs": 1289237.0,
         "estimated": false,
+        "expense_items": [
+          {
+            "amount": 3400.0,
+            "group": "admin",
+            "label": "منظفات ومكافحة",
+            "label_raw": "منظفات ومكافحة",
+            "note": null
+          },
+          {
+            "amount": 10000.0,
+            "group": "admin",
+            "label": "محامى",
+            "label_raw": "محامى",
+            "note": null
+          },
+          {
+            "amount": 6696.0,
+            "group": "admin",
+            "label": "أخرى",
+            "label_raw": "أخرى",
+            "note": null
+          },
+          {
+            "amount": 59150.0,
+            "group": "admin",
+            "label": "ايجارات",
+            "label_raw": "ايجارات",
+            "note": null
+          },
+          {
+            "amount": 14995.0,
+            "group": "admin",
+            "label": "بدلات ومكافئات",
+            "label_raw": "بدلات ومكافئات",
+            "note": null
+          },
+          {
+            "amount": 105000.0,
+            "group": "admin",
+            "label": "تصنيع لدى الغير",
+            "label_raw": "تصنيع لدى الغير",
+            "note": null
+          },
+          {
+            "amount": 1650.0,
+            "group": "admin",
+            "label": "غفرة رمضان",
+            "label_raw": "غفرة رمضان",
+            "note": null
+          },
+          {
+            "amount": 6350.0,
+            "group": "admin",
+            "label": "عمالة خارجية",
+            "label_raw": "عمالة خارجية",
+            "note": null
+          },
+          {
+            "amount": 1690.0,
+            "group": "admin",
+            "label": "مصاريف المكتب",
+            "label_raw": "مصاريف المكتب",
+            "note": null
+          },
+          {
+            "amount": 0.0,
+            "group": "admin",
+            "label": "فهمى",
+            "label_raw": "فهمى",
+            "note": null
+          },
+          {
+            "amount": 2435.0,
+            "group": "admin",
+            "label": "ضيافات وكافيهات",
+            "label_raw": "ضيافات وكافيهات",
+            "note": null
+          },
+          {
+            "amount": 7810.0,
+            "group": "admin",
+            "label": "صيانات وقطع غيار",
+            "label_raw": "صيانات وقطه غيار",
+            "note": null
+          },
+          {
+            "amount": 1400.0,
+            "group": "admin",
+            "label": "تامينات",
+            "label_raw": "تامينات",
+            "note": null
+          },
+          {
+            "amount": 4000.0,
+            "group": "admin",
+            "label": "صحة وتموين",
+            "label_raw": "صحة وتموين",
+            "note": null
+          },
+          {
+            "amount": 37428.0,
+            "group": "admin",
+            "label": "فواتير كهرباء ونت",
+            "label_raw": "كهرباء",
+            "note": null
+          },
+          {
+            "amount": 201483.0,
+            "group": "admin",
+            "label": "مرتبات",
+            "label_raw": "مرتبات",
+            "note": null
+          },
+          {
+            "amount": 17000.0,
+            "group": "selling",
+            "label": "ايجارات",
+            "label_raw": "ايجارات",
+            "note": null
+          },
+          {
+            "amount": 49230.0,
+            "group": "selling",
+            "label": "عمولة البيع +بدلات السفر والاكراميات",
+            "label_raw": "عمولة البيع +بدلات السفر والاكراميات",
+            "note": null
+          },
+          {
+            "amount": 71500.0,
+            "group": "selling",
+            "label": "مرتبات",
+            "label_raw": "مرتبات",
+            "note": null
+          },
+          {
+            "amount": 1450.0,
+            "group": "selling",
+            "label": "دخان المبيعات",
+            "label_raw": "دخان المبيعات",
+            "note": null
+          },
+          {
+            "amount": 11737.0,
+            "group": "selling",
+            "label": "عربية 1639",
+            "label_raw": "عربية 1639",
+            "note": null
+          },
+          {
+            "amount": 19637.0,
+            "group": "selling",
+            "label": "عربية 1642",
+            "label_raw": "عربية 1642",
+            "note": null
+          },
+          {
+            "amount": 9185.0,
+            "group": "selling",
+            "label": "عربية الفاستر 1842",
+            "label_raw": "عربية الفاستر 1842",
+            "note": null
+          },
+          {
+            "amount": 9800.0,
+            "group": "selling",
+            "label": "عربية 3782",
+            "label_raw": "عربية 3782",
+            "note": null
+          },
+          {
+            "amount": 13295.0,
+            "group": "selling",
+            "label": "عربية 4195",
+            "label_raw": "عربية 4195",
+            "note": null
+          },
+          {
+            "amount": 45590.0,
+            "group": "selling",
+            "label": "عربية جامبو",
+            "label_raw": "عربية جامبو",
+            "note": null
+          },
+          {
+            "amount": 8860.0,
+            "group": "selling",
+            "label": "عربية مدير بيع",
+            "label_raw": "عربية مدير بيع",
+            "note": null
+          },
+          {
+            "amount": 2100.0,
+            "group": "selling",
+            "label": "زيت",
+            "label_raw": "زيت",
+            "note": null
+          },
+          {
+            "amount": 50671.0,
+            "group": "financing",
+            "label": "مصاريف قرض السيارة والحساب",
+            "label_raw": "مصاريق قرض السيارة والحساب",
+            "note": null
+          },
+          {
+            "amount": 75449.0,
+            "group": "financing",
+            "label": "مصاريف قرض المبادرة",
+            "label_raw": "مصاريف قرض المبادرة",
+            "note": null
+          }
+        ],
+        "expenses": {
+          "admin": 463487.0,
+          "financing": 126120.0,
+          "selling": 259384.0
+        },
         "gross_margin_pct": 49.1812,
         "gross_profit": 1247692.0,
+        "has_item_detail": true,
         "months": 1,
         "net_margin_pct": 15.7159,
         "net_profit": 398701.0,
@@ -23578,8 +23796,233 @@
         "basis": "measured",
         "cogs": 1745079.05,
         "estimated": false,
+        "expense_items": [
+          {
+            "amount": 12755.0,
+            "group": "admin",
+            "label": "منظفات ومكافحة",
+            "label_raw": "منظفات ومكافحة",
+            "note": null
+          },
+          {
+            "amount": 5000.0,
+            "group": "admin",
+            "label": "محامى",
+            "label_raw": "محامى",
+            "note": null
+          },
+          {
+            "amount": 9055.0,
+            "group": "admin",
+            "label": "أخرى",
+            "label_raw": "أخرى",
+            "note": null
+          },
+          {
+            "amount": 59150.0,
+            "group": "admin",
+            "label": "ايجارات",
+            "label_raw": "ايجارات",
+            "note": null
+          },
+          {
+            "amount": 13570.0,
+            "group": "admin",
+            "label": "بدلات ومكافئات",
+            "label_raw": "بدلات ومكافئات",
+            "note": null
+          },
+          {
+            "amount": 1650.0,
+            "group": "admin",
+            "label": "غفرة رمضان",
+            "label_raw": "غفرة رمضان",
+            "note": null
+          },
+          {
+            "amount": 73970.0,
+            "group": "admin",
+            "label": "عمالة خارجية",
+            "label_raw": "عمالة خارجية",
+            "note": null
+          },
+          {
+            "amount": 6585.0,
+            "group": "admin",
+            "label": "مصاريف المكتب",
+            "label_raw": "مصاريف المكتب",
+            "note": null
+          },
+          {
+            "amount": 5514.0,
+            "group": "admin",
+            "label": "ديون اعدمت",
+            "label_raw": "ديون اعدمت",
+            "note": null
+          },
+          {
+            "amount": 826.0,
+            "group": "admin",
+            "label": "ضيافات وكافيهات",
+            "label_raw": "ضيافات وكافيهات",
+            "note": null
+          },
+          {
+            "amount": 940.0,
+            "group": "admin",
+            "label": "مياه شقة العاملين",
+            "label_raw": "مياه شقة العاملين",
+            "note": null
+          },
+          {
+            "amount": 35075.0,
+            "group": "admin",
+            "label": "صيانات وقطع غيار",
+            "label_raw": "صيانات وقطه غيار",
+            "note": null
+          },
+          {
+            "amount": 4131.0,
+            "group": "admin",
+            "label": "تامينات",
+            "label_raw": "تامينات و اتعاب محمد عطية",
+            "note": null
+          },
+          {
+            "amount": 14000.0,
+            "group": "admin",
+            "label": "صحة وتموين",
+            "label_raw": "صحة وتموين",
+            "note": null
+          },
+          {
+            "amount": 5000.0,
+            "group": "admin",
+            "label": "مكتب المحاسبة",
+            "label_raw": "مكتب المحاسبة",
+            "note": null
+          },
+          {
+            "amount": 43274.0,
+            "group": "admin",
+            "label": "فواتير كهرباء ونت",
+            "label_raw": "فواتير كهرباء ونت",
+            "note": null
+          },
+          {
+            "amount": 122583.67,
+            "group": "admin",
+            "label": "مرتبات",
+            "label_raw": "مرتبات",
+            "note": null
+          },
+          {
+            "amount": 17000.0,
+            "group": "selling",
+            "label": "ايجارات",
+            "label_raw": "ايجارات",
+            "note": null
+          },
+          {
+            "amount": 58972.0,
+            "group": "selling",
+            "label": "عمولة البيع +بدلات السفر والاكراميات",
+            "label_raw": "عمولة البيع +بدلات السفر والاكراميات",
+            "note": null
+          },
+          {
+            "amount": 66533.33,
+            "group": "selling",
+            "label": "مرتبات",
+            "label_raw": "مرتبات",
+            "note": null
+          },
+          {
+            "amount": 3385.0,
+            "group": "selling",
+            "label": "دخان المبيعات",
+            "label_raw": "دخان المبيعات",
+            "note": null
+          },
+          {
+            "amount": 17970.0,
+            "group": "selling",
+            "label": "عربية 1639",
+            "label_raw": "عربية 1639",
+            "note": null
+          },
+          {
+            "amount": 15665.0,
+            "group": "selling",
+            "label": "عربية 1642",
+            "label_raw": "عربية 1642",
+            "note": null
+          },
+          {
+            "amount": 36600.0,
+            "group": "selling",
+            "label": "عربية الفاستر 1842",
+            "label_raw": "عربية الفاستر 1842",
+            "note": null
+          },
+          {
+            "amount": 24610.0,
+            "group": "selling",
+            "label": "عربية 3782",
+            "label_raw": "عربية 3782",
+            "note": null
+          },
+          {
+            "amount": 14900.0,
+            "group": "selling",
+            "label": "عربية 4195",
+            "label_raw": "عربية 4195",
+            "note": null
+          },
+          {
+            "amount": 63147.0,
+            "group": "selling",
+            "label": "عربية جامبو",
+            "label_raw": "عربية جامبو",
+            "note": null
+          },
+          {
+            "amount": 5330.0,
+            "group": "selling",
+            "label": "عربية مدير بيع",
+            "label_raw": "عربية مدير بيع",
+            "note": null
+          },
+          {
+            "amount": 0.0,
+            "group": "selling",
+            "label": "زيت",
+            "label_raw": "زيت",
+            "note": null
+          },
+          {
+            "amount": 0.0,
+            "group": "financing",
+            "label": "مصاريف قرض السيارة والحساب",
+            "label_raw": "مصاريق قرض السيارة والحساب",
+            "note": null
+          },
+          {
+            "amount": 0.0,
+            "group": "financing",
+            "label": "مصاريف قرض المبادرة",
+            "label_raw": "مصاريف قرض المبادرة",
+            "note": null
+          }
+        ],
+        "expenses": {
+          "admin": 413078.6666666666,
+          "financing": 0.0,
+          "selling": 324112.3333333334
+        },
         "gross_margin_pct": 41.9466,
         "gross_profit": 1260911.95,
+        "has_item_detail": true,
         "months": 1,
         "net_margin_pct": 17.4226,
         "net_profit": 523720.95,
@@ -23593,8 +24036,247 @@
         "basis": "measured",
         "cogs": 2633584.4,
         "estimated": false,
+        "expense_items": [
+          {
+            "amount": 7000.0,
+            "group": "admin",
+            "label": "اعمال الخير",
+            "label_raw": "اعمال الخير",
+            "note": null
+          },
+          {
+            "amount": 3150.0,
+            "group": "admin",
+            "label": "منظفات ومكافحة",
+            "label_raw": "منظفات ومكافحة",
+            "note": null
+          },
+          {
+            "amount": 5000.0,
+            "group": "admin",
+            "label": "محامى",
+            "label_raw": "محامى",
+            "note": null
+          },
+          {
+            "amount": 7600.0,
+            "group": "admin",
+            "label": "أخرى",
+            "label_raw": "أخرى",
+            "note": null
+          },
+          {
+            "amount": 51850.0,
+            "group": "admin",
+            "label": "ايجارات",
+            "label_raw": "ايجارات",
+            "note": null
+          },
+          {
+            "amount": 31950.0,
+            "group": "admin",
+            "label": "بدلات ومكافئات",
+            "label_raw": "بدلات ومكافئات",
+            "note": null
+          },
+          {
+            "amount": 500.0,
+            "group": "admin",
+            "label": "بوفيه",
+            "label_raw": "بوفيه",
+            "note": null
+          },
+          {
+            "amount": 1650.0,
+            "group": "admin",
+            "label": "غفرة رمضان",
+            "label_raw": "غفرة رمضان",
+            "note": null
+          },
+          {
+            "amount": 87935.0,
+            "group": "admin",
+            "label": "عمالة خارجية",
+            "label_raw": "عمالة خارجية",
+            "note": null
+          },
+          {
+            "amount": 2080.0,
+            "group": "admin",
+            "label": "مصاريف المكتب",
+            "label_raw": "مصاريف المكتب",
+            "note": null
+          },
+          {
+            "amount": 4000.0,
+            "group": "admin",
+            "label": "دفاترمبيعات",
+            "label_raw": "دفاترمبيعات",
+            "note": null
+          },
+          {
+            "amount": 6345.0,
+            "group": "admin",
+            "label": "ضيافات وكافيهات",
+            "label_raw": "ضيافات وكافيهات",
+            "note": null
+          },
+          {
+            "amount": 23800.0,
+            "group": "admin",
+            "label": "شقة العاملين",
+            "label_raw": "شقة العاملين",
+            "note": null
+          },
+          {
+            "amount": 19995.0,
+            "group": "admin",
+            "label": "صيانات وقطع غيار",
+            "label_raw": "صيانات وقطه غيار",
+            "note": null
+          },
+          {
+            "amount": 3250.0,
+            "group": "admin",
+            "label": "تامينات",
+            "label_raw": "تامينات و اتعاب محمد عطية",
+            "note": null
+          },
+          {
+            "amount": 5000.0,
+            "group": "admin",
+            "label": "صحة وتموين",
+            "label_raw": "صحة وتموين",
+            "note": null
+          },
+          {
+            "amount": 5000.0,
+            "group": "admin",
+            "label": "مكتب المحاسبة",
+            "label_raw": "مكتب المحاسبة",
+            "note": null
+          },
+          {
+            "amount": 62203.0,
+            "group": "admin",
+            "label": "فواتير كهرباء ونت",
+            "label_raw": "فواتير كهرباء ونت",
+            "note": null
+          },
+          {
+            "amount": 138000.0,
+            "group": "admin",
+            "label": "مرتبات",
+            "label_raw": "مرتبات",
+            "note": null
+          },
+          {
+            "amount": 12000.0,
+            "group": "selling",
+            "label": "ايجارات",
+            "label_raw": "ايجارات",
+            "note": null
+          },
+          {
+            "amount": 50465.0,
+            "group": "selling",
+            "label": "عمولة البيع +بدلات السفر والاكراميات",
+            "label_raw": "عمولة البيع +بدلات السفر والاكراميات",
+            "note": null
+          },
+          {
+            "amount": 50065.0,
+            "group": "selling",
+            "label": "مرتبات",
+            "label_raw": "مرتبات",
+            "note": null
+          },
+          {
+            "amount": 2110.0,
+            "group": "selling",
+            "label": "دخان المبيعات",
+            "label_raw": "دخان المبيعات",
+            "note": null
+          },
+          {
+            "amount": 18105.0,
+            "group": "selling",
+            "label": "عربية 1639",
+            "label_raw": "عربية 1639",
+            "note": null
+          },
+          {
+            "amount": 13290.0,
+            "group": "selling",
+            "label": "عربية 1642",
+            "label_raw": "عربية 1642",
+            "note": null
+          },
+          {
+            "amount": 50280.0,
+            "group": "selling",
+            "label": "عربية الفاستر 1842",
+            "label_raw": "عربية الفاستر 1842",
+            "note": null
+          },
+          {
+            "amount": 10135.0,
+            "group": "selling",
+            "label": "عربية 3782",
+            "label_raw": "عربية 3782",
+            "note": null
+          },
+          {
+            "amount": 19795.0,
+            "group": "selling",
+            "label": "عربية 4195",
+            "label_raw": "عربية 4195",
+            "note": null
+          },
+          {
+            "amount": 29505.0,
+            "group": "selling",
+            "label": "عربية جامبو",
+            "label_raw": "عربية جامبو",
+            "note": null
+          },
+          {
+            "amount": 4370.0,
+            "group": "selling",
+            "label": "عربية مدير بيع",
+            "label_raw": "عربية مدير بيع",
+            "note": null
+          },
+          {
+            "amount": 0.0,
+            "group": "selling",
+            "label": "زيت",
+            "label_raw": "زيت",
+            "note": null
+          },
+          {
+            "amount": 9769.0,
+            "group": "financing",
+            "label": "مصاريف قرض السيارة والحساب",
+            "label_raw": "مصاريق قرض السيارة والحساب",
+            "note": null
+          },
+          {
+            "amount": 40368.0,
+            "group": "financing",
+            "label": "مصاريف قرض المبادرة",
+            "label_raw": "مصاريف قرض المبادرة",
+            "note": null
+          }
+        ],
+        "expenses": {
+          "admin": 466308.0,
+          "financing": 50137.0,
+          "selling": 260120.0
+        },
         "gross_margin_pct": 31.6084,
         "gross_profit": 1217160.6,
+        "has_item_detail": true,
         "months": 1,
         "net_margin_pct": 11.4418,
         "net_profit": 440595.6,
@@ -23608,8 +24290,247 @@
         "basis": "measured",
         "cogs": 2317112.19,
         "estimated": false,
+        "expense_items": [
+          {
+            "amount": 9900.0,
+            "group": "admin",
+            "label": "تصنيع لدى الغير",
+            "label_raw": "تصنيع لدى الغير",
+            "note": null
+          },
+          {
+            "amount": 3850.0,
+            "group": "admin",
+            "label": "منظفات ومكافحة",
+            "label_raw": "منظفات ومكافحة",
+            "note": null
+          },
+          {
+            "amount": 0.0,
+            "group": "admin",
+            "label": "محامى",
+            "label_raw": "محامى",
+            "note": null
+          },
+          {
+            "amount": 6895.0,
+            "group": "admin",
+            "label": "أخرى",
+            "label_raw": "أخرى",
+            "note": null
+          },
+          {
+            "amount": 52150.0,
+            "group": "admin",
+            "label": "ايجارات",
+            "label_raw": "ايجارات",
+            "note": null
+          },
+          {
+            "amount": 9900.0,
+            "group": "admin",
+            "label": "بدلات ومكافئات",
+            "label_raw": "بدلات ومكافئات",
+            "note": null
+          },
+          {
+            "amount": 0.0,
+            "group": "admin",
+            "label": "بوفيه",
+            "label_raw": "بوفيه",
+            "note": null
+          },
+          {
+            "amount": 1650.0,
+            "group": "admin",
+            "label": "غفرة رمضان",
+            "label_raw": "غفرة رمضان",
+            "note": null
+          },
+          {
+            "amount": 97750.0,
+            "group": "admin",
+            "label": "عمالة خارجية",
+            "label_raw": "عمالة خارجية",
+            "note": null
+          },
+          {
+            "amount": 6115.0,
+            "group": "admin",
+            "label": "مصاريف المكتب",
+            "label_raw": "مصاريف المكتب",
+            "note": null
+          },
+          {
+            "amount": 4690.0,
+            "group": "admin",
+            "label": "حكومية",
+            "label_raw": "حكومية",
+            "note": null
+          },
+          {
+            "amount": 0.0,
+            "group": "admin",
+            "label": "ضيافات وكافيهات",
+            "label_raw": "ضيافات وكافيهات",
+            "note": null
+          },
+          {
+            "amount": 11880.0,
+            "group": "admin",
+            "label": "شقة العاملين",
+            "label_raw": "شقة العاملين",
+            "note": null
+          },
+          {
+            "amount": 9935.0,
+            "group": "admin",
+            "label": "صيانات وقطع غيار",
+            "label_raw": "صيانات وقطه غيار",
+            "note": null
+          },
+          {
+            "amount": 1215.0,
+            "group": "admin",
+            "label": "تامينات",
+            "label_raw": "تامينات و اتعاب محمد عطية",
+            "note": null
+          },
+          {
+            "amount": 10000.0,
+            "group": "admin",
+            "label": "صحة وتموين",
+            "label_raw": "صحة وتموين وشرطة",
+            "note": null
+          },
+          {
+            "amount": 5000.0,
+            "group": "admin",
+            "label": "مكتب المحاسبة",
+            "label_raw": "مكتب المحاسبة",
+            "note": null
+          },
+          {
+            "amount": 45358.0,
+            "group": "admin",
+            "label": "فواتير كهرباء ونت",
+            "label_raw": "فواتير كهرباء ونت",
+            "note": null
+          },
+          {
+            "amount": 100350.0,
+            "group": "admin",
+            "label": "مرتبات",
+            "label_raw": "مرتبات",
+            "note": null
+          },
+          {
+            "amount": 12000.0,
+            "group": "selling",
+            "label": "ايجارات",
+            "label_raw": "ايجارات",
+            "note": null
+          },
+          {
+            "amount": 57660.0,
+            "group": "selling",
+            "label": "عمولة البيع +بدلات السفر والاكراميات",
+            "label_raw": "عمولة البيع +بدلات السفر والاكراميات",
+            "note": null
+          },
+          {
+            "amount": 40000.0,
+            "group": "selling",
+            "label": "مرتبات",
+            "label_raw": "مرتبات",
+            "note": null
+          },
+          {
+            "amount": 2300.0,
+            "group": "selling",
+            "label": "دخان المبيعات",
+            "label_raw": "دخان المبيعات",
+            "note": null
+          },
+          {
+            "amount": 3770.0,
+            "group": "selling",
+            "label": "عربية 1639",
+            "label_raw": "عربية 1639",
+            "note": null
+          },
+          {
+            "amount": 14855.0,
+            "group": "selling",
+            "label": "عربية 1642",
+            "label_raw": "عربية 1642",
+            "note": null
+          },
+          {
+            "amount": 29830.0,
+            "group": "selling",
+            "label": "عربية الفاستر 1842",
+            "label_raw": "عربية الفاستر 1842",
+            "note": null
+          },
+          {
+            "amount": 22705.0,
+            "group": "selling",
+            "label": "عربية 3782",
+            "label_raw": "عربية 3782",
+            "note": null
+          },
+          {
+            "amount": 18840.0,
+            "group": "selling",
+            "label": "عربية 4195",
+            "label_raw": "عربية 4195",
+            "note": null
+          },
+          {
+            "amount": 30020.0,
+            "group": "selling",
+            "label": "عربية جامبو",
+            "label_raw": "عربية جامبو",
+            "note": null
+          },
+          {
+            "amount": 23785.0,
+            "group": "selling",
+            "label": "بيعى وتسويقى",
+            "label_raw": "بيعى وتسويقى",
+            "note": null
+          },
+          {
+            "amount": 0.0,
+            "group": "selling",
+            "label": "زيت",
+            "label_raw": "زيت",
+            "note": null
+          },
+          {
+            "amount": 0.0,
+            "group": "financing",
+            "label": "مصاريف قرض السيارة والحساب",
+            "label_raw": "مصاريق قرض السيارة والحساب",
+            "note": null
+          },
+          {
+            "amount": 0.0,
+            "group": "financing",
+            "label": "مصاريف قرض المبادرة",
+            "label_raw": "مصاريف قرض المبادرة",
+            "note": null
+          }
+        ],
+        "expenses": {
+          "admin": 376638.0,
+          "financing": 0.0,
+          "selling": 255765.0
+        },
         "gross_margin_pct": 37.2941,
         "gross_profit": 1378091.81,
+        "has_item_detail": true,
         "months": 1,
         "net_margin_pct": 20.1799,
         "net_profit": 745688.81,
@@ -23623,8 +24544,233 @@
         "basis": "measured",
         "cogs": 1726407.5,
         "estimated": false,
+        "expense_items": [
+          {
+            "amount": 71264.0,
+            "group": "admin",
+            "label": "تصنيع لدى الغير",
+            "label_raw": "تصنيع لدى الغير",
+            "note": null
+          },
+          {
+            "amount": 3400.0,
+            "group": "admin",
+            "label": "منظفات ومكافحة",
+            "label_raw": "منظفات ومكافحة",
+            "note": null
+          },
+          {
+            "amount": 2760.0,
+            "group": "admin",
+            "label": "أخرى",
+            "label_raw": "أخرى",
+            "note": null
+          },
+          {
+            "amount": 63150.0,
+            "group": "admin",
+            "label": "ايجارات",
+            "label_raw": "ايجارات",
+            "note": null
+          },
+          {
+            "amount": 18230.0,
+            "group": "admin",
+            "label": "بدلات ومكافئات",
+            "label_raw": "بدلات ومكافئات",
+            "note": null
+          },
+          {
+            "amount": 9900.0,
+            "group": "admin",
+            "label": "باركوود منتجات",
+            "label_raw": "باركوود منتجات",
+            "note": null
+          },
+          {
+            "amount": 1650.0,
+            "group": "admin",
+            "label": "غفرة رمضان",
+            "label_raw": "غفرة رمضان",
+            "note": null
+          },
+          {
+            "amount": 67680.0,
+            "group": "admin",
+            "label": "عمالة خارجية",
+            "label_raw": "عمالة خارجية",
+            "note": null
+          },
+          {
+            "amount": 7366.0,
+            "group": "admin",
+            "label": "مصاريف المكتب",
+            "label_raw": "مصاريف المكتب",
+            "note": null
+          },
+          {
+            "amount": 28350.0,
+            "group": "admin",
+            "label": "غرامات اخر قضية",
+            "label_raw": "غرامات اخر قضية",
+            "note": null
+          },
+          {
+            "amount": 505.0,
+            "group": "admin",
+            "label": "ضيافات وكافيهات",
+            "label_raw": "ضيافات وكافيهات",
+            "note": null
+          },
+          {
+            "amount": 11633.0,
+            "group": "admin",
+            "label": "صيانات وقطع غيار",
+            "label_raw": "صيانات وقطه غيار",
+            "note": null
+          },
+          {
+            "amount": 6000.0,
+            "group": "admin",
+            "label": "تامينات",
+            "label_raw": "تامينات و اتعاب محمد عطية",
+            "note": null
+          },
+          {
+            "amount": 21700.0,
+            "group": "admin",
+            "label": "صحة وتموين",
+            "label_raw": "صحة وتموين وهدايا ورشا",
+            "note": null
+          },
+          {
+            "amount": 5050.0,
+            "group": "admin",
+            "label": "مكتب المحاسبة",
+            "label_raw": "مكتب المحاسبة",
+            "note": null
+          },
+          {
+            "amount": 38633.0,
+            "group": "admin",
+            "label": "فواتير كهرباء ونت",
+            "label_raw": "فواتير كهرباء ونت",
+            "note": null
+          },
+          {
+            "amount": 118325.0,
+            "group": "admin",
+            "label": "مرتبات",
+            "label_raw": "مرتبات",
+            "note": null
+          },
+          {
+            "amount": 12000.0,
+            "group": "selling",
+            "label": "ايجارات",
+            "label_raw": "ايجارات",
+            "note": null
+          },
+          {
+            "amount": 49650.0,
+            "group": "selling",
+            "label": "عمولة البيع +بدلات السفر والاكراميات",
+            "label_raw": "عمولة البيع +بدلات والاكراميات",
+            "note": null
+          },
+          {
+            "amount": 41315.0,
+            "group": "selling",
+            "label": "مرتبات",
+            "label_raw": "مرتبات",
+            "note": null
+          },
+          {
+            "amount": 1730.0,
+            "group": "selling",
+            "label": "دخان المبيعات",
+            "label_raw": "دخان المبيعات",
+            "note": null
+          },
+          {
+            "amount": 10795.0,
+            "group": "selling",
+            "label": "عربية 1639",
+            "label_raw": "عربية 1639",
+            "note": null
+          },
+          {
+            "amount": 10645.0,
+            "group": "selling",
+            "label": "عربية 1642",
+            "label_raw": "عربية 1642",
+            "note": null
+          },
+          {
+            "amount": 17245.0,
+            "group": "selling",
+            "label": "عربية الفاستر 1842",
+            "label_raw": "عربية الفاستر 1842",
+            "note": null
+          },
+          {
+            "amount": 28075.0,
+            "group": "selling",
+            "label": "عربية 3782",
+            "label_raw": "عربية 3782",
+            "note": null
+          },
+          {
+            "amount": 5475.0,
+            "group": "selling",
+            "label": "عربية 4195",
+            "label_raw": "عربية 4195",
+            "note": null
+          },
+          {
+            "amount": 44155.0,
+            "group": "selling",
+            "label": "عربية جامبو",
+            "label_raw": "عربية جامبو",
+            "note": null
+          },
+          {
+            "amount": 2715.0,
+            "group": "selling",
+            "label": "بيعى وتسويقى",
+            "label_raw": "بيعى وتسويقى",
+            "note": null
+          },
+          {
+            "amount": 0.0,
+            "group": "selling",
+            "label": "زيت",
+            "label_raw": "زيت",
+            "note": null
+          },
+          {
+            "amount": 0.0,
+            "group": "financing",
+            "label": "مصاريف قرض السيارة والحساب",
+            "label_raw": "مصاريق قرض السيارة والحساب",
+            "note": null
+          },
+          {
+            "amount": 0.0,
+            "group": "financing",
+            "label": "مصاريف قرض المبادرة",
+            "label_raw": "مصاريف قرض المبادرة",
+            "note": null
+          }
+        ],
+        "expenses": {
+          "admin": 475596.0,
+          "financing": 0.0,
+          "selling": 223800.0
+        },
         "gross_margin_pct": 43.0709,
         "gross_profit": 1306147.64,
+        "has_item_detail": true,
         "months": 1,
         "net_margin_pct": 20.0079,
         "net_profit": 606751.64,
@@ -23638,8 +24784,226 @@
         "basis": "measured",
         "cogs": 1795859.68,
         "estimated": false,
+        "expense_items": [
+          {
+            "amount": 124090.0,
+            "group": "admin",
+            "label": "تصنيع لدى الغير",
+            "label_raw": "تصنيع لدى الغير البانيه",
+            "note": null
+          },
+          {
+            "amount": 10350.0,
+            "group": "admin",
+            "label": "منظفات ومكافحة",
+            "label_raw": "منظفات ومكافحة",
+            "note": null
+          },
+          {
+            "amount": 5915.0,
+            "group": "admin",
+            "label": "أخرى",
+            "label_raw": "أخرى",
+            "note": null
+          },
+          {
+            "amount": 63150.0,
+            "group": "admin",
+            "label": "ايجارات",
+            "label_raw": "ايجارات",
+            "note": null
+          },
+          {
+            "amount": 15825.0,
+            "group": "admin",
+            "label": "بدلات ومكافئات",
+            "label_raw": "بدلات ومكافئات",
+            "note": null
+          },
+          {
+            "amount": 10000.0,
+            "group": "admin",
+            "label": "محامى",
+            "label_raw": "محامى",
+            "note": null
+          },
+          {
+            "amount": 1650.0,
+            "group": "admin",
+            "label": "غفرة رمضان",
+            "label_raw": "غفرة رمضان",
+            "note": null
+          },
+          {
+            "amount": 55980.0,
+            "group": "admin",
+            "label": "عمالة خارجية",
+            "label_raw": "عمالة خارجية",
+            "note": null
+          },
+          {
+            "amount": 3290.0,
+            "group": "admin",
+            "label": "مصاريف المكتب",
+            "label_raw": "مصاريف المكتب",
+            "note": null
+          },
+          {
+            "amount": 700.0,
+            "group": "admin",
+            "label": "ضيافات وكافيهات",
+            "label_raw": "ضيافات وكافيهات",
+            "note": null
+          },
+          {
+            "amount": 17080.0,
+            "group": "admin",
+            "label": "صيانات وقطع غيار",
+            "label_raw": "صيانات وقطه غيار",
+            "note": null
+          },
+          {
+            "amount": 20290.0,
+            "group": "admin",
+            "label": "تامينات",
+            "label_raw": "تامينات و حكومى",
+            "note": null
+          },
+          {
+            "amount": 60405.0,
+            "group": "admin",
+            "label": "وهدايا ورشا",
+            "label_raw": "وهدايا ورشا",
+            "note": null
+          },
+          {
+            "amount": 6060.0,
+            "group": "admin",
+            "label": "مكتب المحاسبة",
+            "label_raw": "مكتب المحاسبة",
+            "note": null
+          },
+          {
+            "amount": 33703.0,
+            "group": "admin",
+            "label": "فواتير كهرباء ونت",
+            "label_raw": "فواتير كهرباء ونت",
+            "note": null
+          },
+          {
+            "amount": 104515.0,
+            "group": "admin",
+            "label": "مرتبات",
+            "label_raw": "مرتبات",
+            "note": null
+          },
+          {
+            "amount": 12000.0,
+            "group": "selling",
+            "label": "ايجار عربية 1842",
+            "label_raw": "ايجار عربية 1842",
+            "note": null
+          },
+          {
+            "amount": 49879.0,
+            "group": "selling",
+            "label": "عمولة البيع +بدلات السفر والاكراميات",
+            "label_raw": "عمولة البيع +بدلات",
+            "note": null
+          },
+          {
+            "amount": 49481.0,
+            "group": "selling",
+            "label": "مرتبات",
+            "label_raw": "مرتبات",
+            "note": null
+          },
+          {
+            "amount": 2120.0,
+            "group": "selling",
+            "label": "دخان المبيعات",
+            "label_raw": "دخان المبيعات",
+            "note": null
+          },
+          {
+            "amount": 20495.0,
+            "group": "selling",
+            "label": "عربية 1639",
+            "label_raw": "عربية 1639",
+            "note": null
+          },
+          {
+            "amount": 12445.0,
+            "group": "selling",
+            "label": "عربية 1642",
+            "label_raw": "عربية 1642",
+            "note": null
+          },
+          {
+            "amount": 19585.0,
+            "group": "selling",
+            "label": "عربية الفاستر 1842",
+            "label_raw": "عربية الفاستر 1842",
+            "note": null
+          },
+          {
+            "amount": 28845.0,
+            "group": "selling",
+            "label": "عربية 3782",
+            "label_raw": "عربية 3782",
+            "note": null
+          },
+          {
+            "amount": 22946.0,
+            "group": "selling",
+            "label": "عربية 4195",
+            "label_raw": "عربية 4195",
+            "note": null
+          },
+          {
+            "amount": 43880.0,
+            "group": "selling",
+            "label": "عربية جامبو",
+            "label_raw": "عربية جامبو",
+            "note": null
+          },
+          {
+            "amount": 13550.0,
+            "group": "selling",
+            "label": "زيت",
+            "label_raw": "زيت + فلاتر للعربيات",
+            "note": null
+          },
+          {
+            "amount": 3600.0,
+            "group": "selling",
+            "label": "فنادق",
+            "label_raw": "فنادق",
+            "note": null
+          },
+          {
+            "amount": 17100.0,
+            "group": "financing",
+            "label": "مصاريف قرض السيارة والحساب",
+            "label_raw": "مصاريق قرض السيارة من شهر 9 الى 12",
+            "note": "القيمة مقيدة في ديسمبر وتغطي الأشهر 9–12 بنص الملف"
+          },
+          {
+            "amount": 53412.0,
+            "group": "financing",
+            "label": "مصاريف قرض المبادرة",
+            "label_raw": "مصاريف قرض المبادرة من شهر 9 الى شهر 12",
+            "note": "القيمة مقيدة في ديسمبر وتغطي الأشهر 9–12 بنص الملف"
+          }
+        ],
+        "expenses": {
+          "admin": 533003.0,
+          "financing": 70512.0,
+          "selling": 278826.0
+        },
         "gross_margin_pct": 43.363,
         "gross_profit": 1374966.32,
+        "has_item_detail": true,
         "months": 1,
         "net_margin_pct": 15.5362,
         "net_profit": 492625.32,
@@ -23653,8 +25017,11 @@
         "basis": "allocated",
         "cogs": 1939188.46,
         "estimated": true,
+        "expense_items": [],
+        "expenses": null,
         "gross_margin_pct": 31.2747,
         "gross_profit": 882463.78,
+        "has_item_detail": false,
         "months": 1,
         "net_margin_pct": 5.2991,
         "net_profit": 149521.93,
@@ -23668,8 +25035,11 @@
         "basis": "allocated",
         "cogs": 2508917.96,
         "estimated": true,
+        "expense_items": [],
+        "expenses": null,
         "gross_margin_pct": 31.2747,
         "gross_profit": 1141729.76,
+        "has_item_detail": false,
         "months": 1,
         "net_margin_pct": 5.2991,
         "net_profit": 193451.15,
@@ -23683,8 +25053,11 @@
         "basis": "allocated",
         "cogs": 2398224.41,
         "estimated": true,
+        "expense_items": [],
+        "expenses": null,
         "gross_margin_pct": 31.2747,
         "gross_profit": 1091356.63,
+        "has_item_detail": false,
         "months": 1,
         "net_margin_pct": 5.2991,
         "net_profit": 184916.09,
@@ -23698,8 +25071,11 @@
         "basis": "measured",
         "cogs": 2448699.45,
         "estimated": false,
+        "expense_items": [],
+        "expenses": null,
         "gross_margin_pct": 34.9804,
         "gross_profit": 1317397.05,
+        "has_item_detail": false,
         "months": 1,
         "net_margin_pct": 1.6305,
         "net_profit": 61407.05,
@@ -23713,8 +25089,11 @@
         "basis": "measured",
         "cogs": 1998174.59,
         "estimated": false,
+        "expense_items": [],
+        "expenses": null,
         "gross_margin_pct": 51.8508,
         "gross_profit": 2151792.41,
+        "has_item_detail": false,
         "months": 1,
         "net_margin_pct": 30.268,
         "net_profit": 1256113.41,
@@ -23728,8 +25107,11 @@
         "basis": "measured",
         "cogs": 2039933.08,
         "estimated": false,
+        "expense_items": [],
+        "expenses": null,
         "gross_margin_pct": 45.4822,
         "gross_profit": 1701838.92,
+        "has_item_detail": false,
         "months": 1,
         "net_margin_pct": 11.1937,
         "net_profit": 418841.92,
@@ -23743,8 +25125,11 @@
         "basis": "measured",
         "cogs": 2736459.37,
         "estimated": false,
+        "expense_items": [],
+        "expenses": null,
         "gross_margin_pct": 42.8014,
         "gross_profit": 2047675.63,
+        "has_item_detail": false,
         "months": 1,
         "net_margin_pct": 20.0449,
         "net_profit": 958973.09,
@@ -23754,6 +25139,173 @@
         "total_expenses": 1088702.54
       }
     ],
+    "expenses": {
+      "aliases": [
+        {
+          "group": "admin",
+          "label": "تامينات",
+          "label_raw": "تامينات و اتعاب محمد عطية"
+        },
+        {
+          "group": "admin",
+          "label": "تامينات",
+          "label_raw": "تامينات و حكومى"
+        },
+        {
+          "group": "admin",
+          "label": "تصنيع لدى الغير",
+          "label_raw": "تصنيع لدى الغير البانيه"
+        },
+        {
+          "group": "admin",
+          "label": "صحة وتموين",
+          "label_raw": "صحة وتموين وشرطة"
+        },
+        {
+          "group": "admin",
+          "label": "صحة وتموين",
+          "label_raw": "صحة وتموين وهدايا ورشا"
+        },
+        {
+          "group": "admin",
+          "label": "صيانات وقطع غيار",
+          "label_raw": "صيانات وقطه غيار"
+        },
+        {
+          "group": "admin",
+          "label": "فواتير كهرباء ونت",
+          "label_raw": "كهرباء"
+        },
+        {
+          "group": "financing",
+          "label": "مصاريف قرض المبادرة",
+          "label_raw": "مصاريف قرض المبادرة من شهر 9 الى شهر 12"
+        },
+        {
+          "group": "financing",
+          "label": "مصاريف قرض السيارة والحساب",
+          "label_raw": "مصاريق قرض السيارة من شهر 9 الى 12"
+        },
+        {
+          "group": "financing",
+          "label": "مصاريف قرض السيارة والحساب",
+          "label_raw": "مصاريق قرض السيارة والحساب"
+        },
+        {
+          "group": "selling",
+          "label": "زيت",
+          "label_raw": "زيت + فلاتر للعربيات"
+        },
+        {
+          "group": "selling",
+          "label": "عمولة البيع +بدلات السفر والاكراميات",
+          "label_raw": "عمولة البيع +بدلات"
+        },
+        {
+          "group": "selling",
+          "label": "عمولة البيع +بدلات السفر والاكراميات",
+          "label_raw": "عمولة البيع +بدلات والاكراميات"
+        }
+      ],
+      "coverage": {
+        "allocated_periods": [
+          "2026-01",
+          "2026-02",
+          "2026-03"
+        ],
+        "item_detail_periods": [
+          "2025-07",
+          "2025-08",
+          "2025-09",
+          "2025-10",
+          "2025-11",
+          "2025-12"
+        ],
+        "months": 13,
+        "months_with_item_detail": 6,
+        "n_items": 188,
+        "no_statement_periods": [
+          "2025-01",
+          "2025-02",
+          "2025-03",
+          "2025-04",
+          "2025-05",
+          "2025-06",
+          "2026-08"
+        ],
+        "total_only_periods": [
+          "2026-01",
+          "2026-02",
+          "2026-03",
+          "2026-04",
+          "2026-05",
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "rows_outside_totals": [
+        {
+          "amount": 1300.0,
+          "label_raw": "مكتب المبيعات",
+          "period": "2025-07",
+          "row": 44
+        },
+        {
+          "amount": 2750.0,
+          "label_raw": "فنادق",
+          "period": "2025-07",
+          "row": 45
+        },
+        {
+          "amount": 0.0,
+          "label_raw": "مكتب المبيعات",
+          "period": "2025-08",
+          "row": 44
+        },
+        {
+          "amount": 5200.0,
+          "label_raw": "فنادق",
+          "period": "2025-08",
+          "row": 45
+        },
+        {
+          "amount": 1750.0,
+          "label_raw": "مكتب المبيعات",
+          "period": "2025-09",
+          "row": 46
+        },
+        {
+          "amount": 2850.0,
+          "label_raw": "فنادق",
+          "period": "2025-09",
+          "row": 47
+        },
+        {
+          "amount": 150.0,
+          "label_raw": "مكتب المبيعات",
+          "period": "2025-10",
+          "row": 46
+        },
+        {
+          "amount": 3600.0,
+          "label_raw": "فنادق",
+          "period": "2025-10",
+          "row": 47
+        },
+        {
+          "amount": 10500.0,
+          "label_raw": "عربية ميكس فود",
+          "period": "2025-11",
+          "row": 46
+        },
+        {
+          "amount": 3400.0,
+          "label_raw": "فنادق",
+          "period": "2025-11",
+          "row": 47
+        }
+      ]
+    },
     "meta": {
       "level": "company",
       "n_observations": 11,
@@ -23765,7 +25317,7 @@
       "quarter_period": "2026-Q1",
       "sales_window": "2025-01..2026-06",
       "see": "data/cost/PROVENANCE.md",
-      "source_commit": "5833cc3ca851a48cb18746330924f988dc9450ea",
+      "source_commit": "cb357c9e89146170311db012ccee56f25de5beff",
       "source_repo": "hannopo1/Abohashem",
       "statement_window": "2025-07..2026-07"
     },

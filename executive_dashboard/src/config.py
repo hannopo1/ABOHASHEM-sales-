@@ -177,6 +177,7 @@ def overdue_cutoff(as_of_str: str = None) -> "date":
     as_of = date.fromisoformat(as_of_str or AS_OF_DATE)
     return as_of - timedelta(days=NET_TERMS_DAYS)
 
+
 # Bonus ladder driven by collection rate. Single source of truth: a customer's
 # bonus % is the value of the first tier whose upper bound they fall under.
 # Read as: collection_rate < 0.70 -> 0% ; < 0.80 -> 1% ; ... ; <= 1.0 -> 5%.

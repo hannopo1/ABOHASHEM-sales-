@@ -19,8 +19,18 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "executive_dashboard"))
 
+# config imports only re/datetime/pathlib, so it loads anywhere — which keeps the
+# rule tests (derived cutoff, the 30/31-day boundary) running on a bare CI runner.
+# overdue.py pulls in polars, so it is imported inside the tests that need it,
+# behind importorskip — the same shape test_ar_snapshot.py uses. Importing it at
+# module level made collection fail outright and took the whole suite down with it.
 from src import config as C  # noqa: E402
-from src import overdue as O  # noqa: E402
+
+
+def _overdue_mod():
+    pytest.importorskip("polars")
+    from src import overdue as overdue_mod
+    return overdue_mod
 
 
 def test_cutoff_is_derived_from_the_terms_not_typed():
@@ -60,7 +70,7 @@ def test_overdue_boundary_is_exactly_the_terms(age_days, overdue):
 def test_bands_come_from_config_not_a_second_ladder():
     """One spelling of the aging ladder, in config, read by everyone."""
     from_config = [(k, lo, hi) for k, _lbl, lo, hi in C.AGING_BUCKETS if hi > 0]
-    assert O._PAST_DUE_BANDS == from_config
+    assert _overdue_mod()._PAST_DUE_BANDS == from_config
 
 
 @pytest.mark.parametrize("days_past_due, bucket", [
@@ -76,7 +86,7 @@ def test_bands_come_from_config_not_a_second_ladder():
     (5000, "d120p"),
 ])
 def test_bucket_is_chosen_by_days_past_due(days_past_due, bucket):
-    assert O._bucket_for_days_past_due(days_past_due) == bucket
+    assert _overdue_mod()._bucket_for_days_past_due(days_past_due) == bucket
 
 
 def test_the_first_band_can_actually_be_reached():
@@ -91,4 +101,4 @@ def test_the_first_band_can_actually_be_reached():
     one_day_late = as_of - timedelta(days=C.NET_TERMS_DAYS + 1)
     dpd = (as_of - C.due_date(one_day_late)).days
     assert dpd == 1
-    assert O._bucket_for_days_past_due(dpd) == "d1_30"
+    assert _overdue_mod()._bucket_for_days_past_due(dpd) == "d1_30"
